@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:localsend_app/config/init.dart';
 import 'package:localsend_app/config/theme.dart';
 import 'package:localsend_app/gen/strings.g.dart';
+import 'package:localsend_app/pages/conversations_page.dart';
 import 'package:localsend_app/pages/home_page_controller.dart';
 import 'package:localsend_app/pages/tabs/receive_tab.dart';
 import 'package:localsend_app/pages/tabs/send_tab.dart';
@@ -17,6 +18,8 @@ import 'package:refena_flutter/refena_flutter.dart';
 enum HomeTab {
   receive(Icons.wifi),
   send(Icons.send),
+  // [FORK] 新增会话 Tab
+  conversations(Icons.chat_bubble_outline),
   settings(Icons.settings)
   ;
 
@@ -30,6 +33,8 @@ enum HomeTab {
         return t.receiveTab.title;
       case HomeTab.send:
         return t.sendTab.title;
+      case HomeTab.conversations:
+        return t.conversation.title;
       case HomeTab.settings:
         return t.settingsTab.title;
     }
@@ -145,6 +150,8 @@ class _HomePageState extends State<HomePage> with Refena {
                           children: const [
                             ReceiveTab(),
                             SendTab(),
+                            // [FORK] 会话 Tab
+                            ConversationsPage(),
                             SettingsTab(),
                           ],
                         ),

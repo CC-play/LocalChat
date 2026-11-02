@@ -5,6 +5,7 @@ import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:localsend_app/gen/strings.g.dart';
+import 'package:localsend_app/model/conversation/conversation.dart';
 import 'package:localsend_app/model/persistence/color_mode.dart';
 import 'package:localsend_app/model/persistence/favorite_device.dart';
 import 'package:localsend_app/model/persistence/quick_save_mode.dart';
@@ -54,6 +55,9 @@ const _stunServers = 'ls_stun_servers';
 
 // Received file history
 const _receiveHistory = 'ls_receive_history';
+
+// Conversations (chat-style, bidirectional). Added for the fork's chat feature.
+const _conversations = 'ls_conversations';
 
 // Favorites
 const _favorites = 'ls_favorites';
@@ -260,6 +264,34 @@ class PersistenceService {
   Future<void> setReceiveHistory(List<ReceiveHistoryEntry> entries) async {
     final historyRaw = entries.map((entry) => jsonEncode(entry.toJson())).toList();
     await _prefs.setStringList(_receiveHistory, historyRaw);
+  }
+
+  /// 读取会话列表。
+  ///
+  /// 每个会话独占一个字符串元素，与 receiveHistory 的存储方式一致。
+  /// 单条解析失败时跳过该会话，而不是让整个列表加载失败。
+  List<Conversation> getConversations() {
+    final raw = _prefs.getStringList(_conversations) ?? [];
+    final result = <Conversation>[];
+    for (final entry in raw) {
+      try {
+        final decoded = jsonDecode(entry);
+        if (decoded is Map) {
+          final conversation = Conversation.fromJson(Map<String, dynamic>.from(decoded));
+          if (conversation.peerFingerprint.isNotEmpty) {
+            result.add(conversation);
+          }
+        }
+      } catch (e) {
+        _logger.warning('Skipping corrupted conversation entry: $e');
+      }
+    }
+    return result;
+  }
+
+  Future<void> setConversations(List<Conversation> conversations) async {
+    final raw = conversations.map((entry) => jsonEncode(entry.toJson())).toList();
+    await _prefs.setStringList(_conversations, raw);
   }
 
   List<FavoriteDevice> getFavorites() {

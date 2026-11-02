@@ -185,6 +185,26 @@
     "whitelist": "Whitelist",
     "blacklist": "Blacklist"
   },
+  "conversation": {
+    "title": "Chats",
+    "empty": "No chats yet",
+    "emptyHint": "Chats are created automatically after you send or receive files with a device.",
+    "clearAll": "Clear all chats",
+    "clearAllTitle": "Clear all chats?",
+    "clearAllMessage": "All chat history will be deleted. This cannot be undone. Received files are not affected.",
+    "clear": "Clear",
+    "deleteTitle": "Delete chat?",
+    "deleteMessage": "The chat history with \"{name}\" will be deleted. Received files are not affected.",
+    "deleted": "This chat has been deleted.",
+    "noMessages": "No messages yet.",
+    "you": "You",
+    "youPrefix": "You: ",
+    "sending": "Sending\u2026",
+    "sendFailed": "Failed to send",
+    "yesterday": "Yesterday",
+    "messagePlaceholder": "[Message]",
+    "filePlaceholder": "[File]"
+  },
   "receiveHistoryPage": {
     "title": "History",
     "openFolder": "Open folder",

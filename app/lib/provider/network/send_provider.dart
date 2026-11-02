@@ -14,6 +14,7 @@ import 'package:localsend_app/provider/file_transfer_provider.dart';
 import 'package:localsend_app/provider/http_provider.dart';
 import 'package:localsend_app/provider/selection/selected_sending_files_provider.dart';
 import 'package:localsend_app/provider/settings_provider.dart';
+import 'package:localsend_app/util/conversation/conversation_recorder.dart';
 import 'package:localsend_app/widget/dialogs/pin_dialog.dart';
 import 'package:localsend_isolates/isolate.dart';
 import 'package:localsend_isolates/model/device.dart';
@@ -643,6 +644,20 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
           case HttpUploadFileStartedEvent():
             _logger.info('Sending ${state[sessionId]?.files[event.fileId]?.file.fileName}');
             ref.notifier(fileTransferProvider).setStatus(sessionId: sessionId, fileId: event.fileId, status: FileStatus.sending);
+            // [FORK] 聊天视图：记录一条「发送中」气泡。
+            final startedFile = state[sessionId]?.files[event.fileId];
+            if (startedFile != null) {
+              await recordSentFileStart(
+                ref: ref,
+                target: sessionState.target,
+                messageId: startedFile.file.id,
+                fileName: startedFile.file.fileName,
+                filePath: startedFile.path,
+                fileSize: startedFile.file.size,
+                fileType: startedFile.file.fileType,
+                text: startedFile.file.fileType == FileType.text ? startedFile.file.preview : null,
+              );
+            }
           case HttpUploadFileProgressEvent():
             ref
                 .notifier(fileTransferProvider)
@@ -663,6 +678,21 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
                 );
             _updateForegroundServiceProgress(sessionId);
             ref.notifier(fileTransferProvider).setStatus(sessionId: sessionId, fileId: event.fileId, status: FileStatus.finished);
+            // [FORK] 聊天视图：标记为已发送。
+            final finishedFile = state[sessionId]?.files[event.fileId];
+            if (finishedFile != null) {
+              await markSentFile(
+                ref: ref,
+                target: sessionState.target,
+                messageId: finishedFile.file.id,
+                fileName: finishedFile.file.fileName,
+                filePath: finishedFile.path,
+                fileSize: finishedFile.file.size,
+                fileType: finishedFile.file.fileType,
+                success: true,
+                text: finishedFile.file.fileType == FileType.text ? finishedFile.file.preview : null,
+              );
+            }
           case HttpUploadFileFailedEvent():
             _logger.warning('Error while sending file ${state[sessionId]?.files[event.fileId]?.file.fileName}: ${event.error}');
             ref.notifier(fileTransferProvider).setStatus(sessionId: sessionId, fileId: event.fileId, status: FileStatus.failed);
@@ -670,6 +700,22 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
               sessionId: sessionId,
               state: (s) => s?.withFileError(event.fileId, event.error),
             );
+            // [FORK] 聊天视图：标记为发送失败。
+            final failedFile = state[sessionId]?.files[event.fileId];
+            if (failedFile != null) {
+              await markSentFile(
+                ref: ref,
+                target: sessionState.target,
+                messageId: failedFile.file.id,
+                fileName: failedFile.file.fileName,
+                filePath: failedFile.path,
+                fileSize: failedFile.file.size,
+                fileType: failedFile.file.fileType,
+                text: failedFile.file.fileType == FileType.text ? failedFile.file.preview : null,
+                success: false,
+                errorMessage: event.error,
+              );
+            }
         }
       }
     } catch (e, st) {

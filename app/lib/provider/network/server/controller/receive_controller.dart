@@ -22,6 +22,7 @@ import 'package:localsend_app/provider/security_provider.dart';
 import 'package:localsend_app/provider/selection/selected_receiving_files_provider.dart';
 import 'package:localsend_app/provider/selection/selected_sending_files_provider.dart';
 import 'package:localsend_app/provider/settings_provider.dart';
+import 'package:localsend_app/util/conversation/conversation_recorder.dart';
 import 'package:localsend_app/util/native/directories.dart';
 import 'package:localsend_app/util/native/platform_check.dart';
 import 'package:localsend_app/util/native/tray_helper.dart';
@@ -179,6 +180,15 @@ class ReceiveController {
               timestamp: DateTime.now().toUtc(),
             ),
           );
+
+      // [FORK] 聊天视图：文本消息同样记为一条会话消息。
+      final currentSession = server.getState().session!;
+      await recordReceivedText(
+        ref: server.ref,
+        sender: currentSession.sender,
+        senderAlias: currentSession.senderAlias,
+        text: message,
+      );
     }
 
     final receiveProvider = ViewProvider((ref) {
@@ -366,6 +376,18 @@ class ReceiveController {
               timestamp: DateTime.now().toUtc(),
             ),
           );
+
+      // [FORK] 聊天视图：把落盘成功的文件记为一条会话消息。
+      await recordReceivedFile(
+        ref: server.ref,
+        sender: receiveState.sender,
+        senderAlias: receiveState.senderAlias,
+        messageId: fileId,
+        fileName: receivingFile.desiredName!,
+        filePath: filePath,
+        fileSize: receivingFile.file.size,
+        fileType: fileType,
+      );
     } else {
       server.ref.notifier(fileTransferProvider).setStatus(sessionId: event.sessionId, fileId: fileId, status: FileStatus.failed);
       server.setState(

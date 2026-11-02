@@ -185,6 +185,26 @@
     "whitelist": "白名单",
     "blacklist": "黑名单"
   },
+  "conversation": {
+    "title": "会话",
+    "empty": "暂无会话",
+    "emptyHint": "与设备收发文件或消息后，这里会自动生成会话",
+    "clearAll": "清空全部会话",
+    "clearAllTitle": "清空全部会话？",
+    "clearAllMessage": "所有会话记录都会被删除，此操作不可撤销。已接收的文件不受影响。",
+    "clear": "清空",
+    "deleteTitle": "删除会话？",
+    "deleteMessage": "与「{name}」的聊天记录将被删除，已接收的文件不受影响。",
+    "deleted": "该会话已被删除",
+    "noMessages": "暂无往来记录",
+    "you": "我",
+    "youPrefix": "我: ",
+    "sending": "发送中…",
+    "sendFailed": "发送失败",
+    "yesterday": "昨天",
+    "messagePlaceholder": "[消息]",
+    "filePlaceholder": "[文件]"
+  },
   "receiveHistoryPage": {
     "title": "历史",
     "openFolder": "打开目录",
