@@ -90,11 +90,14 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
     required Device target,
     required List<CrossFile> files,
     required bool background,
+    // [FORK] 调用方可以指定会话 id。聊天页需要拿固定 id 才能回读这次会话的结局
+    // （成功时会话会被立刻收掉，事后无法再从会话列表里定位它）。
+    String? sessionIdOverride,
   }) async {
     // Pinned to the device the user picked, so the request is not sent at all
     // if someone else answers on that address.
     final client = ref.read(httpProvider).pinnedTo(target.fingerprint);
-    final sessionId = _uuid.v4();
+    final sessionId = sessionIdOverride ?? _uuid.v4();
     final createChecksums = ref.read(settingsProvider).createChecksums;
 
     // The ids are assigned upfront, so the checksums calculated below

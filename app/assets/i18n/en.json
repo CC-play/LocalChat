@@ -203,7 +203,14 @@
     "sendFailed": "Failed to send",
     "yesterday": "Yesterday",
     "messagePlaceholder": "[Message]",
-    "filePlaceholder": "[File]"
+    "filePlaceholder": "[File]",
+    "messageHint": "Message\u2026",
+    "attachFile": "Send a file",
+    "send": "Send",
+    "messageTooLong": "The message is too long (at most {max} characters).",
+    "peerDeclined": "The receiver declined it.",
+    "peerBusy": "The receiver is busy with another transfer.",
+    "peerUnreachable": "The device is not reachable. Make sure LocalSend is running on it."
   },
   "receiveHistoryPage": {
     "title": "History",

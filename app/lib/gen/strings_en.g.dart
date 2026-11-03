@@ -52,6 +52,7 @@ class Translations with BaseTranslations<AppLocale, Translations> {
   late final Translations$settingsTab$en settingsTab = Translations$settingsTab$en.internal(_root);
   late final Translations$troubleshootPage$en troubleshootPage = Translations$troubleshootPage$en.internal(_root);
   late final Translations$networkInterfacesPage$en networkInterfacesPage = Translations$networkInterfacesPage$en.internal(_root);
+  late final Translations$conversation$en conversation = Translations$conversation$en.internal(_root);
   late final Translations$receiveHistoryPage$en receiveHistoryPage = Translations$receiveHistoryPage$en.internal(_root);
   late final Translations$apkPickerPage$en apkPickerPage = Translations$apkPickerPage$en.internal(_root);
   late final Translations$selectedFilesPage$en selectedFilesPage = Translations$selectedFilesPage$en.internal(_root);
@@ -329,6 +330,90 @@ class Translations$networkInterfacesPage$en {
 
   /// en: 'Blacklist'
   String get blacklist => 'Blacklist';
+}
+
+// Path: conversation
+class Translations$conversation$en {
+  Translations$conversation$en.internal(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+
+  /// en: 'Chats'
+  String get title => 'Chats';
+
+  /// en: 'No chats yet'
+  String get empty => 'No chats yet';
+
+  /// en: 'Chats are created automatically after you send or receive files with a device.'
+  String get emptyHint => 'Chats are created automatically after you send or receive files with a device.';
+
+  /// en: 'Clear all chats'
+  String get clearAll => 'Clear all chats';
+
+  /// en: 'Clear all chats?'
+  String get clearAllTitle => 'Clear all chats?';
+
+  /// en: 'All chat history will be deleted. This cannot be undone. Received files are not affected.'
+  String get clearAllMessage => 'All chat history will be deleted. This cannot be undone. Received files are not affected.';
+
+  /// en: 'Clear'
+  String get clear => 'Clear';
+
+  /// en: 'Delete chat?'
+  String get deleteTitle => 'Delete chat?';
+
+  /// en: 'The chat history with "{name}" will be deleted. Received files are not affected.'
+  String deleteMessage({required Object name}) => 'The chat history with "${name}" will be deleted. Received files are not affected.';
+
+  /// en: 'This chat has been deleted.'
+  String get deleted => 'This chat has been deleted.';
+
+  /// en: 'No messages yet.'
+  String get noMessages => 'No messages yet.';
+
+  /// en: 'You'
+  String get you => 'You';
+
+  /// en: 'You: '
+  String get youPrefix => 'You: ';
+
+  /// en: 'Sending…'
+  String get sending => 'Sending…';
+
+  /// en: 'Failed to send'
+  String get sendFailed => 'Failed to send';
+
+  /// en: 'Yesterday'
+  String get yesterday => 'Yesterday';
+
+  /// en: '[Message]'
+  String get messagePlaceholder => '[Message]';
+
+  /// en: '[File]'
+  String get filePlaceholder => '[File]';
+
+  /// en: 'Message…'
+  String get messageHint => 'Message…';
+
+  /// en: 'Send a file'
+  String get attachFile => 'Send a file';
+
+  /// en: 'Send'
+  String get send => 'Send';
+
+  /// en: 'The message is too long (at most {max} characters).'
+  String messageTooLong({required Object max}) => 'The message is too long (at most ${max} characters).';
+
+  /// en: 'The receiver declined it.'
+  String get peerDeclined => 'The receiver declined it.';
+
+  /// en: 'The receiver is busy with another transfer.'
+  String get peerBusy => 'The receiver is busy with another transfer.';
+
+  /// en: 'The device is not reachable. Make sure LocalSend is running on it.'
+  String get peerUnreachable => 'The device is not reachable. Make sure LocalSend is running on it.';
 }
 
 // Path: receiveHistoryPage

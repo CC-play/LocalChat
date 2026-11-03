@@ -30,10 +30,12 @@ class FileMessageCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final titleColor = isOutgoing ? theme.colorScheme.onPrimary : theme.colorScheme.onSurface;
-    final subColor = isOutgoing ? theme.colorScheme.onPrimary.withValues(alpha: 0.7) : theme.colorScheme.outline;
-    final iconBg = isOutgoing ? theme.colorScheme.primaryContainer : theme.colorScheme.surfaceContainerHighest;
-    final iconColor = isOutgoing ? theme.colorScheme.onPrimary : theme.colorScheme.primary;
+    // [FORK] 发出的气泡是固定蓝底（见 message_bubble.dart 的 kOutgoingBubbleColor），
+    // 所以这一侧的文字/图标固定用白色系，不跟主题的 onPrimary 走。
+    final titleColor = isOutgoing ? Colors.white : theme.colorScheme.onSurface;
+    final subColor = isOutgoing ? Colors.white.withValues(alpha: 0.75) : theme.colorScheme.outline;
+    final iconBg = isOutgoing ? Colors.white.withValues(alpha: 0.22) : theme.colorScheme.surfaceContainerHighest;
+    final iconColor = isOutgoing ? Colors.white : theme.colorScheme.primary;
 
     return InkWell(
       onTap: onTap,

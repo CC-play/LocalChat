@@ -44,6 +44,13 @@ import 'package:window_manager/window_manager.dart';
 
 final _logger = Logger('ReceiveController');
 
+/// [FORK] 文本消息（只含一个 text 文件的请求）是否静默接收、不弹接收确认页。
+///
+/// 文本消息不落盘：接收端用空文件表回应 204，真正的正文随 `preview` 字段到达。
+/// 既然没有文件需要用户挑选，打断用户去点「接受」只是在拖慢聊天。
+/// 未读提示由会话列表的角标承担。
+const bool autoAcceptTextMessages = true;
+
 /// Handles all server events for receiving files.
 /// The HTTP requests themselves are served by the Rust server which emits
 /// the events handled here.
@@ -158,37 +165,23 @@ class ReceiveController {
       return;
     }
 
+    // [FORK] 文本消息静默接收：不弹确认页，也不把窗口唤到前台。
+    // 这段必须排在 [showFromTray] 之前，否则对方每发一句话都会抢走用户的焦点。
+    final message = server.getState().session?.message;
+    if (message != null && autoAcceptTextMessages) {
+      await _recordTextMessage(message);
+      // 不返回任何文件，Rust 侧因此回 204，发送端不会进入传输阶段。
+      await acceptFileRequest({});
+      return;
+    }
+
     if (checkPlatformHasTray() && (await windowManager.isMinimized() || !(await windowManager.isVisible()) || !(await windowManager.isFocused()))) {
       await showFromTray();
     }
 
-    final message = server.getState().session?.message;
     if (message != null) {
       // Message already received
-      await server.ref
-          .redux(receiveHistoryProvider)
-          .dispatchAsync(
-            AddHistoryEntryAction(
-              entryId: const Uuid().v4(),
-              fileName: message,
-              fileType: FileType.text,
-              path: null,
-              savedToGallery: false,
-              isMessage: true,
-              fileSize: utf8.encode(message).length,
-              senderAlias: server.getState().session!.senderAlias,
-              timestamp: DateTime.now().toUtc(),
-            ),
-          );
-
-      // [FORK] 聊天视图：文本消息同样记为一条会话消息。
-      final currentSession = server.getState().session!;
-      await recordReceivedText(
-        ref: server.ref,
-        sender: currentSession.sender,
-        senderAlias: currentSession.senderAlias,
-        text: message,
-      );
+      await _recordTextMessage(message);
     }
 
     final receiveProvider = ViewProvider((ref) {
@@ -242,6 +235,40 @@ class ReceiveController {
 
     // ignore: use_build_context_synchronously, unawaited_futures
     Routerino.context.push(() => ReceivePage(receiveProvider));
+  }
+
+  /// [FORK] 把一条收到的文本消息同时写进「接收历史」和「会话」。
+  ///
+  /// 两处都写是有意的：接收历史是上游的功能，会话是本 fork 的聊天视图，
+  /// 任何一个为空都会让对应页面少一条记录。
+  Future<void> _recordTextMessage(String message) async {
+    final session = server.getStateOrNull()?.session;
+    if (session == null) {
+      return;
+    }
+
+    await server.ref
+        .redux(receiveHistoryProvider)
+        .dispatchAsync(
+          AddHistoryEntryAction(
+            entryId: const Uuid().v4(),
+            fileName: message,
+            fileType: FileType.text,
+            path: null,
+            savedToGallery: false,
+            isMessage: true,
+            fileSize: utf8.encode(message).length,
+            senderAlias: session.senderAlias,
+            timestamp: DateTime.now().toUtc(),
+          ),
+        );
+
+    await recordReceivedText(
+      ref: server.ref,
+      sender: session.sender,
+      senderAlias: session.senderAlias,
+      text: message,
+    );
   }
 
   /// An accepted file started being uploaded.

@@ -203,7 +203,14 @@
     "sendFailed": "发送失败",
     "yesterday": "昨天",
     "messagePlaceholder": "[消息]",
-    "filePlaceholder": "[文件]"
+    "filePlaceholder": "[文件]",
+    "messageHint": "输入消息…",
+    "attachFile": "发送文件",
+    "send": "发送",
+    "messageTooLong": "消息太长了（最多 {max} 个字符）",
+    "peerDeclined": "对方拒绝了这条消息",
+    "peerBusy": "对方正在传输其他内容",
+    "peerUnreachable": "对方不可达，请确认它已打开 LocalSend"
   },
   "receiveHistoryPage": {
     "title": "历史",

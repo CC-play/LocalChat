@@ -54,6 +54,8 @@ class TranslationsZhCn extends Translations with BaseTranslations<AppLocale, Tra
   @override
   late final Translations$networkInterfacesPage$zh_CN networkInterfacesPage = Translations$networkInterfacesPage$zh_CN.internal(_root);
   @override
+  late final Translations$conversation$zh_CN conversation = Translations$conversation$zh_CN.internal(_root);
+  @override
   late final Translations$receiveHistoryPage$zh_CN receiveHistoryPage = Translations$receiveHistoryPage$zh_CN.internal(_root);
   @override
   late final Translations$apkPickerPage$zh_CN apkPickerPage = Translations$apkPickerPage$zh_CN.internal(_root);
@@ -297,6 +299,65 @@ class Translations$networkInterfacesPage$zh_CN extends Translations$networkInter
   String get whitelist => '白名单';
   @override
   String get blacklist => '黑名单';
+}
+
+// Path: conversation
+class Translations$conversation$zh_CN extends Translations$conversation$en {
+  Translations$conversation$zh_CN.internal(TranslationsZhCn root) : this._root = root, super.internal(root);
+
+  final TranslationsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '会话';
+  @override
+  String get empty => '暂无会话';
+  @override
+  String get emptyHint => '与设备收发文件或消息后，这里会自动生成会话';
+  @override
+  String get clearAll => '清空全部会话';
+  @override
+  String get clearAllTitle => '清空全部会话？';
+  @override
+  String get clearAllMessage => '所有会话记录都会被删除，此操作不可撤销。已接收的文件不受影响。';
+  @override
+  String get clear => '清空';
+  @override
+  String get deleteTitle => '删除会话？';
+  @override
+  String deleteMessage({required Object name}) => '与「${name}」的聊天记录将被删除，已接收的文件不受影响。';
+  @override
+  String get deleted => '该会话已被删除';
+  @override
+  String get noMessages => '暂无往来记录';
+  @override
+  String get you => '我';
+  @override
+  String get youPrefix => '我: ';
+  @override
+  String get sending => '发送中…';
+  @override
+  String get sendFailed => '发送失败';
+  @override
+  String get yesterday => '昨天';
+  @override
+  String get messagePlaceholder => '[消息]';
+  @override
+  String get filePlaceholder => '[文件]';
+  @override
+  String get messageHint => '输入消息…';
+  @override
+  String get attachFile => '发送文件';
+  @override
+  String get send => '发送';
+  @override
+  String messageTooLong({required Object max}) => '消息太长了（最多 ${max} 个字符）';
+  @override
+  String get peerDeclined => '对方拒绝了这条消息';
+  @override
+  String get peerBusy => '对方正在传输其他内容';
+  @override
+  String get peerUnreachable => '对方不可达，请确认它已打开 LocalSend';
 }
 
 // Path: receiveHistoryPage

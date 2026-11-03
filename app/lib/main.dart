@@ -91,7 +91,8 @@ class LocalSendApp extends StatelessWidget {
               navigatorKey: context.read(navigationProvider).key,
               home: RouterinoHome(
                 builder: () => const HomePage(
-                  initialTab: HomeTab.receive,
+                  // [FORK] 启动默认落在会话页
+                  initialTab: HomeTab.conversations,
                   appStart: true,
                 ),
               ),
