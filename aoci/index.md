@@ -13,6 +13,7 @@
 | 发文本消息 | `app/lib/util/conversation/conversation_sender.dart:106`（`sendTextMessage`）→ `app/lib/provider/network/send_provider.dart:681` | [conversation](modules/conversation.md) | 双端收发 |
 | 发文件（含离线重试） | `app/lib/util/conversation/conversation_sender.dart`（`deliverFiles`）→ `send_provider.dart`（`startSession`） | [conversation](modules/conversation.md) | 双端收发 |
 | 发送卡住 / 一直转圈 | `app/lib/util/conversation/conversation_sender.dart`（硬超时 + `_watchStalledUploads`） | [conversation](modules/conversation.md#超时与看门狗) | 对端关机后点重发，2 分钟内应失败 |
+| 想中止正在发送的消息 | `message_bubble.dart`（`onCancel`，转圈可点）→ `conversation_sender.dart`（`cancelChatMessage` + `_SendTicket`）→ 兜底 `chatSendWatchdogTimeout` | [conversation](modules/conversation.md#主动取消与界面兜底) | 手动：点重发后点转圈立刻停下 |
 | 收文本消息（静默接收） | `app/lib/provider/network/server/controller/receive_controller.dart:168` | [conversation](modules/conversation.md) | 双端收发 |
 | 收到文件的记录时机 | `receive_controller.dart:377`（`error == null` 分支） | [conversation](modules/conversation.md) | 传一个文件后看会话 |
 | 会话持久化 / 迁移 | `app/lib/provider/persistence_provider.dart:60`（`ls_conversations`） | — | `flutter test` |
@@ -58,7 +59,7 @@
 | `app/lib/util/conversation/clipboard_image.dart` | 整个文件为 fork 新增（剪贴板文件与图片读取） |
 | `app/lib/widget/chat/drop_confirm_dialog.dart` | 整个文件为 fork 新增（拖拽/粘贴共用确认卡片） |
 | `app/lib/model/conversation/conversation.dart` | `copyWith(clearError)`：`errorMessage` 需要能被置空（重发） |
-| `app/lib/util/conversation/conversation_sender.dart` | `sendTextMessage(messageIdOverride)` / `deliverFiles(messageIds)` / `retryChatMessage` |
+| `app/lib/util/conversation/conversation_sender.dart` | `sendTextMessage(messageIdOverride)` / `deliverFiles(messageIds)` / `retryChatMessage` / `cancelChatMessage` / `_SendTicket` |
 | `app/lib/provider/conversation/chat_transfer_provider.dart` | 整个文件为 fork 新增（上传进度旁路，每条消息一个 `ValueNotifier`） |
 | `app/lib/provider/network/send_provider.dart`（进度） | `HttpUploadFileProgressEvent` 分支里的 `chatTransferProvider.report` |
 
@@ -67,13 +68,13 @@
 ```
 app/lib/model/conversation/conversation.dart          266 行
 app/lib/util/conversation/conversation_recorder.dart  209 行
-app/lib/util/conversation/conversation_sender.dart    718 行
+app/lib/util/conversation/conversation_sender.dart    901 行
 app/lib/util/conversation/clipboard_image.dart         199 行（图片 + 文件列表两条通道）
 app/lib/provider/conversation_provider.dart           229 行
 app/lib/provider/conversation/chat_transfer_provider.dart  77 行（上传进度旁路）
 app/lib/pages/conversations_page.dart                 173 行
-app/lib/pages/conversation_page.dart                  962 行
-app/lib/widget/chat/message_bubble.dart               246 行
+app/lib/pages/conversation_page.dart                 1023 行
+app/lib/widget/chat/message_bubble.dart               309 行
 app/lib/widget/chat/file_message_card.dart             76 行
 app/lib/widget/chat/top_toast.dart                    168 行
 app/lib/widget/chat/drop_confirm_dialog.dart          128 行

@@ -64,6 +64,7 @@ LocalSend **没有**可调的「发送超时」：对端 App 没开时 prepare-u
 - **文件只在握手阶段重试**：一旦 `session.files` 里有 `token != null`，说明已进入流式上传，重来会在对端留下半截文件 → 停止重试，后续交给 upload 事件。
 - 跨重试复用 `checksumCache`（`send_provider.startSession` 的 `[FORK]` 参数），否则两分钟内会把几百 MB 文件反复读盘哈希。
 - 投递全程在后台：页面不 `await`，输入框不锁；结果由气泡状态（转圈 / 红色感叹号）和顶部 Toast 表达。
+- 这 2 分钟里用户可以随时点转圈取消（见「主动取消与界面兜底」），不必干等。
 
 ## 失败重发（点红色感叹号）
 
@@ -93,6 +94,22 @@ LocalSend **没有**可调的「发送超时」：对端 App 没开时 prepare-u
 - 小文件可能一个 progress 事件都没有就传完了 —— 那时气泡已是终态，看门狗在下一轮巡检自然退出。
 
 **3. 附带修复：异常逃逸。** 两条路径的 `catch` 现在都会把 `failure` 置为非空并继续走到 `markSentFile` / `_failPendingFiles`。之前中途抛异常会让已置为 pending 的气泡再也无人收尾。
+
+## 主动取消与界面兜底
+
+上一轮修掉「窗口根本不起作用」之后，仍然会收到「点了重发一直在转圈」的反馈。原因不同：**这次它确实在工作** —— 对着离线对端每 2 秒重试一次，界面只写「发送中…」，既看不出推进，也无法中止。超时存在不等于用户能感知。
+
+三层，从主动到兜底：
+
+1. **手动取消**：转圈本身是 `InkResponse`（`Tooltip`「点击取消发送」），只在发出方向 + `pending` 时挂 `onCancel`。`cancelChatMessage` 先把气泡写成 `failed`（`SendFailure.cancelled` →「已取消发送」），再 `closeSession` 断开后台会话，不等下一条事件。
+2. **令牌阻止复燃**：`_SendTicket` + 模块级 `_inFlight: messageId -> ticket`。光 `closeSession` 不够 —— 它只取消当前挂着的 prepare-upload，重试循环下一轮还会再发一次，所以 `_sendTextWithRetry` / `_deliverWithRetry` **每轮开头**都要查 `ticket.cancelled`。一个文件批次共用一个令牌：取消任意一条就整批停，避免「取消了一条、剩下几条还在后台排队」。
+3. **界面兜底**：`chatSendWatchdogTimeout = window + grace + 5s`。气泡下方的倒计时（`_SendProgressFooter` 的 1s ticker）走满就回调 `onStalePending` → 直接标失败。它不依赖任何后台任务，专门覆盖「发送流程已经不在了、气泡却还挂着」：异常逃逸，或**页面销毁后 `ref` 失效导致上传看门狗静默退出**（`_watchStalledUploads` 里 `ref.read` 抛异常就 `return`，正是最隐蔽的一条）。
+
+**取消后不再写终态**：`sendTextMessage` / `deliverFiles` 在 `ticket.cancelled` 时直接返回，不调 `markSentFile` / `_failPendingFiles`。否则会把「已取消」覆盖成「发送失败」，甚至在「用户点取消的同一瞬间刚好发成功」时改回「已发送」。
+
+**倒计时是这次的关键**：`sending` 文案换成 `sendingCountdown`（「发送中 12s…」）。纯「发送中…」连续几十秒，用户无法区分「在工作」和「卡死」—— 这正是本次反馈的来源。
+
+**`cancelChatMessage` 在 `_inFlight` 找不到令牌时也会标失败**：那种情况说明发送流程已经消失，气泡却还挂在 pending，是「永远转圈」最难看的样子。返回值 `false` 只表示「没有流程可停」，不影响收尾。
 
 ## 进度条
 
