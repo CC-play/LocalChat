@@ -10,7 +10,8 @@
 | 会话列表的卡片样式/排序/角标 | `app/lib/pages/conversations_page.dart` → `app/lib/provider/conversation_provider.dart` | [conversation](modules/conversation.md) | `flutter test test/unit/provider/conversation_provider_test.dart` |
 | 会话页气泡/输入栏 | `app/lib/pages/conversation_page.dart` → `app/lib/widget/chat/message_bubble.dart` | [conversation](modules/conversation.md) | `flutter analyze` |
 | 会话栏什么时候出现卡片 | `app/lib/util/conversation/conversation_recorder.dart` → `conversation_provider.dart:48` | [conversation](modules/conversation.md#卡片生成条件) | 手动：双端互发一次文本 |
-| 发文本消息 | `app/lib/util/conversation/conversation_sender.dart` → `app/lib/provider/network/send_provider.dart:647` | [conversation](modules/conversation.md) | 双端收发 |
+| 发文本消息 | `app/lib/util/conversation/conversation_sender.dart:106`（`sendTextMessage`）→ `app/lib/provider/network/send_provider.dart:681` | [conversation](modules/conversation.md) | 双端收发 |
+| 发文件（含离线重试） | `app/lib/util/conversation/conversation_sender.dart`（`deliverFiles`）→ `send_provider.dart`（`startSession`） | [conversation](modules/conversation.md) | 双端收发 |
 | 收文本消息（静默接收） | `app/lib/provider/network/server/controller/receive_controller.dart:168` | [conversation](modules/conversation.md) | 双端收发 |
 | 收到文件的记录时机 | `receive_controller.dart:377`（`error == null` 分支） | [conversation](modules/conversation.md) | 传一个文件后看会话 |
 | 会话持久化 / 迁移 | `app/lib/provider/persistence_provider.dart:60`（`ls_conversations`） | — | `flutter test` |
@@ -27,7 +28,8 @@
 |---|---|---|
 | `conversationProvider` | `provider/conversation_provider.dart` | 全部会话状态（Redux，唯一真相） |
 | `AppendChatMessageAction` | 同上 | **唯一**能新建会话的 action |
-| `sendTextMessage` | `util/conversation/conversation_sender.dart:87` | 会话页发文本 |
+| `sendTextMessage` | `util/conversation/conversation_sender.dart:106` | 会话页发文本（2 分钟重试窗口） |
+| `deliverFiles` / `pickConversationFiles` | 同上 | 会话页发文件（只在握手阶段重试） |
 | `recordReceivedText` / `recordReceivedFile` | `util/conversation/conversation_recorder.dart` | 接收侧写会话的唯一入口 |
 | `HomeTab` | `pages/home_page.dart` | 枚举顺序 == `PageView.children` 顺序 |
 | `ReceiveController` | `provider/network/server/controller/receive_controller.dart` | 服务端事件处理器（非路由） |
