@@ -33,7 +33,7 @@
 | `app/lib/util/conversation/conversation_recorder.dart` | 接收侧写入口，`peerKeyOf()` 决定会话主键 |
 | `app/lib/util/conversation/conversation_sender.dart` | 发送侧：`resolveConversationTarget` / `sendTextMessage` / `pickConversationFiles` + `deliverFiles`（含 2 分钟离线重试） |
 | `app/lib/pages/conversations_page.dart` | 列表 + 空态 + 全清 + 长按删除 |
-| `app/lib/pages/conversation_page.dart` | 详情 + 底部输入栏（[附件][输入][发送]） |
+| `app/lib/pages/conversation_page.dart` | 详情 + 底部输入栏（[附件][输入][发送]）+ 文字选区/右键「复制」菜单 |
 | `app/lib/widget/chat/message_bubble.dart` | 文本气泡、头像、固定发出色 |
 | `app/lib/widget/chat/file_message_card.dart` | 文件气泡 |
 | `app/lib/widget/chat/top_toast.dart` | 顶部 Toast（替代 SnackBar） |
@@ -59,6 +59,16 @@ LocalSend **没有**可调的「发送超时」：对端 App 没开时 prepare-u
 - **文件只在握手阶段重试**：一旦 `session.files` 里有 `token != null`，说明已进入流式上传，重来会在对端留下半截文件 → 停止重试，后续交给 upload 事件。
 - 跨重试复用 `checksumCache`（`send_provider.startSession` 的 `[FORK]` 参数），否则两分钟内会把几百 MB 文件反复读盘哈希。
 - 投递全程在后台：页面不 `await`，输入框不锁；结果由气泡状态（转圈 / 红色感叹号）和顶部 Toast 表达。
+
+## 文字选区 / 复制菜单
+
+`conversation_page.dart` 用 `SelectionArea` 让气泡文字可选，但**菜单是自己弹的**，不走框架工具条：
+
+- 框架的 `SelectableRegion._handleMouseDragEnd` 在 desktop（windows/macOS/linux）分支里明确写了 *"The selection overlay is not shown on desktop platforms after a drag"*，所以拖选结束后不会出现任何菜单——想要「选中即弹」必须自己接管。
+- 触发点：`Listener.onPointerUp` → `_autoShowMenu()`；`MessageBubble.onSecondaryTap`（右键）→ 同一条 `_showCopyMenu()`。
+- **坑：`addPostFrameCallback` 不会调度帧**（源码里只是 `_postFrameCallbacks.add`）。桌面端拖选结束后没有重绘，回调会一直挂着，表现就是「选中了但菜单永远不来」。必须用 `WidgetsBinding.instance.endOfFrame`（idle 时它会 `scheduleFrame()`），再补几次 16ms 短重试兜住 pending 选区。
+- 用 `_selectionTouched` 区分「本次按下产生了新选区」（拖选/双击选词，要弹）与「点空白处取消选区」（pointer up 前选区还是旧的，不能弹）。这个判断必须放在 `await endOfFrame` **之后**：双击选词发生在手势竞技场裁决阶段，比 `onPointerUp` 更晚。
+- 菜单框显式描 `colorScheme.outlineVariant` 边框——`showMenu` 默认只有阴影，浅色背景下几乎看不到边缘。
 
 ## 状态机
 

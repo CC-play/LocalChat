@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show SelectedContent;
+import 'package:flutter/services.dart';
 import 'package:localsend_app/gen/strings.g.dart';
 import 'package:localsend_app/model/conversation/conversation.dart';
 import 'package:localsend_app/model/cross_file.dart';
@@ -13,6 +15,9 @@ import 'package:localsend_app/widget/chat/top_toast.dart';
 import 'package:localsend_isolates/model/device.dart';
 import 'package:localsend_isolates/model/file_type.dart';
 import 'package:refena_flutter/refena_flutter.dart';
+
+/// 气泡右键 / 选中后弹出的菜单项。目前只有复制，留枚举方便后续加「转发」「删除」。
+enum _ChatMenuAction { copy }
 
 /// 单个对端设备的会话窗口。
 class ConversationPage extends StatefulWidget {
@@ -28,6 +33,21 @@ class ConversationPage extends StatefulWidget {
 }
 
 class _ConversationPageState extends State<ConversationPage> {
+  /// [FORK] 文字可选中：靠它拿到当前选区锚点，用于定位「复制」菜单。
+  final _selectionKey = GlobalKey<SelectionAreaState>();
+
+  /// 当前选中文本；由 [SelectionArea.onSelectionChanged] 维护，仅作字段用（不 setState）。
+  String? _selectedText;
+
+  /// 本次按下之后选区是否真的变化过。
+  ///
+  /// 用来区分「拖选 / 双击选词」（要弹菜单）和「点空白处取消选区」
+  /// （此时 pointer up 前选区还是旧的，不该弹）。
+  bool _selectionTouched = false;
+
+  /// 菜单是否已经弹出。避免 pointer up 与后续事件重复弹两次。
+  bool _menuOpen = false;
+
   @override
   void initState() {
     super.initState();
@@ -38,6 +58,124 @@ class _ConversationPageState extends State<ConversationPage> {
       }
       unawaited(context.ref.redux(conversationProvider).dispatchAsync(MarkConversationReadAction(widget.peerFingerprint)));
     });
+  }
+
+  void _handleSelectionChanged(SelectedContent? content) {
+    final text = content?.plainText;
+    _selectedText = text;
+    if (text != null && text.isNotEmpty) {
+      _selectionTouched = true;
+    }
+  }
+
+  void _handlePointerDown(PointerDownEvent event) {
+    // 新一轮按下，先认为选区没被碰过；真正的选中会在此后回调里置位。
+    _selectionTouched = false;
+  }
+
+  /// 松手后如果存在选区，就在选区旁自动弹出「复制」。
+  void _handlePointerUp(PointerUpEvent event) {
+    unawaited(_autoShowMenu(event.position));
+  }
+
+  Future<void> _autoShowMenu(Offset fallbackPosition) async {
+    // 必须等一帧再读：选区在 pointer up 之后才最终化，而双击选词更晚——
+    // 选词发生在手势竞技场裁决阶段，比 Listener.onPointerUp 还迟，
+    // 所以判断不能提前返回。
+    //
+    // 用 endOfFrame 而不是 addPostFrameCallback —— 后者只登记回调、**不会主动
+    // 调度帧**（见 SchedulerBinding.addPostFrameCallback 源码）。松手之后如果没有
+    // 任何重绘（桌面端拖选完成后框架不再画选区手柄），回调就会一直挂着，
+    // 菜单永远不会出现。endOfFrame 在 idle 时会自己 scheduleFrame，行为确定。
+    await WidgetsBinding.instance.endOfFrame;
+
+    // 偶发情况下选区比一帧更晚才就绪（例如 SelectionResult 是 pending 的），
+    // 这里再补几次短重试，避免「明明选中了却不弹菜单」。
+    for (var attempt = 0; attempt < 4; attempt++) {
+      if (attempt > 0) {
+        await Future<void>.delayed(const Duration(milliseconds: 16));
+      }
+      if (!mounted || _menuOpen) {
+        return;
+      }
+      final selected = _selectedText;
+      // 点空白处取消选区时，本次按下从没产生过新选区，不该弹菜单。
+      if (!_selectionTouched || selected == null || selected.isEmpty) {
+        continue;
+      }
+      await _showCopyMenu(fallbackPosition, selected);
+      return;
+    }
+  }
+
+  /// 右键气泡：有选区就用选区，否则复制这一条气泡的正文。
+  void _handleBubbleSecondaryTap(Offset position, ChatMessage message) {
+    final body = message.kind == ChatMessageKind.text ? (message.text ?? '') : (message.fileName ?? '');
+    if (body.isEmpty) {
+      return;
+    }
+    final selected = _selectedText;
+    // 选区必须确实落在这一条气泡里，才按「复制选中部分」处理，否则容易复制到别处的内容。
+    final text = (selected != null && selected.isNotEmpty && body.contains(selected)) ? selected : body;
+    unawaited(_showCopyMenu(position, text));
+  }
+
+  Future<void> _showCopyMenu(Offset position, String text) async {
+    final overlay = Overlay.of(context).context.findRenderObject();
+    if (overlay is! RenderBox || _menuOpen) {
+      return;
+    }
+
+    _menuOpen = true;
+    final theme = Theme.of(context);
+    _ChatMenuAction? action;
+    try {
+      action = await showMenu<_ChatMenuAction>(
+        context: context,
+        position: RelativeRect.fromLTRB(
+          position.dx,
+          position.dy,
+          overlay.size.width - position.dx,
+          overlay.size.height - position.dy,
+        ),
+        // [FORK] 菜单框描一圈浅色边框，和气泡一样有明确的边界感
+        // （默认只有阴影，在浅色背景上几乎看不出边缘）。
+        color: theme.colorScheme.surfaceContainer,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: BorderSide(color: theme.colorScheme.outlineVariant),
+        ),
+        items: [
+          PopupMenuItem(
+            value: _ChatMenuAction.copy,
+            height: 40,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.copy, size: 16),
+                const SizedBox(width: 10),
+                Text(t.general.copy),
+              ],
+            ),
+          ),
+        ],
+      );
+    } finally {
+      _menuOpen = false;
+    }
+
+    if (!mounted) {
+      return;
+    }
+    // 复制完顺手取消高亮，避免残留一片蓝色选区。
+    _selectionKey.currentState?.selectableRegion.clearSelection();
+    _selectedText = null;
+    _selectionTouched = false;
+
+    if (action == _ChatMenuAction.copy) {
+      await Clipboard.setData(ClipboardData(text: text));
+    }
   }
 
   @override
@@ -62,36 +200,48 @@ class _ConversationPageState extends State<ConversationPage> {
           Expanded(
             child: messages.isEmpty
                 ? Center(child: Text(t.conversation.noMessages))
-                : ListView.builder(
-                    reverse: true,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    itemCount: messages.length,
-                    itemBuilder: (context, index) {
-                      // reverse: true 时 index 0 是最新一条。
-                      final i = messages.length - 1 - index;
-                      final msg = messages[i];
-                      final showDate = i == 0 || _needsDateSeparator(messages[i - 1].timestamp, msg.timestamp);
+                : SelectionArea(
+                    key: _selectionKey,
+                    // 框架自带的工具栏在桌面端只在右键时出现，且无法定制成「只有复制」；
+                    // 这里清空它，改由 _handlePointerUp / 右键回调自己弹菜单。
+                    contextMenuBuilder: (context, state) => const SizedBox.shrink(),
+                    onSelectionChanged: _handleSelectionChanged,
+                    child: Listener(
+                      onPointerDown: _handlePointerDown,
+                      onPointerUp: _handlePointerUp,
+                      child: ListView.builder(
+                        reverse: true,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        itemCount: messages.length,
+                        itemBuilder: (context, index) {
+                          // reverse: true 时 index 0 是最新一条。
+                          final i = messages.length - 1 - index;
+                          final msg = messages[i];
+                          final showDate = i == 0 || _needsDateSeparator(messages[i - 1].timestamp, msg.timestamp);
 
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          if (showDate) _DateLabel(timestamp: msg.timestamp),
-                          MessageBubble(
-                            message: msg,
-                            peerInitial: initial,
-                            onFileTap: msg.filePath == null
-                                ? null
-                                : () async {
-                                    await openFile(
-                                      context,
-                                      msg.fileType ?? FileType.other,
-                                      msg.filePath!,
-                                    );
-                                  },
-                          ),
-                        ],
-                      );
-                    },
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              if (showDate) _DateLabel(timestamp: msg.timestamp),
+                              MessageBubble(
+                                message: msg,
+                                peerInitial: initial,
+                                onSecondaryTap: (position) => _handleBubbleSecondaryTap(position, msg),
+                                onFileTap: msg.filePath == null
+                                    ? null
+                                    : () async {
+                                        await openFile(
+                                          context,
+                                          msg.fileType ?? FileType.other,
+                                          msg.filePath!,
+                                        );
+                                      },
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
                   ),
           ),
           _Composer(

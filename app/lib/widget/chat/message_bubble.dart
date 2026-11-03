@@ -17,11 +17,15 @@ class MessageBubble extends StatelessWidget {
 
   final VoidCallback? onFileTap;
 
+  /// [FORK] 右键（桌面）点击气泡时回调，参数是全局坐标，用于在该点弹出菜单。
+  final ValueChanged<Offset>? onSecondaryTap;
+
   const MessageBubble({
     super.key,
     required this.message,
     required this.peerInitial,
     this.onFileTap,
+    this.onSecondaryTap,
   });
 
   @override
@@ -97,50 +101,56 @@ class MessageBubble extends StatelessWidget {
       };
     }
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
-      child: Row(
-        mainAxisAlignment: isOutgoing ? MainAxisAlignment.end : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (!isOutgoing) avatar,
-          if (!isOutgoing) const SizedBox(width: 8),
-          // [FORK] 发送状态圆圈（转圈 / 红色感叹号），只在发出方向显示。
-          if (statusIndicator != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 6, right: 6),
-              child: statusIndicator,
-            ),
-          Flexible(
-            child: Column(
-              crossAxisAlignment: isOutgoing ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-              children: [
-                Container(
-                  constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.7),
-                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: bubbleColor,
-                    borderRadius: BorderRadius.circular(10),
+    return GestureDetector(
+      // 整行可右键（含气泡外侧留白），菜单由页面统一弹。
+      // 用 translucent：子节点（文件卡片）自己的点击照旧生效。
+      behavior: HitTestBehavior.translucent,
+      onSecondaryTapUp: onSecondaryTap == null ? null : (details) => onSecondaryTap!(details.globalPosition),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+        child: Row(
+          mainAxisAlignment: isOutgoing ? MainAxisAlignment.end : MainAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (!isOutgoing) avatar,
+            if (!isOutgoing) const SizedBox(width: 8),
+            // [FORK] 发送状态圆圈（转圈 / 红色感叹号），只在发出方向显示。
+            if (statusIndicator != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 6, right: 6),
+                child: statusIndicator,
+              ),
+            Flexible(
+              child: Column(
+                crossAxisAlignment: isOutgoing ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.7),
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: bubbleColor,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: bubbleChild,
                   ),
-                  child: bubbleChild,
-                ),
-                if (statusHint != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 3),
-                    child: Text(
-                      statusHint,
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: failed ? theme.colorScheme.error : theme.colorScheme.outline,
+                  if (statusHint != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 3),
+                      child: Text(
+                        statusHint,
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: failed ? theme.colorScheme.error : theme.colorScheme.outline,
+                        ),
                       ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
-          ),
-          if (isOutgoing) const SizedBox(width: 8),
-          if (isOutgoing) avatar,
-        ],
+            if (isOutgoing) const SizedBox(width: 8),
+            if (isOutgoing) avatar,
+          ],
+        ),
       ),
     );
   }
