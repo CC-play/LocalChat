@@ -73,6 +73,27 @@ LocalSend **没有**可调的「发送超时」：对端 App 没开时 prepare-u
 - 文件重发前 `File(path).existsSync()`：粘贴的图片落在缓存目录，可能已被系统清理 → 返回 `SendFailure.fileMissing`（`t.conversation.fileMissing`「原文件已经不在了」），并把气泡标回失败。
 - 页面用 `_retrying` 集合挡连点：重发期间点同一颗感叹号不再响应（气泡此时也已经是「发送中」）。
 
+## 超时与看门狗
+
+「气泡一直转圈」有两个互不相干的根因，修复方式也不同。
+
+**1. 握手阶段可能永久挂起（不是窗口太短，是窗口根本不起作用）。**
+`http_provider.dart` 创建 HTTP 客户端时只传 `privateKey/cert/expectedFingerprint`，Rust 的 `create_reqwest_client` 在 `timeout == None` 时**不给 reqwest 设任何超时**。于是 `prepare-upload` 对着一个「TCP 能连上但不应答」的地址会永久挂起。而重试循环里的 `deadline` 判断写在 `await` **之后**，永远执行不到 —— 2 分钟窗口形同虚设。
+
+- 修法：把整段重试循环抽成 `_sendTextWithRetry` / `_deliverWithRetry`，外层 `.timeout(textSendRetryWindow + _timeoutGrace)`（`_timeoutGrace = 10s`，避免抢在「最后一次尝试正常结束」之前判超时）。
+- `finally` 里的 `closeSession` 会顺带取消还挂着的 prepare-upload（cancel token），超时后不会留下仍在跑的请求。
+- **不能简单地给 prepare-upload 加短超时**：接收端在「需要确认」模式下会一直 hold 住这个请求等用户点接受/拒绝，短超时会把正常场景误判成失败。所以用「总窗口」而不是「单次请求超时」。
+
+**2. 上传阶段原本完全没有超时。**
+`deliverFiles` 一旦 `enteredTransfer` 就 `return null`，终态全靠 upload 事件。对端在传输中途消失、TCP 半开，事件再也不来，气泡永远转圈。
+
+- 修法：进入上传时 `unawaited(_watchStalledUploads(...))`。每 10 秒巡检一次，超过 `uploadStallTimeout = 60s` 没有任何进度事件 → `closeSession` + 把仍 pending 的气泡标失败（可点重发）。
+- 活跃度取自 `chatTransferProvider.lastProgressOf(id)`，而**不是**气泡上的进度值：看门狗必须在「用户没打开会话页、没有气泡登记」时也能判断。所以 `report()` 里时间戳是**无条件**记录的，进度 notifier 才是按需创建。少了这条，后台正常传输的大文件会被误判成停滞。
+- **按整批文件判断活跃度，不按单文件**：多文件是顺序上传的，逐文件计时会误伤排在后面、还没开始传的正常文件。
+- 小文件可能一个 progress 事件都没有就传完了 —— 那时气泡已是终态，看门狗在下一轮巡检自然退出。
+
+**3. 附带修复：异常逃逸。** 两条路径的 `catch` 现在都会把 `failure` 置为非空并继续走到 `markSentFile` / `_failPendingFiles`。之前中途抛异常会让已置为 pending 的气泡再也无人收尾。
+
 ## 进度条
 
 气泡下方的细进度条 + 百分比，只在上传阶段出现。
@@ -83,7 +104,8 @@ LocalSend **没有**可调的「发送超时」：对端 App 没开时 prepare-u
 
 - 不参与持久化，纯内存旁路；**每条消息一个 `ValueNotifier<double?>`**，进度变化只重建那一条气泡。
 - 键是 `messageId`。聊天场景里消息 id 与上传使用的 `fileId` 是同一个值（`ConversationSender` 刻意复用），所以 `send_provider.dart` 拿到 `HttpUploadFileProgressEvent` 后可以按 `event.fileId` 直接回报。
-- `report()` **只更新已登记的条目**：没气泡在等（从普通「发送」Tab 发出去的传输）就整条丢弃，不给每个普通传输都建一个没人用的 notifier。
+- `report()` **只更新已登记的条目**：没气泡在等（从普通「发送」Tab 发出去的传输）就只刷新时间戳、不建 notifier，不给每个普通传输都留一个没人用的对象。
+- 另有 `_lastProgressAt`（`lastProgressOf`）记录最后一次进度事件的时间，**无条件**写入，供上传看门狗判断传输是否还活着（见「超时与看门狗」）。
 - 节流 0.5%：上传事件按块回报，1GB 文件上千次，逐次重绘没有意义。允许回退（重发从 0 重来）。
 - 清理只有一处：`markSentFile` 开头 `finish(messageId)`。所有终态（成功 / 上传失败 / 对端未勾选 / 源文件丢失 / 重试超时）都经过它。
 - `finish` 只从 map 移除、**不 `dispose`**：气泡可能还在同一帧挂着监听，dispose 过的 notifier 再加监听会抛错。
@@ -155,7 +177,7 @@ ChatMessageStatus:  pending ──成功──> sent
 
 ```bash
 cd app && flutter test test/unit/provider/conversation_provider_test.dart   # 16 个用例
-cd app && flutter test test/unit/provider/chat_transfer_test.dart           # 8 个用例（节流 / 回退 / 清理）
+cd app && flutter test test/unit/provider/chat_transfer_test.dart           # 11 个用例（节流 / 回退 / 清理 / 时间戳）
 NO_PROXY=localhost,127.0.0.1,::1 flutter test                              # 全量（HTTP_PROXY 会拦 localhost WebSocket）
 ```
 

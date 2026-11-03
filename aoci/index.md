@@ -12,6 +12,7 @@
 | 会话栏什么时候出现卡片 | `app/lib/util/conversation/conversation_recorder.dart` → `conversation_provider.dart:48` | [conversation](modules/conversation.md#卡片生成条件) | 手动：双端互发一次文本 |
 | 发文本消息 | `app/lib/util/conversation/conversation_sender.dart:106`（`sendTextMessage`）→ `app/lib/provider/network/send_provider.dart:681` | [conversation](modules/conversation.md) | 双端收发 |
 | 发文件（含离线重试） | `app/lib/util/conversation/conversation_sender.dart`（`deliverFiles`）→ `send_provider.dart`（`startSession`） | [conversation](modules/conversation.md) | 双端收发 |
+| 发送卡住 / 一直转圈 | `app/lib/util/conversation/conversation_sender.dart`（硬超时 + `_watchStalledUploads`） | [conversation](modules/conversation.md#超时与看门狗) | 对端关机后点重发，2 分钟内应失败 |
 | 收文本消息（静默接收） | `app/lib/provider/network/server/controller/receive_controller.dart:168` | [conversation](modules/conversation.md) | 双端收发 |
 | 收到文件的记录时机 | `receive_controller.dart:377`（`error == null` 分支） | [conversation](modules/conversation.md) | 传一个文件后看会话 |
 | 会话持久化 / 迁移 | `app/lib/provider/persistence_provider.dart:60`（`ls_conversations`） | — | `flutter test` |
@@ -66,10 +67,10 @@
 ```
 app/lib/model/conversation/conversation.dart          266 行
 app/lib/util/conversation/conversation_recorder.dart  209 行
-app/lib/util/conversation/conversation_sender.dart    559 行
+app/lib/util/conversation/conversation_sender.dart    718 行
 app/lib/util/conversation/clipboard_image.dart         199 行（图片 + 文件列表两条通道）
 app/lib/provider/conversation_provider.dart           229 行
-app/lib/provider/conversation/chat_transfer_provider.dart  63 行（上传进度旁路）
+app/lib/provider/conversation/chat_transfer_provider.dart  77 行（上传进度旁路）
 app/lib/pages/conversations_page.dart                 173 行
 app/lib/pages/conversation_page.dart                  962 行
 app/lib/widget/chat/message_bubble.dart               246 行
@@ -80,7 +81,7 @@ app/windows/runner/clipboard_image_win.cpp            217 行（纯 Win32/WIC，
 app/windows/runner/clipboard_files_win.cpp            74 行（CF_HDROP → 路径，shellapi）
 app/windows/runner/clipboard_ext.cpp                   67 行
 app/test/unit/provider/conversation_provider_test.dart 368 行（16 用例）
-app/test/unit/provider/chat_transfer_test.dart          91 行（8 用例）
+app/test/unit/provider/chat_transfer_test.dart         127 行（11 用例）
 app/test/unit/util/clipboard_image_test.dart           75 行（9 用例）
 ```
 
