@@ -33,7 +33,12 @@
 | `app/lib/util/conversation/conversation_recorder.dart` | 接收侧写入口，`peerKeyOf()` 决定会话主键 |
 | `app/lib/util/conversation/conversation_sender.dart` | 发送侧：`resolveConversationTarget` / `sendTextMessage` / `pickConversationFiles` + `deliverFiles`（含 2 分钟离线重试） |
 | `app/lib/pages/conversations_page.dart` | 列表 + 空态 + 全清 + 长按删除 |
-| `app/lib/pages/conversation_page.dart` | 详情 + 底部输入栏（[附件][输入][发送]）+ 文字选区/右键「复制」菜单 |
+| `app/lib/pages/conversation_page.dart` | 详情 + 底部输入栏（[附件][输入][发送]）+ 文字选区/右键「复制」菜单 + Ctrl+V 粘贴（文件 / 图片 / 文本） |
+| `app/lib/util/conversation/clipboard_image.dart` | 剪贴板文件与图片读取（原生通道）+ 落缓存目录 + 文件名消毒 |
+| `app/windows/runner/clipboard_image_win.cpp` | WIC：剪贴板 PNG / JPEG / DIB → PNG 字节（不依赖 Flutter，可单独编译验证） |
+| `app/windows/runner/clipboard_files_win.cpp` | `CF_HDROP` → 路径列表（拖动文件到剪贴板时只有这个格式） |
+| `app/windows/runner/clipboard_ext.cpp` | Windows 侧方法通道 `getClipboardImage` / `getClipboardFiles` |
+| `app/android/.../MainActivity.kt` | 同一个通道的 Android 实现（读 `ClipData` 的 content URI） |
 | `app/lib/widget/chat/message_bubble.dart` | 文本气泡、头像、固定发出色 |
 | `app/lib/widget/chat/file_message_card.dart` | 文件气泡 |
 | `app/lib/widget/chat/top_toast.dart` | 顶部 Toast（替代 SnackBar） |
@@ -69,6 +74,31 @@ LocalSend **没有**可调的「发送超时」：对端 App 没开时 prepare-u
 - **坑：`addPostFrameCallback` 不会调度帧**（源码里只是 `_postFrameCallbacks.add`）。桌面端拖选结束后没有重绘，回调会一直挂着，表现就是「选中了但菜单永远不来」。必须用 `WidgetsBinding.instance.endOfFrame`（idle 时它会 `scheduleFrame()`），再补几次 16ms 短重试兜住 pending 选区。
 - 用 `_selectionTouched` 区分「本次按下产生了新选区」（拖选/双击选词，要弹）与「点空白处取消选区」（pointer up 前选区还是旧的，不能弹）。这个判断必须放在 `await endOfFrame` **之后**：双击选词发生在手势竞技场裁决阶段，比 `onPointerUp` 更晚。
 - 菜单框显式描 `colorScheme.outlineVariant` 边框——`showMenu` 默认只有阴影，浅色背景下几乎看不到边缘。
+
+## 拖拽文件进入会话
+
+- 会话页自己挂 `DropTarget`（`desktop_drop`）。**关键坑**：这个包不做冒泡/顶层判定，**所有**注册的 `DropTarget` 都会收到事件、各自用 `paintBounds` 命中。主页那层必须 `enable: ModalRoute.of(context)?.isCurrent`（`_ModalScopeStatus` 会在 push/pop 时通知依赖方重建），否则拖文件进会话页会同时被主页塞进「发送」Tab 并切走页面。
+- 落下后先 `CrossFileConverters.convertXFile` 拿到 name/size，再弹 `showDropConfirmDialog`（`widget/chat/drop_confirm_dialog.dart`）：数量 + 合计大小 + 文件清单；取消＝红字红框，确认＝蓝底白字（复用 `kOutgoingBubbleColor`）。
+- 确认后走 `deliverFilesInBackground`，与回形针**同一条**投递路径（2 分钟重试、预置「发送中」气泡、失败才提示）。
+- 目录不展开（可能是整个盘），只提示跳过；拖拽悬停时整页盖一层 `_DropOverlay` 提示「松手即发」。
+
+## 粘贴（Ctrl+V）：文件 / 图片 / 文本
+
+Flutter 的 `Clipboard.getData` **只认纯文本**：`ClipboardData` 里只有 `text` 字段，实现里直接 `result['text'] as String`，位图根本没有通路。所以剪贴板走自建原生通道（通道名与 Android 共用一个：`org.localsend.localsend_app/localsend`），并且**按顺序问三种东西**：
+
+1. `getClipboardFiles` —— 文件列表。资源管理器里 Ctrl+C 一个文件（含 `.jpg`）时，剪贴板里是 `CF_HDROP`（一组路径），不是位图；Android 对应的是带 `content://` URI 的 `ClipData`（可能是多条）。Windows 只回路径（文件已在磁盘上），Android 回 `{bytes, mime, name}`（没有路径可用），Dart 侧统一 `materialize` 成实体文件。
+2. `getClipboardImage` —— 位图。Windows 先试注册格式 `PNG`，再试 `JFIF`/`JPEG`（少数看图工具只放这个），最后 `CF_DIBV5`/`CF_DIB` → 补 `BITMAPFILEHEADER` → WIC 解码 → **PNG 编码**。`OpenClipboard` 被占用时重试 5×20ms。
+3. 文本 —— `Clipboard.getData(kTextPlain)`。
+
+**为什么输出总是 PNG**：剪贴板里存的不是「图片文件」，而是解码后的像素（DIB）或一份流。PNG 只是我们落盘时选的容器（无损、能带 alpha），跟来源是 JPG / WebP / PNG 无关。复制一张 JPEG 照片粘贴进来，走的是第 2 步，转成 PNG 发出。
+
+- Dart 侧把 `Ctrl/Cmd+V` 映射到私有 intent，在 **整个会话页**生效（`_PasteShortcuts`，不是只包输入框）：不点输入框也能粘。两个关键点：
+  - 读剪贴板是异步的，而键事件必须同步给出「已处理」，所以文本粘贴也一并接管——没有文件/图片时走 `_insertText()`。
+  - `_PasteShortcuts` 内部带一个 `Focus(autofocus: true)`：刚打开会话、什么都没点时，焦点是 route 自己的 `FocusScopeNode`，它在页面**外层**，沿 context 向上找 `Shortcuts` 根本不会经过本页（表现就是「没聚焦时按 Ctrl+V 无效」）。
+- **不能用 `Actions.invoke(context, PasteTextIntent(...))` 把文本粘贴交回框架**：那个 action 由 `EditableTextState` 注册在它自己的子树里，`Actions.invoke` 只沿 context 向上找，从输入条 context 永远找不到，会静默 no-op（表现为「文本粘不进来」）。
+- 文件/图片先落缓存目录（`getCacheDirectory()`；图片名为 `clipboard-yyyyMMdd-HHmmss.png`，Android 文件保留原名并消毒非法字符），再 `CrossFileConverters.convertFile` + **复用同一张 `showDropConfirmDialog`**，确认后走 `deliverFilesInBackground`（与拖拽、回形针同一条投递路径）。
+- 文件夹不展开（和拖拽一致）：跳过并提示 `pasteSkipped`。
+- 确认卡片会抢焦点，关闭后要 `_focusNode.requestFocus()` 把光标还给输入框。
 
 ## 状态机
 
@@ -108,3 +138,7 @@ NO_PROXY=localhost,127.0.0.1,::1 flutter test                              # 全
 - `peerPort` 为空的旧会话无法主动发消息（`resolveConversationTarget` 返回 null，`https` 只能猜 false）。
 - 对端改名后卡片名会更新，但**无指纹的对端**改名会分裂成新卡片（伪键 `alias:<别名>`）。
 - 文本消息上限 4000 字符（`maxTextMessageLength`）。
+- 粘贴只在 **Windows / Android** 有原生实现（macOS / Linux / iOS 会走 `MissingPluginException` 分支，退化为普通文本粘贴）。
+- Android 上粘贴依赖物理键盘的 Ctrl+V；软键盘长按弹出的系统「粘贴」走的是 `TextInputClient` 通道，不经过 `Shortcuts`。
+- 剪贴板文件一次最多 100 个（Windows `kMaxFiles`）/ 20 个且单文件 ≤256MB（Android `MAX_CLIPBOARD_*`）：Android 是把字节读进内存再落盘，不设上限会 OOM。
+- Windows 复制**文件夹**只会被跳过（`Directory.existsSync()` 判断），不展开递归。
