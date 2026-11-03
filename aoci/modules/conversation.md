@@ -73,6 +73,23 @@ LocalSend **没有**可调的「发送超时」：对端 App 没开时 prepare-u
 - 文件重发前 `File(path).existsSync()`：粘贴的图片落在缓存目录，可能已被系统清理 → 返回 `SendFailure.fileMissing`（`t.conversation.fileMissing`「原文件已经不在了」），并把气泡标回失败。
 - 页面用 `_retrying` 集合挡连点：重发期间点同一颗感叹号不再响应（气泡此时也已经是「发送中」）。
 
+## 进度条
+
+气泡下方的细进度条 + 百分比，只在上传阶段出现。
+
+**为什么不把 `progress` 放进 `ChatMessage`**：会话状态（Redux）每次变更都会 `setConversations` 整份序列化写盘，而上传进度每秒来好几次，几百条消息的会话会被高频全量写盘拖垮；同时 provider 一变，整页 `ConversationPage.build` 连同可见的每条气泡都要重建。上游的 `fileTransferProvider` 出于同样理由用 `ChangeNotifier`。
+
+做法（`provider/conversation/chat_transfer_provider.dart`）：
+
+- 不参与持久化，纯内存旁路；**每条消息一个 `ValueNotifier<double?>`**，进度变化只重建那一条气泡。
+- 键是 `messageId`。聊天场景里消息 id 与上传使用的 `fileId` 是同一个值（`ConversationSender` 刻意复用），所以 `send_provider.dart` 拿到 `HttpUploadFileProgressEvent` 后可以按 `event.fileId` 直接回报。
+- `report()` **只更新已登记的条目**：没气泡在等（从普通「发送」Tab 发出去的传输）就整条丢弃，不给每个普通传输都建一个没人用的 notifier。
+- 节流 0.5%：上传事件按块回报，1GB 文件上千次，逐次重绘没有意义。允许回退（重发从 0 重来）。
+- 清理只有一处：`markSentFile` 开头 `finish(messageId)`。所有终态（成功 / 上传失败 / 对端未勾选 / 源文件丢失 / 重试超时）都经过它。
+- `finish` 只从 map 移除、**不 `dispose`**：气泡可能还在同一帧挂着监听，dispose 过的 notifier 再加监听会抛错。
+- 进度为 `null`（还没进入上传，例如正在算校验和、或正等对方接受）时退回原来的「发送中…」文字，不占额外高度。
+- 百分比用 `floor` 而不是 `round`：99.6% 还没传完，显示 100% 会让人以为卡住了。
+
 ## 文字选区 / 复制菜单
 
 `conversation_page.dart` 用 `SelectionArea` 让气泡文字可选，但**菜单是自己弹的**，不走框架工具条：
@@ -137,7 +154,8 @@ ChatMessageStatus:  pending ──成功──> sent
 ## 测试
 
 ```bash
-cd app && flutter test test/unit/provider/conversation_provider_test.dart   # 12 个用例
+cd app && flutter test test/unit/provider/conversation_provider_test.dart   # 16 个用例
+cd app && flutter test test/unit/provider/chat_transfer_test.dart           # 8 个用例（节流 / 回退 / 清理）
 NO_PROXY=localhost,127.0.0.1,::1 flutter test                              # 全量（HTTP_PROXY 会拦 localhost WebSocket）
 ```
 

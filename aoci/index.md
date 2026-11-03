@@ -21,6 +21,7 @@
 | 设备发现 / 扫描 | `app/lib/provider/network/nearby_devices_provider.dart` → `scan_facade.dart` → `packages/core/src/multicast/` | — | 见 `AGENTS.md` |
 | HTTP 协议 / 传输 | `packages/core/src/http/` → `app/lib/provider/network/server/server_provider.dart` | — | `cargo test --features full` |
 | 单条消息的状态机 | `app/lib/model/conversation/conversation.dart`（`ChatMessageStatus`） | [conversation](modules/conversation.md#状态机) | 单元测试 |
+| 气泡上的上传进度条 | `app/lib/provider/conversation/chat_transfer_provider.dart` → `app/lib/widget/chat/message_bubble.dart`（`_SendProgressFooter`）→ `send_provider.dart`（`HttpUploadFileProgressEvent` 分支） | [conversation](modules/conversation.md#进度条) | `flutter test test/unit/provider/chat_transfer_test.dart` |
 
 ## 入口符号速查
 
@@ -57,18 +58,21 @@
 | `app/lib/widget/chat/drop_confirm_dialog.dart` | 整个文件为 fork 新增（拖拽/粘贴共用确认卡片） |
 | `app/lib/model/conversation/conversation.dart` | `copyWith(clearError)`：`errorMessage` 需要能被置空（重发） |
 | `app/lib/util/conversation/conversation_sender.dart` | `sendTextMessage(messageIdOverride)` / `deliverFiles(messageIds)` / `retryChatMessage` |
+| `app/lib/provider/conversation/chat_transfer_provider.dart` | 整个文件为 fork 新增（上传进度旁路，每条消息一个 `ValueNotifier`） |
+| `app/lib/provider/network/send_provider.dart`（进度） | `HttpUploadFileProgressEvent` 分支里的 `chatTransferProvider.report` |
 
 ## fork 独占文件（上游不存在）
 
 ```
 app/lib/model/conversation/conversation.dart          266 行
-app/lib/util/conversation/conversation_recorder.dart  200 行
-app/lib/util/conversation/conversation_sender.dart    555 行
+app/lib/util/conversation/conversation_recorder.dart  209 行
+app/lib/util/conversation/conversation_sender.dart    559 行
 app/lib/util/conversation/clipboard_image.dart         199 行（图片 + 文件列表两条通道）
 app/lib/provider/conversation_provider.dart           229 行
+app/lib/provider/conversation/chat_transfer_provider.dart  63 行（上传进度旁路）
 app/lib/pages/conversations_page.dart                 173 行
 app/lib/pages/conversation_page.dart                  962 行
-app/lib/widget/chat/message_bubble.dart               172 行
+app/lib/widget/chat/message_bubble.dart               246 行
 app/lib/widget/chat/file_message_card.dart             76 行
 app/lib/widget/chat/top_toast.dart                    168 行
 app/lib/widget/chat/drop_confirm_dialog.dart          128 行
@@ -76,6 +80,7 @@ app/windows/runner/clipboard_image_win.cpp            217 行（纯 Win32/WIC，
 app/windows/runner/clipboard_files_win.cpp            74 行（CF_HDROP → 路径，shellapi）
 app/windows/runner/clipboard_ext.cpp                   67 行
 app/test/unit/provider/conversation_provider_test.dart 368 行（16 用例）
+app/test/unit/provider/chat_transfer_test.dart          91 行（8 用例）
 app/test/unit/util/clipboard_image_test.dart           75 行（9 用例）
 ```
 
