@@ -136,3 +136,8 @@ Slang, source files in `app/assets/i18n/` (`<locale>.json` plus `_missing_transl
 ## Release notes
 
 `app/pubspec.yaml`'s version must match `#define MyAppVersion` in `support/scripts/compile_windows_exe-inno.iss` and the `version` in `cli/Cargo.toml` (the CLI prints it in its start banner) — CI fails on a mismatch. Platform build commands and release steps are documented in `README.md` ("Building") and `CONTRIBUTING.md` ("Release").
+## Fork-specific code index
+
+`aoci/` holds an AI-oriented index maintained by this fork: `index.md` routes "I want to change X" to the 2-3 files to read first, `invariants.md` lists constraints whose violation breaks the build or the UI, and `modules/` documents subsystems the fork added (the conversation/chat layer). Read it before exploring `app/lib`; validate it after refactors with `python support/scripts/aoci_check.py`.
+
+Fork changes to upstream files are marked with `// [FORK]` comments — preserve them when syncing with upstream, and list new insertion points in `aoci/index.md`.
