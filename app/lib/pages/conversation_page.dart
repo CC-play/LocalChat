@@ -4,11 +4,13 @@ import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:localsend_app/gen/strings.g.dart';
 import 'package:localsend_app/model/conversation/conversation.dart';
+import 'package:localsend_app/model/cross_file.dart';
 import 'package:localsend_app/provider/conversation_provider.dart';
 import 'package:localsend_app/util/conversation/conversation_sender.dart';
 import 'package:localsend_app/util/native/open_file.dart';
 import 'package:localsend_app/widget/chat/message_bubble.dart';
 import 'package:localsend_app/widget/chat/top_toast.dart';
+import 'package:localsend_isolates/model/device.dart';
 import 'package:localsend_isolates/model/file_type.dart';
 import 'package:refena_flutter/refena_flutter.dart';
 
@@ -195,7 +197,7 @@ class _ComposerState extends State<_Composer> {
 
   Future<void> _sendText() async {
     final text = _controller.text.trim();
-    if (text.isEmpty || _busy) {
+    if (text.isEmpty) {
       return;
     }
 
@@ -210,38 +212,34 @@ class _ComposerState extends State<_Composer> {
       return;
     }
 
-    setState(() => _busy = true);
+    // 先清空并留住焦点，避免用户以为没发出去又点一次。
     _controller.clear();
+    _focusNode.requestFocus();
 
-    SendFailure? failure;
+    // 发送可能一直重试到上限（默认 2 分钟）才有结论，不能阻塞输入框：
+    // 气泡的「发送中 / 失败」状态由 conversation_recorder 负责更新。
+    unawaited(_deliver(context.ref, text, target));
+  }
+
+  /// 真正等待发送结果，只用来弹失败提示。
+  Future<void> _deliver(Ref ref, String text, Device target) async {
+    final SendFailure? failure;
     try {
       failure = await sendTextMessage(
-        ref: context.ref,
+        ref: ref,
         target: target,
         text: text,
       );
-    } finally {
-      if (mounted) {
-        setState(() => _busy = false);
-      }
-    }
-
-    if (failure == null) {
-      // 保持焦点，方便接着发下一条。
-      if (mounted) {
-        _focusNode.requestFocus();
-      }
+    } catch (e) {
+      // 页面在两分钟的重试窗口内被销毁时 ref 可能已失效，别让它变成未捕获异常。
+      debugPrint('Failed to deliver a text message: $e');
       return;
     }
 
-    // 发送失败把内容还回输入框，别让用户重打一遍。
-    if (mounted && _controller.text.isEmpty) {
-      _controller.text = text;
-      _controller.selection = TextSelection.collapsed(offset: text.length);
+    if (failure == null || !mounted) {
+      return;
     }
-    if (mounted) {
-      _focusNode.requestFocus();
-    }
+    // 消息气泡里已经写了原文，失败时不再回填输入框（那样会变成两条）。
     _showMessage(_describeFailure(failure));
   }
 
@@ -250,25 +248,47 @@ class _ComposerState extends State<_Composer> {
       return;
     }
 
-    final target = resolveConversationTarget(context.ref, widget.conversation);
+    final ref = context.ref;
+    final target = resolveConversationTarget(ref, widget.conversation);
     if (target == null) {
       _showMessage(t.conversation.peerUnreachable);
       return;
     }
 
+    // 选择器是模态的，这期间锁住回形针，避免连点弹出两个窗口。
     setState(() => _busy = true);
-    SendFailure? failure;
+    final List<CrossFile>? files;
     try {
-      failure = await sendFilesToConversation(ref: context.ref, target: target);
+      files = await pickConversationFiles();
     } finally {
       if (mounted) {
         setState(() => _busy = false);
       }
     }
-
-    if (failure != null) {
-      _showMessage(_describeFailure(failure));
+    if (files == null || files.isEmpty) {
+      return;
     }
+
+    // 投递可能要重试到 2 分钟，同样不能阻塞输入框：
+    // 「发送中」气泡已经由 deliverFiles 落下，用户随时能看到进度。
+    unawaited(_deliverFiles(ref, target, files));
+  }
+
+  /// 真正等待文件投递结果，只用来弹失败提示。
+  Future<void> _deliverFiles(Ref ref, Device target, List<CrossFile> files) async {
+    final SendFailure? failure;
+    try {
+      failure = await deliverFiles(ref: ref, target: target, files: files);
+    } catch (e) {
+      // 页面在重试窗口内被销毁时 ref 可能已失效，别让它变成未捕获异常。
+      debugPrint('Failed to deliver files: $e');
+      return;
+    }
+
+    if (failure == null || !mounted) {
+      return;
+    }
+    _showMessage(_describeFailure(failure));
   }
 
   @override

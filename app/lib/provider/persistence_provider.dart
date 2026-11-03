@@ -56,7 +56,7 @@ const _stunServers = 'ls_stun_servers';
 // Received file history
 const _receiveHistory = 'ls_receive_history';
 
-// Conversations (chat-style, bidirectional). Added for the fork's chat feature.
+// [FORK] Conversations (chat-style, bidirectional). Added for the fork's chat feature.
 const _conversations = 'ls_conversations';
 
 // Favorites
@@ -266,6 +266,7 @@ class PersistenceService {
     await _prefs.setStringList(_receiveHistory, historyRaw);
   }
 
+  // [FORK] 会话存储：与上游 receiveHistory 完全解耦（后者全局只留 30 条且仅记接收方向）。
   /// 读取会话列表。
   ///
   /// 每个会话独占一个字符串元素，与 receiveHistory 的存储方式一致。

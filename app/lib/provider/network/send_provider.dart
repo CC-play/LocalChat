@@ -93,6 +93,12 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
     // [FORK] 调用方可以指定会话 id。聊天页需要拿固定 id 才能回读这次会话的结局
     // （成功时会话会被立刻收掉，事后无法再从会话列表里定位它）。
     String? sessionIdOverride,
+    // [FORK] 调用方可以预分配文件 id。聊天页要先把「发送中」气泡画出来，
+    // 之后 upload 事件必须复用同一批 id，否则同一次发送会冒两条气泡。
+    List<String>? fileIdsOverride,
+    // [FORK] 校验和缓存（key 为文件 id）。聊天页对同一个文件会重试多次，
+    // 若每次都重算，几百 MB 的文件会在两分钟里被反复读盘哈希。
+    Map<String, String>? checksumCache,
   }) async {
     // Pinned to the device the user picked, so the request is not sent at all
     // if someone else answers on that address.
@@ -102,7 +108,13 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
 
     // The ids are assigned upfront, so the checksums calculated below
     // can be mapped back to the corresponding file.
-    final selectedFiles = files.map((file) => (id: _uuid.v4(), file: file)).toList();
+    final selectedFiles = [
+      for (var i = 0; i < files.length; i++)
+        (
+          id: fileIdsOverride != null && i < fileIdsOverride.length ? fileIdsOverride[i] : _uuid.v4(),
+          file: files[i],
+        ),
+    ];
 
     state = state.updateSession(
       sessionId: sessionId,
@@ -167,12 +179,26 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
 
     // Calculate the checksums which are part of the request.
     // The files are read and hashed in Rust, one file after another.
-    final hashes = <String, String>{};
+    final hashes = <String, String>{
+      // [FORK] 命中缓存的文件不再重复哈希（聊天页重试时用）。
+      ...?checksumCache,
+    };
     if (createChecksums) {
       final hashCancelToken = rust_cancel.createCancellationToken();
       _hashCancelTokens[sessionId] = hashCancelToken;
       try {
-        for (final (:id, :file) in selectedFiles) {
+        for (final selected in selectedFiles) {
+          final id = selected.id;
+          final file = selected.file;
+          if (hashes.containsKey(id)) {
+            // [FORK] 校验和已在上一轮算好：跳过读盘，直接补进度。
+            ref.notifier(fileTransferProvider).setProgress(sessionId: sessionId, fileId: id, progress: 1);
+            state = state.updateSession(
+              sessionId: sessionId,
+              state: (s) => s?.copyWith(hashedFileCount: s.hashedFileCount + 1),
+            );
+            continue;
+          }
           try {
             hashes[id] = await calculateFileHash(
               path: file.path,
@@ -216,6 +242,8 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
         }
       } finally {
         _hashCancelTokens.remove(sessionId);
+        // [FORK] 把本轮算出的校验和回填给调用方，供下次重试复用。
+        checksumCache?.addAll(hashes);
       }
     }
 

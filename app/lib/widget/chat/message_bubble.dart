@@ -74,6 +74,29 @@ class MessageBubble extends StatelessWidget {
       _ => null,
     };
 
+    // [FORK] 气泡左侧的状态圆圈：发送中转圈，失败红色感叹号，成功不占位。
+    final Widget? statusIndicator;
+    if (!isOutgoing) {
+      statusIndicator = null;
+    } else {
+      statusIndicator = switch (message.status) {
+        ChatMessageStatus.pending => SizedBox(
+          width: 18,
+          height: 18,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: theme.colorScheme.primary,
+          ),
+        ),
+        ChatMessageStatus.failed => Icon(
+          Icons.error,
+          size: 18,
+          color: theme.colorScheme.error,
+        ),
+        _ => null,
+      };
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
       child: Row(
@@ -82,15 +105,11 @@ class MessageBubble extends StatelessWidget {
         children: [
           if (!isOutgoing) avatar,
           if (!isOutgoing) const SizedBox(width: 8),
-          // [FORK] 发送失败：只在气泡左侧加一个红色感叹号，气泡本身保持原样。
-          if (isOutgoing && failed)
+          // [FORK] 发送状态圆圈（转圈 / 红色感叹号），只在发出方向显示。
+          if (statusIndicator != null)
             Padding(
               padding: const EdgeInsets.only(top: 6, right: 6),
-              child: Icon(
-                Icons.error,
-                size: 18,
-                color: theme.colorScheme.error,
-              ),
+              child: statusIndicator,
             ),
           Flexible(
             child: Column(
