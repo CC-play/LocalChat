@@ -694,6 +694,19 @@ class _ComposerState extends State<_Composer> {
     super.dispose();
   }
 
+  /// [FORK] Android 上回车键为什么不能靠这里接管（实测结论，别再加回来了）。
+  ///
+  /// 桌面端引擎把 Enter 翻成 `TextInputAction.send`，`onSubmitted` 能收到；
+  /// Android 没有这一步：软键盘的回车本身就是「发送」键（`action = send`），
+  /// 而外接键盘的回车会被 IME 直接当成 `\n` 提交进文本 ——
+  /// **框架层连一个 KeyEvent 都收不到**（`FocusNode.onKeyEvent` 实测为空）。
+  ///
+  /// 因此「监听插入了一个换行就撤回并发送」这条看起来可行的路走不通：
+  /// 换行落地时 Shift 早已松开，无法把 Shift+Enter 与裸回车区分开，
+  /// 结果是 Shift+Enter 也会把内容直接发出去。误发到对端比多一个空行有害，
+  /// 所以 Android 上保持引擎默认语义：
+  /// - 软键盘回车 / 输入框右侧按钮 → 发送
+  /// - 外接键盘的回车 → 换行
   void _handleTextChanged() {
     final hasText = _controller.text.trim().isNotEmpty;
     if (hasText != _hasText) {
