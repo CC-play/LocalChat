@@ -138,6 +138,9 @@ NO_PROXY=localhost,127.0.0.1,::1 flutter test                              # 全
 - `peerPort` 为空的旧会话无法主动发消息（`resolveConversationTarget` 返回 null，`https` 只能猜 false）。
 - 对端改名后卡片名会更新，但**无指纹的对端**改名会分裂成新卡片（伪键 `alias:<别名>`）。
 - 文本消息上限 4000 字符（`maxTextMessageLength`）。
+- 输入条是**多行**输入框（`minLines: 1` / `maxLines: 6`），但 `textInputAction` 故意用 `send` 而不是 `newline`：Windows 引擎的 `TextInputPlugin::EnterPressed` 只在 `TextInputType.multiline + TextInputAction.newline` 组合下自己往文本里插换行，用 `send` 才能让每个 Enter 先经过框架的 `onSubmitted`，否则没有机会「按 Enter 发送」。
+- 回车语义集中在 `_handleEnter()`：裸 Enter 发送；Shift+Enter 由自己 `_insertText('\n')` 补换行（引擎不会补）；Ctrl / Alt / Cmd + Enter 忽略。修饰键信息到不了 action（引擎只透传 `inputAction`），只能在 `onSubmitted` 里读 `HardwareKeyboard`。
+- Android 软键盘的「发送」键走 `performAction(send)`，与桌面一致；Android 物理键盘的 Enter / Shift+Enter 通常由 IME 直接插换行，不经过这条路径。
 - 粘贴只在 **Windows / Android** 有原生实现（macOS / Linux / iOS 会走 `MissingPluginException` 分支，退化为普通文本粘贴）。
 - Android 上粘贴依赖物理键盘的 Ctrl+V；软键盘长按弹出的系统「粘贴」走的是 `TextInputClient` 通道，不经过 `Shortcuts`。
 - 剪贴板文件一次最多 100 个（Windows `kMaxFiles`）/ 20 个且单文件 ≤256MB（Android `MAX_CLIPBOARD_*`）：Android 是把字节读进内存再落盘，不设上限会 OOM。

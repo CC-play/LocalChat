@@ -65,7 +65,7 @@ app/lib/util/conversation/conversation_sender.dart    255 行
 app/lib/util/conversation/clipboard_image.dart         199 行（图片 + 文件列表两条通道）
 app/lib/provider/conversation_provider.dart           186 行
 app/lib/pages/conversations_page.dart                 173 行
-app/lib/pages/conversation_page.dart                  898 行
+app/lib/pages/conversation_page.dart                  922 行
 app/lib/widget/chat/message_bubble.dart               128 行
 app/lib/widget/chat/file_message_card.dart             76 行
 app/lib/widget/chat/top_toast.dart                    168 行
