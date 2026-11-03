@@ -200,6 +200,7 @@
     "you": "You",
     "youPrefix": "You: ",
     "sending": "Sending\u2026",
+    "sendingProgress": "Sending {percent}%",
     "sendFailed": "Failed to send",
     "yesterday": "Yesterday",
     "messagePlaceholder": "[Message]",

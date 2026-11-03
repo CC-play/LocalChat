@@ -9,6 +9,7 @@ import 'package:localsend_app/pages/home_page.dart';
 import 'package:localsend_app/pages/home_page_controller.dart';
 import 'package:localsend_app/pages/progress_page.dart';
 import 'package:localsend_app/pages/send_page.dart';
+import 'package:localsend_app/provider/conversation/chat_transfer_provider.dart';
 import 'package:localsend_app/provider/device_info_provider.dart';
 import 'package:localsend_app/provider/file_transfer_provider.dart';
 import 'package:localsend_app/provider/http_provider.dart';
@@ -697,6 +698,9 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
                   fileId: event.fileId,
                   progress: event.progress,
                 );
+            // [FORK] 聊天视图：把上传进度同步给对应的气泡。
+            // 普通（非聊天）发送没有气泡在等这个 id，notifier 内部会直接丢弃。
+            ref.read(chatTransferProvider).report(messageId: event.fileId, progress: event.progress);
             _updateForegroundServiceProgress(sessionId);
           case HttpUploadFileFinishedEvent():
             // set progress to 100% when successfully finished

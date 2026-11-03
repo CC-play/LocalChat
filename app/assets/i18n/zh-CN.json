@@ -200,6 +200,7 @@
     "you": "我",
     "youPrefix": "我: ",
     "sending": "发送中…",
+    "sendingProgress": "发送中 {percent}%",
     "sendFailed": "发送失败",
     "yesterday": "昨天",
     "messagePlaceholder": "[消息]",

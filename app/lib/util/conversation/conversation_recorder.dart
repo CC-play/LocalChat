@@ -1,4 +1,5 @@
 import 'package:localsend_app/model/conversation/conversation.dart';
+import 'package:localsend_app/provider/conversation/chat_transfer_provider.dart';
 import 'package:localsend_app/provider/conversation_provider.dart';
 import 'package:localsend_isolates/model/device.dart';
 import 'package:localsend_isolates/model/file_type.dart';
@@ -150,6 +151,14 @@ Future<void> markSentFile({
 }) async {
   final status = success ? ChatMessageStatus.sent : ChatMessageStatus.failed;
   final peerFingerprint = peerKeyOf(target);
+
+  // [FORK] 进度条到此为止。所有终态都经过这里（成功、上传失败、对端未勾选、
+  // 源文件丢失、重试超时），所以清理只需要放这一处。
+  try {
+    ref.read(chatTransferProvider).finish(messageId);
+  } catch (e, st) {
+    _logger.warning('Failed to clear chat transfer progress', e, st);
+  }
 
   bool exists = false;
   try {

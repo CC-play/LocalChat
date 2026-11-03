@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:localsend_app/gen/strings.g.dart';
 import 'package:localsend_app/model/conversation/conversation.dart';
+import 'package:localsend_app/provider/conversation/chat_transfer_provider.dart';
 import 'package:localsend_app/widget/chat/file_message_card.dart';
+import 'package:refena_flutter/refena_flutter.dart';
 
 /// [FORK] 自己发出的气泡固定用这个蓝色；文字因此固定走白色系（不跟主题走，
 /// 否则深色主题的 onPrimary 是深蓝，压在浅蓝底上会看不清）。
@@ -148,7 +150,18 @@ class MessageBubble extends StatelessWidget {
                     ),
                     child: bubbleChild,
                   ),
-                  if (statusHint != null)
+                  // [FORK] 发出方向「发送中」时显示上传进度条；没有进度可报
+                  // （还没进入上传，例如正在算校验和）就退回原来那行文字。
+                  if (isOutgoing && message.status == ChatMessageStatus.pending)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 3),
+                      child: _SendProgressFooter(
+                        messageId: message.id,
+                        color: theme.colorScheme.primary,
+                        idleHint: t.conversation.sending,
+                      ),
+                    )
+                  else if (statusHint != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 3),
                       child: Text(
@@ -167,6 +180,67 @@ class MessageBubble extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// [FORK] 气泡下方的上传进度。
+///
+/// 只订阅**这一条消息**的进度：[ChatTransferNotifier] 给每条消息一个独立的
+/// [ValueNotifier]，所以并发传几个文件时，进度事件不会让整个消息列表重绘。
+///
+/// 进度为 null 表示还没开始上传（例如仍在计算校验和，或者正在等对方接受），
+/// 此时显示原来的「发送中…」，不占用额外高度。
+class _SendProgressFooter extends StatelessWidget {
+  final String messageId;
+  final Color color;
+  final String idleHint;
+
+  const _SendProgressFooter({
+    required this.messageId,
+    required this.color,
+    required this.idleHint,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final notifier = context.ref.read(chatTransferProvider).progressOf(messageId);
+
+    return ValueListenableBuilder<double?>(
+      valueListenable: notifier,
+      builder: (context, progress, _) {
+        if (progress == null) {
+          return Text(
+            idleHint,
+            style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.outline),
+          );
+        }
+
+        // 用 floor 而不是 round：99.6% 还没传完，显示 100% 会让人以为卡住了。
+        final percent = (progress * 100).floor().clamp(0, 100);
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 96,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(2),
+                child: LinearProgressIndicator(
+                  value: progress,
+                  minHeight: 3,
+                  backgroundColor: color.withValues(alpha: 0.2),
+                  valueColor: AlwaysStoppedAnimation<Color>(color),
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              t.conversation.sendingProgress(percent: percent),
+              style: TextStyle(fontSize: 10, color: color),
+            ),
+          ],
+        );
+      },
     );
   }
 }

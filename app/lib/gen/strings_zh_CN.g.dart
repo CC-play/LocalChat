@@ -337,6 +337,8 @@ class Translations$conversation$zh_CN extends Translations$conversation$en {
   @override
   String get sending => '发送中…';
   @override
+  String sendingProgress({required Object percent}) => '发送中 ${percent}%';
+  @override
   String get sendFailed => '发送失败';
   @override
   String get yesterday => '昨天';

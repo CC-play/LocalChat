@@ -6,6 +6,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart';
 import 'package:localsend_app/model/conversation/conversation.dart';
 import 'package:localsend_app/model/cross_file.dart';
+import 'package:localsend_app/provider/conversation/chat_transfer_provider.dart';
 import 'package:localsend_app/provider/conversation_provider.dart';
 import 'package:localsend_app/provider/network/nearby_devices_provider.dart';
 import 'package:localsend_app/provider/network/send_provider.dart';
@@ -391,6 +392,9 @@ Future<SendFailure?> retryChatMessage({
           messageId: message.id,
         ),
       );
+
+  // [FORK] 进度复位：上一轮的 100% 会先闪一下，否则用户以为新的一轮已经传完了。
+  ref.read(chatTransferProvider).reset(message.id);
 
   if (message.kind == ChatMessageKind.text) {
     final text = message.text;

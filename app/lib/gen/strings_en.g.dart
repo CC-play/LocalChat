@@ -382,6 +382,9 @@ class Translations$conversation$en {
   /// en: 'Sending…'
   String get sending => 'Sending…';
 
+  /// en: 'Sending {percent}%'
+  String sendingProgress({required Object percent}) => 'Sending ${percent}%';
+
   /// en: 'Failed to send'
   String get sendFailed => 'Failed to send';
 
