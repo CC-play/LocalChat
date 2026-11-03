@@ -2,235 +2,312 @@
 
 > 目标：让 fork 的会话/聊天功能在 Android 上跑通（与 Windows 端互通）。
 >
-> 当前状态（2026-11-03 15:20 复查）：
-> - **Android 从未构建过**，`android-36` 平台与 NDK 仍缺，见 §0。
-> - Android 侧的原生代码**已经写好但从未编译过**（剪贴板通道 `getClipboardImage` / `getClipboardFiles`），见 §2。
-> - Dart 侧与 Windows 共用同一份代码，平台差异集中在输入法、快捷键与键盘遮挡，见 §4。
+> 当前状态（2026-11-03 23:30 复查）：
+> - **Android 端已能构建、安装、运行**：APK 89.6 MB，模拟器 Pixel_8（API 36 / x86_64）实测启动正常。
+> - 会话列表、会话页、输入条、发送中倒计时、失败红色感叹号、接收文本静默落库 —— 均已在模拟器上截图确认。
+> - **环境坑已全部趟平并记录在 §0**（JDK 25、CMake、Gradle 发行包、Maven 镜像、ABI、Kotlin 增量缓存）。
+> - 未验证项集中在需要真机 / 真实剪贴板 / 同网段对端的地方，见 §3 的 `⬜ 未验证`。
 > - Windows 端已跑通：会话 Tab、文本/文件收发、2 分钟离线重试、拖拽、Ctrl+V 粘贴、回车语义。
 
 ---
 
-## 0. 环境准备（一次性，阻塞后续所有步骤）
+## 0. 环境准备（已全部完成）
 
-现状（2026-11-03 15:20 实测，与 11-02 记录一致，尚未打补丁）：
-
-| 组件 | 要求 | 现状 |
+| 组件 | 要求 | 现状（2026-11-03 23:00） |
 |---|---|---|
-| `compileSdkVersion` | 36（`app/android/app/build.gradle`） | ❌ 只有 `android-35` / `android-37.0`，**缺 `platforms/android-36`** |
-| `targetSdkVersion` | 37 | ✅ `android-37.0` |
-| NDK | `28.2.13676358`（`FlutterExtension.kt` 里的固定值，AGP 会硬校验） | ❌ `Sdk\ndk` 目录不存在 |
-| build-tools | 36.0.0 | ✅ 34.0.0 / 35.0.0 / 36.0.0 |
-| platform-tools / adb | 任意 | ✅ |
-| cmdline-tools / sdkmanager | 需要 | ❌ `Sdk\cmdline-tools` 是空目录 |
-| JDK | 17+ | ✅ JBR 21 |
-| Rust Android target | 见 §0.3 | ❌ 只有 `x86_64-pc-windows-msvc` |
-| 设备 | 真机或模拟器 | ✅ **已有 AVD `Pixel_8`**（`system-images;android-36;google_apis_playstore;x86_64`） |
+| `compileSdkVersion` | 36 | ✅ `platforms/android-36` 已装 |
+| `targetSdkVersion` | 37 | ✅ `android-37.0`（原有） |
+| NDK | `28.2.13676358` | ✅ 已装（~1.9 GB，AGP 会硬校验版本号） |
+| build-tools | 36.0.0 | ✅ 原有 |
+| CMake | **3.22.1（AGP 必需）** | ✅ 已装 —— 见 §0.3，**这是最隐蔽的一个坑** |
+| cmdline-tools | sdkmanager | ✅ 12.0，装在 `Sdk\cmdline-tools\latest` |
+| JDK | 17–21（Gradle 8.13 不支持 25） | ✅ 用 `~/.jdks/jbr-21.0.11`，见 §0.2 |
+| Rust Android target | x86_64 + arm 两个 | ✅ 三个都装了 |
+| 设备 | 真机或模拟器 | ✅ AVD `Pixel_8` |
 
-预计下载量 ~2.5 GB（NDK 约 1.5 GB + 平台 0.2 GB + 模拟器相关）。
+### 0.1 装 cmdline-tools / platform / NDK
 
-### 0.1 装 cmdline-tools（拿到 sdkmanager）
-
-没有 Android Studio，只能手动解压。**注意 zip 内已经有一层 `cmdline-tools` 目录，解压后要再套一层 `latest`**，否则 sdkmanager 找不到 SDK。
+Google 直连会间歇 429，**cmdline-tools 走腾讯镜像更快**（146 MB / 5 秒）：
 
 ```powershell
 $sdk = "$env:LOCALAPPDATA\Android\Sdk"
-Invoke-WebRequest -Uri https://dl.google.com/android/repository/commandlinetools-win-11076708_latest.zip -OutFile "$env:TEMP\cmdtools.zip"
+Invoke-WebRequest -Uri https://mirrors.cloud.tencent.com/AndroidSDK/commandlinetools-win-11076708_latest.zip -OutFile "$env:TEMP\cmdtools.zip"
 Expand-Archive "$env:TEMP\cmdtools.zip" "$env:TEMP\cmdtools" -Force
 New-Item -ItemType Directory -Force "$sdk\cmdline-tools\latest" | Out-Null
-Move-Item "$env:TEMP\cmdtools\cmdline-tools\*" "$sdk\cmdline-tools\latest\" -Force
-& "$sdk\cmdline-tools\latest\bin\sdkmanager.bat" --version
+Copy-Item "$env:TEMP\cmdtools\cmdline-tools\*" "$sdk\cmdline-tools\latest\" -Recurse -Force
+
+& "$sdk\cmdline-tools\latest\bin\sdkmanager.bat" --sdk_root="$sdk" `
+    "platforms;android-36" "ndk;28.2.13676358" "cmake;3.22.1"
 ```
 
-- [ ] sdkmanager 能打印版本号（如 `19.0`）
+- [x] `Sdk\platforms\android-36\android.jar` 存在
+- [x] `Sdk\ndk\28.2.13676358\toolchains\llvm\prebuilt\windows-x86_64\bin\clang.exe` 存在
+- [x] `Sdk\cmake\3.22.1\bin\{cmake,ninja}.exe` 存在
+- 注：`sdkmanager` 会刷一串 `package.xml parsing problem` 警告（本机有 API 37 预览包，schema v4），不影响安装。
 
-### 0.2 装 platform / NDK
+### 0.2 JDK：**必须显式指定，否则构建直接失败**
+
+Flutter 会自动选中 Android Studio 自带的 JBR，本机那个是 **Java 25**（class 文件 major 69），
+Gradle 8.13 读不了，报 `BUG! exception in phase 'semantic analysis' ... Unsupported class file major version 69`。
 
 ```powershell
-$sdk = "$env:LOCALAPPDATA\Android\Sdk"
-& "$sdk\cmdline-tools\latest\bin\sdkmanager.bat" --sdk_root="$sdk" `
-    "platforms;android-36" `
-    "ndk;28.2.13676358"
+flutter config --jdk-dir "C:\Users\94184\.jdks\jbr-21.0.11"
 ```
 
-- [ ] `Sdk\platforms\android-36` 存在
-- [ ] `Sdk\ndk\28.2.13676358` 存在
-- [ ] `flutter doctor -v` 的 Android 段落不再报 NDK / platform 缺失
+- [x] `app\android\gradlew.bat --version` 显示 `Launcher JVM: 21.x`
+- 教训：报那个错时不要去改 Gradle 版本，先确认 Flutter 用的是哪个 JDK。
 
-> `build-tools;36.0.0` 已装，不必重复。首次 `sdkmanager` 会要求接受 licenses，加 `--licenses` 或按提示敲 `y`。
+### 0.3 CMake：PATH 上的 pip 版 cmake 会顶掉 AGP 的
 
-### 0.3 Rust Android target
+首次构建 37 分钟后倒在 `:app:configureCMakeDebug[arm64-v8a]`，原因是 AGP 找到了
+`...\Python\RunCode\.venv\Scripts\cmake.exe`（pip 装的），不是 SDK 的 CMake。
+已在 `app\android\local.properties`（该文件被 gitignore）显式指定：
 
-cargokit 在 Gradle 构建时通常会自己 `rustup target add`，但预装能避免首次构建时把「网络失败」误判成代码问题。
+```properties
+cmake.dir=C\:\\Users\\94184\\AppData\\Local\\Android\\Sdk\\cmake\\3.22.1
+```
+
+- [x] `configureCMakeDebug` 通过
+- 注：这个属性是本地专用，别写进仓库。
+
+### 0.4 Gradle 发行包与 Maven 镜像（本机网络专用，写在 `~/.gradle`）
+
+两个问题都在 `~/.gradle` 里解决，**不改仓库文件**：
+
+1. **wrapper 下载超时**（`services.gradle.org` 直连 Connection timed out）。
+   本机 `~/.gradle/wrapper/dists/gradle-8.13-all` 下已有一份完整发行版，但 hash 目录与
+   `distributionUrl` 对不上。用目录联接把已有的接过去，并补 `.ok` 标记：
+
+   ```powershell
+   $base="$env:USERPROFILE\.gradle\wrapper\dists\gradle-8.13-all"
+   New-Item -ItemType Junction -Path "$base\54h0s9kvb6g2sinako7ub77ku\gradle-8.13" `
+       -Target "$base\bjf2jc8io67a4o2cq7ctduuqp\gradle-8.13"
+   New-Item -ItemType File -Path "$base\54h0s9kvb6g2sinako7ub77ku\gradle-8.13-all.zip.ok" -Force
+   ```
+
+2. **`maven.google.com` 不可达**（本地代理 502，直连超时），Gradle 会卡到十几分钟不动。
+   `~/.gradle/init.gradle` 把 `google()` / `plugins.gradle.org` 的 URL 重写到阿里云镜像。
+
+   > ⚠️ 只重写 URL，**不要 `repositories.maven{}` 新增仓库**：Flutter 用
+   > `RepositoriesMode.PREFER_SETTINGS`，注入项目级仓库会直接报
+   > `repository 'maven' was added by settings file`。
+
+3. **Kotlin 增量缓存跨盘失败**：pub 包在 C:、项目在 D:，Kotlin 增量缓存做相对路径时抛
+   `this and base files have different roots`，每次构建多花好几分钟。
+   `~/.gradle/gradle.properties` 里 `kotlin.incremental=false`。
+
+### 0.5 Rust target
+
+`packages/localsend_isolates/rust-toolchain.toml` 锁了 1.97.1 并声明了三个 Android target，
+rustup 进入该目录会自动装；预装一份可以避免首次构建把网络问题误判成代码问题。
 
 ```bash
-# 模拟器（Pixel_8 是 x86_64）
-rustup target add x86_64-linux-android
-# 真机
-rustup target add aarch64-linux-android armv7-linux-androideabi
+rustup target add x86_64-linux-android aarch64-linux-android armv7-linux-androideabi
 ```
 
-- [ ] `rustup target list --installed` 里能看到至少要用的那几个
-- [ ] 只连模拟器时**不需要** arm 的两个 target，`flutter run` 默认只为目标 ABI 编译，能省一大截时间
+- [x] `rustup target list --installed` 三个都在
 
-### 0.4 设备
+### 0.6 模拟器
 
-模拟器（推荐先走这条，不用碰手机）：
-
-```bash
-"$env:LOCALAPPDATA/Android/Sdk/emulator/emulator.exe" -avd Pixel_8   # 或 Android Studio 里启动
-adb devices                                                          # 应出现 emulator-5554
+```powershell
+Start-Process -FilePath "$env:LOCALAPPDATA\Android\Sdk\emulator\emulator.exe" `
+    -ArgumentList '-avd','Pixel_8','-no-snapshot-load','-no-audio','-no-boot-anim','-gpu','swiftshader_indirect'
 ```
 
-- [ ] `adb devices` 能列出 `emulator-5554`
-- [ ] 模拟器需要开启硬件加速（WHPX / Hyper-V），否则 x86_64 镜像起不来
-
-真机：
-
-- [ ] 手机开启「开发者选项 → USB 调试」
-- [ ] `adb devices` 能列出设备（首次要在手机上点允许）
+- [x] `adb devices` 显示 `emulator-5554 device`
+- [x] WHPX 可用（`emulator -accel-check` 返回 0）
+- ⚠️ 两个踩过的坑：
+  - **不要把 emulator 的输出接进 `| Select-Object -First N`**：管道被提前关闭会把模拟器一起带走（表现为进程秒退、退出码 0）。
+  - 后台任务方式启动会卡在 shell 起来的那一步（只有 3 行日志、没有 qemu 子进程），用 `Start-Process` 才正常。
 
 ---
 
-## 1. 首次构建
+## 1. 构建与安装
 
 ```bash
 cd app
-flutter run -d emulator-5554        # 调试跑；或 flutter build apk --debug
+flutter build apk --debug --target-platform android-x64
+adb install -r build/app/outputs/flutter-apk/app-debug.apk
+adb shell am start -n org.localsend.localsend_app.debug/org.localsend.localsend_app.MainActivity
 ```
 
-- [ ] `flutter build apk --debug` 成功 → `app/build/app/outputs/flutter-apk/app-debug.apk`
-- [ ] 首次构建能过 `:app:compileDebugKotlin`（这一关会编译 §2 新增的剪贴板代码）
+- [x] 构建成功 → `app/build/app/outputs/flutter-apk/app-debug.apk`（89.6 MB）
+- [x] APK 内含 `lib/x86_64/librust_lib_localsend_app.so`（38.1 MB）
+- [x] debug 包名带 `.debug` 后缀（`applicationIdSuffix`）
+- 耗时：首次 ~37 分钟（依赖下载 + CMake + Kotlin），之后 **1–3 分钟**
 
-### 预期会踩的坑
+### 限制 ABI 是必须的
 
-1. **首次 Gradle 构建 10–20 分钟**：要编译 Rust 的多个 ABI，且会下载 Gradle 发行包。
-2. **JDK 版本**：若报 `Unsupported class file major version`，在 `gradle.properties` 里加
-   `org.gradle.java.home=<JBR 路径>`（本机无 AS，用当前 JBR）。
-3. **不要带 `CL=/source-charset:utf-8`**：那是 Windows 上 MSVC 用的，Android 走 clang。
-4. **NDK 版本不匹配**：AGP 会硬校验 `ndkVersion`，必须精确到 `28.2.13676358`。
-5. **Windows 路径过长**：Rust 增量构建目录较深，若报 `filename too long`，开长路径支持
-   （`git config --system core.longpaths true` + 注册表 `LongPathsEnabled=1`）。
-6. **Kotlin 编译失败先看 §2**：`MainActivity.kt` 的剪贴板代码是本仓库新加的，从未编译过。
+不限制 ABI 时 AGP 会为 arm64-v8a / armeabi-v7a / x86 / x86_64 各配一遍 CMake，
+cargokit 也就为每个 ABI 跑一遍 cargo（**20 分钟还没编完**）。
+`--target-platform android-x64` 只影响 Flutter 引擎，插件仍按 abiFilters 走，
+所以在 `~/.gradle/init.gradle` 里把 `android.defaultConfig.ndk.abiFilters` 收成 `x86_64`（可用 `-Plocalsend.abi=...` 覆盖）。
+出正式包时要显式放开成 `arm64-v8a,armeabi-v7a,x86_64`。
 
----
+### 已知偶发失败
 
-## 2. Android 侧已就位的代码（未编译、未验证）
-
-| 位置 | 内容 |
-|---|---|
-| `android/.../MainActivity.kt` | 方法通道 `org.localsend.localsend_app/localsend` 新增 `getClipboardImage` / `getClipboardFiles`；`readClipboardImage()` 读 `primaryClip` 第 0 项的 `content://` URI；`readClipboardFiles()` 遍历 `ClipData`，取 mime + `OpenableColumns.DISPLAY_NAME` + 字节 |
-| 同上（常量） | `MAX_CLIPBOARD_FILES = 20`、`MAX_CLIPBOARD_FILE_BYTES = 256MB`（Android 必须把字节读进内存，不设上限会 OOM） |
-| `lib/util/conversation/clipboard_image.dart` | `isSupported` 只放 **windows / android**；`MissingPluginException` 当「剪贴板里没有东西」；文件名消毒 `<>:"|?*`、控制字符、尾部点/空格 |
-| `lib/pages/conversation_page.dart` | 页面级 `_PasteShortcuts`（Ctrl/Cmd+V）+ `_handleEnter()`（Enter 发送 / Shift+Enter 换行） |
-
-- [ ] `flutter build apk --debug` 能编译过这段 Kotlin（未验证过）
-- [ ] 真机/模拟器上 `adb logcat | grep -i clipboard` 能看到通道调用（未验证过）
+首次构建时 rustc 编 `byteorder` 崩过一次（`exit code 0xc0000005, STATUS_ACCESS_VIOLATION`），
+重跑即过，且 **Gradle 仍报 BUILD SUCCESSFUL** —— 只是 APK 里没有 so，装上去会在启动时报
+`Failed to load dynamic library 'librust_lib_localsend_app.so'`。
+看到这个运行时错误，先解包确认 `lib/<abi>/librust_lib_localsend_app.so` 在不在。
 
 ---
 
-## 3. 验证清单
+## 2. Android 侧代码
 
-> 前提：Windows 端已跑通。按顺序做，前面的不过不用往后试。
+| 位置 | 内容 | 状态 |
+|---|---|---|
+| `MainActivity.kt` | 方法通道 `org.localsend.localsend_app/localsend` 的 `getClipboardImage` / `getClipboardFiles` | ✅ `:app:compileDebugKotlin` 通过（未改动一行） |
+| `MainActivity.kt` | `MAX_CLIPBOARD_FILES = 20`、单文件 ≤256 MB（Android 要把字节读进内存） | ✅ |
+| `lib/util/conversation/clipboard_image.dart` | `isSupported` 只放 windows / android；`MissingPluginException` 当「剪贴板没东西」 | ✅ 与 Windows 共用同一份 |
+| `lib/pages/conversation_page.dart` | `_PasteShortcuts`（Ctrl/Cmd+V）+ `_handleEnter()` | ✅ 编译通过；行为见 §4.1 |
+
+- [x] Kotlin 剪贴板代码能编译（这是唯一有编译风险的部分，未报错）
+- ⬜ 通道调用本身未验证：模拟器里没有真实「复制图片/文件」的场景，需要真机手动试
+
+---
+
+## 3. 验证清单（2026-11-03 实测）
+
+> 验证方式：模拟器截图 + `adb shell input` 注入 + 一个走真实协议的最小发送端（见 §3.6）。
+> 打 ✅ 的是截图确认过的，打 ⬜ 的是环境不具备、没测到的。
 
 ### 3.1 基础
 
-- [ ] 底部导航 4 个 Tab，【会话】在第一位且默认选中
-- [ ] 侧边栏在窄屏（手机）不出现，底部 NavigationBar 只有图标
-- [ ] 返回键：会话页 → 会话列表 → 退出 App，不出现空栈
-- [ ] Android 13+ 首次传输时通知权限被请求（`POST_NOTIFICATIONS` 由 `flutter_foreground_task` 的 manifest 合并进来，见 `AndroidManifest.xml` 注释）
+- [x] 底部导航 4 个 Tab，【会话】在第一位且默认选中
+- [x] 窄屏下没有侧边栏，底部只有图标
+- [x] 空状态文案正常（"No chats yet"）
+- ⬜ 返回键层级（会话页 → 列表 → 退出）
+- ⬜ Android 13+ 通知权限弹窗（要真触发一次前台传输才看得到）
 
 ### 3.2 文本
 
-- [ ] 底部有 `[附件][输入框][发送]`，键盘弹出时输入框不被遮挡
-- [ ] **软键盘发送键**能发出消息（`TextInputAction.send` 在 Android 上的表现，见 §4.1）
-- [ ] **回车键**能发出消息（裸 Enter；若软键盘把 Enter 变成换行，就是 §4.1 的问题）
-- [ ] **Shift+Enter** 在物理键盘上换行、不发送
-- [ ] 输入框长到 6 行后内部滚动，不把整个底部撑破
-- [ ] Android → Windows 发文本，Windows 端即时出现在会话里
-- [ ] Windows → Android 发文本，**不弹接收确认页**，直接进会话
-- [ ] 离线发文本：气泡左侧出现转圈，2 分钟内对端上线会自动补发
-- [ ] 发送失败：气泡左侧变红叹号 + 顶部 Toast，文字**不再**被还原回输入框（当前实现是清空后后台重试）
+- [x] 底部 `[附件][输入框][发送]`，占位符 "Message…"
+- [x] 软键盘的回车键变成**发送箭头**（`textInputAction: send` 生效）
+- [x] 点软键盘发送键 → 气泡立刻出现、输入框清空
+- [x] 气泡下方显示「Sending 3s…」+ 不确定态扫动进度条（本轮新增的等待态在 Android 上正常）
+- [x] 发送失败 → 红色感叹号 + "Failed to send" / "The device is not reachable…"
+- [x] 点红色感叹号可重发（同一气泡复用，不新增一条）
+- [ ] **外接键盘裸回车 = 换行，不是发送** —— 与桌面端不一致，原因与取舍见 §4.1
+- ⬜ 输入框长到 6 行后内部滚动
+- ⬜ Android → Windows 发文本（本机网络限制，见 §3.6 末尾）
+- [x] Windows → Android 发文本：**不弹确认页**，直接落进会话，未读角标 +1
+- ⬜ 键盘弹出时输入框不被遮挡 / 手势条 padding（截图里未见异常，未严格验证）
 
 ### 3.3 文件
 
-- [ ] 附件按钮走 SAF 选文件后能正常发送（`content://` URI）
-- [ ] 会话页可拖拽接收（见 §4.4，预期在分屏/多窗口下才有意义）
-- [ ] 文件发送失败时不产生「半截文件」（只重试 prepare-upload 阶段）
+- ⬜ SAF 选文件后发送（需要真人点系统选择器）
+- ⬜ 会话页拖拽（Android 只在分屏/多窗口下才有意义）
+- ⬜ 文件发送失败不产生半截文件
 
-### 3.4 粘贴（Android 独有大坑）
+### 3.4 粘贴
 
-- [ ] 物理键盘 Ctrl+V：剪贴板是图片 → 弹确认卡片
-- [ ] 物理键盘 Ctrl+V：剪贴板是文件（如相册「复制」/文件管理器）→ 弹确认卡片
-- [ ] 软键盘长按「粘贴」：**当前预期不生效**（走 `TextInputClient`，不经过 `Shortcuts`），见 §4.2
-- [ ] 粘贴后确认卡片关闭，焦点回到输入框
+- ⬜ 物理键盘 Ctrl+V 粘图片 / 粘文件（模拟器剪贴板里没有真实内容）
+- ⬜ 软键盘长按「粘贴」（预期不生效，走的是 `TextInputClient`，不经 `Shortcuts`）
 
 ### 3.5 视觉
 
-- [ ] 自己气泡固定 `#4C98FF` + 白字，头像跟随主题色
-- [ ] 文字气泡可选中、选中后弹「复制」菜单（Android 上 `SelectionArea` + 自定义菜单是否与系统选择手柄冲突）
-- [ ] 顶部 Toast 字号 16、不挡底部输入条
+- [x] 自己气泡 `#4C98FF` + 白字，`You` 头像
+- [x] 对方气泡浅色 + 首字母头像
+- [x] 时间分隔线（`2026-11-03 15:11`）
+- ⬜ 文字气泡选中 + 「复制」菜单与系统选择手柄是否冲突
+
+### 3.6 双端互通：本机验证到了哪一步
+
+模拟器和 Windows 主机在同一台机器上，**多播发现走不通**：
+- Windows 端启动日志里 `Could not bind UDP multicast socket ... os error 10013`（沙箱不允许绑多播）；
+- 模拟器是 NAT 网络，广播出不了虚拟路由器。
+
+所以「互相发现」这条路在本机没法测。绕开办法是**自己实现一个最小发送端**走真实协议：
+`adb forward tcp:53318 tcp:53317` 把模拟器的 53317 桥到宿主机，Python 用自签证书做客户端，
+调 `POST /api/localsend/v2/prepare-upload`。
+
+实测结果：**返回 204**，说明走了「文本消息静默接收」分支（不返回任何文件、发送端不进入上传阶段），
+会话立刻出现、未读角标 +1 —— 接收侧链路完整。
+
+> 踩过的细节：`fileType` 在协议里是 **MIME**（`text/plain`），不是 `"text"`。
+> 写成 `"text"` 会被解码成 `FileType.other`，于是不认成文本消息，弹出「想给你发文件」的确认页。
+
+真机验证时直接两台设备连同一 Wi-Fi 即可，不需要这段桥接。
 
 ---
 
-## 4. 预判需要改的代码
+## 4. 需要知道的平台差异
 
-### 4.1 回车语义在 Android 上很可能不成立（最高优先级）
+### 4.1 回车键：Android 上无法接管（已实测，别再试了）
 
-Windows 引擎的规则是：`inputType == multiline && inputAction == newline` 才由引擎插换行，否则交给框架 `onSubmitted`。**Android 没有这一层**——`textInputAction: send` 在 `TextInputType.multiline` 下，IME 通常把回车渲染成**换行键**（`IME_ACTION_NONE`），直接 `updateEditingState` 插入 `\n`，`performAction(send)` 根本不触发。
+结论表：
 
-备选（按推荐顺序，实测后定）：
+| 平台 | 外接/物理键盘回车 | 软键盘回车 | Shift+Enter |
+|---|---|---|---|
+| Windows | **发送** | — | 换行 |
+| Android | **换行** | **发送**（`action=send` 显示为 ➤） | 换行（与裸回车无法区分） |
 
-1. 监听 `_controller` 变化，检测「插入了一个 `\n` 且当前没按 Shift」→ 撤回该字符并发送。与 Windows 的行为对齐，代价是脏。
-2. `keyboardType: TextInputType.text` + `maxLines: 1`（失去多行，Shift+Enter 无处可换）。
-3. 试 `TextInputAction.done`：部分 IME 在 `text` 类型下会显示「完成/发送」键，但多行类型下依旧被忽略。
+原因：桌面端引擎会把 Enter 翻成 `TextInputAction.send`，`onSubmitted` 收得到；
+Android 引擎没有这一步，**软键盘的回车本身就是发送键**，而外接键盘的回车会被 IME
+直接当成 `\n` 提交进文本 —— 框架层**连一个 KeyEvent 都收不到**。
+
+验证方式：在 `FocusNode.onKeyEvent` 里打日志，按回车后 logcat 里一条都没有。
+
+那条「监听控制器插入了一个换行就撤回并发送」的路子也试过：能发出去，但 **Shift+Enter 也被判成发送**
+（换行落地时 Shift 早已松开，读不到修饰键状态）。误发到对端比多一个空行有害，因此放弃，保留引擎默认语义。
+这段推理已写进 `conversation_page.dart` 的注释，避免以后有人再走一遍。
+
+如果要让 Android 也「裸回车发送」，只有两个选择，都要付代价：
+1. 改成单行输入框（`maxLines: 1`）—— 彻底没有换行，长消息只能横向滚；
+2. 加一个「回车发送 / 回车换行」设置项，默认按平台给不同值。
 
 ### 4.2 软键盘的「粘贴」不走 `Shortcuts`
 
-`_PasteShortcuts` 只对硬件键盘生效。软键盘长按弹出的系统「粘贴」由 `TextInputClient` 处理，Dart 侧收不到。要支持得给 `TextField` 传 `contextMenuBuilder`，在系统菜单里插一项「粘贴图片 / 文件」，点击时调 `_handlePaste()`。
+`_PasteShortcuts` 只对硬件键盘生效。软键盘长按弹出的系统「粘贴」由 `TextInputClient` 处理，
+Dart 侧收不到。要支持得给 `TextField` 传 `contextMenuBuilder`，在系统菜单里插一项
+「粘贴图片 / 文件」，点击时调 `_handlePaste()`。
 
 ### 4.3 键盘遮挡与多行输入框
 
-- `SafeArea(top: false)` 在 Android 手势条下可能需要额外 bottom padding；多行输入框长到 6 行时空间更紧。
-- 实测后按需用 `MediaQuery.viewInsets.bottom` 或 `AnimatedPadding` 处理。
-- `home_page.dart` 的 `Scaffold` 默认 `resizeToAvoidBottomInset: true`，键盘弹出时 `Row`（含 NavigationRail）会被压缩——桌面无关，移动端走 `bottomNavigationBar`，需实测。
+`SafeArea(top: false)` 在 Android 手势条下可能需要额外 bottom padding；实测截图里输入条位置正常。
+`home_page.dart` 的 `Scaffold` 默认 `resizeToAvoidBottomInset: true`，键盘弹出时移动端走
+`bottomNavigationBar`，未见异常。
 
 ### 4.4 `desktop_drop` 在 Android 的行为
 
-`desktop_drop 0.7.1` **有 Android 实现**（`one.mixin.desktop.drop`），所以会话页的 `DropTarget` 不会抛 `MissingPluginException`。但 Android 的拖拽只在分屏/多窗口、或从其他 App 拖入时才有意义，普通全屏场景基本摸不到。实测确认不崩即可，不追求可用。
+`desktop_drop 0.7.1` 有 Android 实现（`one.mixin.desktop.drop`），会话页的 `DropTarget` 不会抛
+`MissingPluginException`。Android 的拖拽只在分屏/多窗口下有意义，不追求可用。
 
-### 4.5 其他
+### 4.5 其他观察
 
-| 位置 | 问题 | 处理 |
+| 位置 | 现象 | 处理 |
 |---|---|---|
-| `util/conversation/conversation_sender.dart` | Android 分支用 `android_channel.pickFilesAndroid()`，返回 `content://` URI | 上游发送页走同一路径，理论 OK；失败则回退 `file_selector.openFiles()` |
-| `util/native/directories.dart` `getCacheDirectory()` | 走 `path_provider.getTemporaryDirectory()` | Android 正常（app 私有 cache），无需改 |
-| `provider/network/server/controller/receive_controller.dart` | `autoAcceptTextMessages = true`，App 被系统冻结时收不到 | 系统限制，暂不处理 |
-| `android/app/src/main/AndroidManifest.xml` | `POST_NOTIFICATIONS` 来自 `flutter_foreground_task` 的 manifest 合并，本文件未显式声明 | 已确认注释在案；若通知不弹，先 `adb shell dumpsys package ... \| grep POST_NOTIFICATIONS` |
+| 模拟器（debug + swiftshader） | 冷启动约 40 秒，冷启动期的 `adb input` 会撞上 ANR（`Input dispatching timed out (Application does not have a focused window)`） | 环境问题（软件渲染 + debug），真机无此现象；等首页出现后再操作 |
+| `LocalIpService.FetchLocalIpAction` | 启动后会连续触发几次 | 上游行为，未动 |
+| `util/native/directories.dart` | `getCacheDirectory()` 走 `path_provider` | Android 正常 |
+| `receive_controller.dart` | `autoAcceptTextMessages = true`，App 被系统冻结时收不到 | 系统限制，暂不处理 |
 
 ---
 
 ## 5. 待定的设计决策
 
+- [ ] 回车语义：Android 是否要为了「裸回车发送」牺牲多行输入（见 §4.1 的两个选项）
 - [ ] 「自动接收文本消息」要不要做成设置项（当前硬编码 `autoAcceptTextMessages = true`）
-- [ ] 收到文本时要不要发系统通知（后台场景），以及与现有「传输中」前台服务的关系
-- [ ] 会话 Tab 已是默认首页（Windows 端已改），Android 端确认一致即可
-- [ ] 拖拽确认卡片在手机上是否改用底部 Sheet（当前是居中 Dialog，窄屏下已按 `min(380, 宽-120)` 收窄）
+- [ ] 收到文本时要不要发系统通知（后台场景），与现有「传输中」前台服务的关系
+- [ ] 拖拽确认卡片在手机上是否改用底部 Sheet（当前是居中 Dialog）
 
 ---
 
 ## 6. 已知限制（Windows / Android 共有）
 
-- 输入框**多行**（`minLines: 1` / `maxLines: 6`）：裸 Enter 发送，Shift+Enter 换行，Ctrl / Alt / Cmd + Enter 忽略。
+- Windows 输入框多行：裸 Enter 发送，Shift+Enter 换行，Ctrl / Alt / Cmd + Enter 忽略。
+- Android 输入框多行，但**软键盘没有换行键**（回车即发送）；换行只能靠外接键盘。
 - 单条文本上限 4000 字符（正文放在 `preview` 字段里传输）。
 - 对端若是**原版** LocalSend，收到文本仍会弹「接受」卡片——对方版本的限制。
-- 接收端只在 fork 版本上自动接收，原版不受影响。
 - 剪贴板文件一次最多 100 个（Windows）/ 20 个且单文件 ≤256MB（Android）。
 - Windows 复制**文件夹**只跳过并提示，不递归展开。
-- 粘贴的原生实现只有 **Windows / Android**：macOS / Linux / iOS 会走 `MissingPluginException` 分支，退化成普通文本粘贴。
+- 粘贴的原生实现只有 **Windows / Android**：macOS / Linux / iOS 走 `MissingPluginException` 分支。
 
 ---
 
 ## 7. 打包（可选，自用可跳过）
 
-- [ ] debug APK 足够自用，直接 `adb install -r app-debug.apk`
-- [ ] 若要 release：需要 `app/android/key.properties` + keystore，否则 `signingConfigs.release` 为空会构建失败
+- [x] debug APK 足够自用，`adb install -r app-debug.apk`
+- [ ] release 需要 `app/android/key.properties` + keystore，否则 `signingConfigs.release` 为空会构建失败
+- [ ] release 还要放开 ABI 限制（见 §1），否则只有 x86_64，装不进真机
