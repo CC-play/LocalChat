@@ -7,6 +7,9 @@ project(runner LANGUAGES CXX)
 #
 # Any new source files that you add to the application should be added here.
 add_executable(${BINARY_NAME} WIN32
+  "clipboard_ext.cpp"
+  "clipboard_files_win.cpp"
+  "clipboard_image_win.cpp"
   "flutter_window.cpp"
   "main.cpp"
   "utils.cpp"
@@ -43,6 +46,9 @@ target_link_libraries(${BINARY_NAME} PRIVATE "dwmapi.lib")
 # C++/WinRT (winrt_ext.cpp): newer Windows SDKs require linking the WinRT
 # activation functions (RoGetActivationFactory etc.) explicitly.
 target_link_libraries(${BINARY_NAME} PRIVATE "runtimeobject.lib")
+# [FORK] clipboard_ext.cpp：WIC 负责把剪贴板里的 DIB 转成 PNG。
+# clipboard_files_win.cpp 用 shellapi 的 DragQueryFileW 读 CF_HDROP。
+target_link_libraries(${BINARY_NAME} PRIVATE "windowscodecs.lib" "uuid.lib" "ole32.lib" "shell32.lib")
 target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}")
 
 # Run the Flutter tool portions of the build. This must not be removed.

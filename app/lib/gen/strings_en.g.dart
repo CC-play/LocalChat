@@ -414,6 +414,21 @@ class Translations$conversation$en {
 
   /// en: 'The device is not reachable. Make sure LocalSend is running on it.'
   String get peerUnreachable => 'The device is not reachable. Make sure LocalSend is running on it.';
+
+  /// en: 'Send these files?'
+  String get dropTitle => 'Send these files?';
+
+  /// en: '{count} file(s), {size} in total. Send them to this chat?'
+  String dropSummary({required Object count, required Object size}) => '${count} file(s), ${size} in total. Send them to this chat?';
+
+  /// en: 'Release to send files to this chat'
+  String get dropHint => 'Release to send files to this chat';
+
+  /// en: 'Folders can't be dropped here and were skipped.'
+  String get dropFoldersIgnored => 'Folders can\'t be dropped here and were skipped.';
+
+  /// en: 'Some items couldn't be read and were skipped.'
+  String get pasteSkipped => 'Some items couldn\'t be read and were skipped.';
 }
 
 // Path: receiveHistoryPage

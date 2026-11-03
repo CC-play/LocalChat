@@ -2,6 +2,7 @@
 
 #include <optional>
 
+#include "clipboard_ext.h"
 #include "flutter/generated_plugin_registrant.h"
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
@@ -25,6 +26,8 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
+  // [FORK] 聊天输入框的「粘贴图片」需要读剪贴板位图，Flutter 的 Clipboard 不提供。
+  RegisterClipboardChannel(flutter_controller_->engine()->messenger());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
   return true;
 }

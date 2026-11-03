@@ -81,6 +81,11 @@ class _HomePageState extends State<HomePage> with Refena {
     final vm = context.watch(homePageControllerProvider);
 
     return DropTarget(
+      // [FORK] desktop_drop 不做冒泡判定：所有注册的 DropTarget 都会收到事件，
+      // 各自用 bounds 命中。会话页自己也挂了 DropTarget，如果不在这里关掉，
+      // 拖文件进会话页时主页会同时把文件塞进「发送」Tab 并切走页面。
+      // 「当前路由是否最上层」在 push/pop 时会让依赖方重建（_ModalScopeStatus）。
+      enable: ModalRoute.of(context)?.isCurrent ?? true,
       onDragEntered: (_) {
         setState(() {
           _dragAndDropIndicator = true;

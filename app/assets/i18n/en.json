@@ -210,7 +210,12 @@
     "messageTooLong": "The message is too long (at most {max} characters).",
     "peerDeclined": "The receiver declined it.",
     "peerBusy": "The receiver is busy with another transfer.",
-    "peerUnreachable": "The device is not reachable. Make sure LocalSend is running on it."
+    "peerUnreachable": "The device is not reachable. Make sure LocalSend is running on it.",
+    "dropTitle": "Send these files?",
+    "dropSummary": "{count} file(s), {size} in total. Send them to this chat?",
+    "dropHint": "Release to send files to this chat",
+    "dropFoldersIgnored": "Folders can't be dropped here and were skipped.",
+    "pasteSkipped": "Some items couldn't be read and were skipped."
   },
   "receiveHistoryPage": {
     "title": "History",

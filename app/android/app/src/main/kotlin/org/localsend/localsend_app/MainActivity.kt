@@ -2,6 +2,7 @@ package org.localsend.localsend_app
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.content.ClipboardManager
 import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
@@ -11,6 +12,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.DocumentsContract
+import android.provider.OpenableColumns
 import android.provider.Settings
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -31,6 +33,10 @@ private const val REQUEST_CODE_LOCAL_NETWORK = 4
 // Not available as a constant in compileSdk 36.
 private const val PERMISSION_ACCESS_LOCAL_NETWORK = "android.permission.ACCESS_LOCAL_NETWORK"
 private const val API_LEVEL_ANDROID_17 = 37
+
+// [FORK] 一次粘贴近似「全选相册」时，读字节会把内存打爆，这里给个上限。
+private const val MAX_CLIPBOARD_FILES = 20
+private const val MAX_CLIPBOARD_FILE_BYTES = 256L * 1024 * 1024
 
 class MainActivity : FlutterActivity() {
     private var pendingResult: MethodChannel.Result? = null
@@ -122,6 +128,14 @@ class MainActivity : FlutterActivity() {
                     result.success(isAnimationsEnabled())
                 }
 
+                "getClipboardImage" -> {
+                    result.success(readClipboardImage())
+                }
+
+                "getClipboardFiles" -> {
+                    result.success(readClipboardFiles())
+                }
+
                 "getDownloadsDirectory" -> {
                     result.success(getDownloadsDirectory())
                 }
@@ -165,6 +179,83 @@ class MainActivity : FlutterActivity() {
     private fun isAnimationsEnabled() : Boolean {
         return Settings.Global.getFloat(this.getContentResolver(),
             Settings.Global.ANIMATOR_DURATION_SCALE, 1.0f) != 0.0f;
+    }
+
+    /// [FORK] 读取系统剪贴板里的图片，供聊天输入框「粘贴图片」使用。
+    ///
+    /// Flutter 的 Clipboard.getData 只支持纯文本，图片只能走原生。
+    /// 返回 null 表示剪贴板里没有图片，Dart 侧据此退回普通文本粘贴。
+    private fun readClipboardImage(): Map<String, Any>? {
+        val manager = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return null
+        val clip = manager.primaryClip ?: return null
+        if (clip.itemCount == 0) return null
+
+        // 只有「复制了一张图」的情况才带 URI；纯文本复制没有。
+        val uri = clip.getItemAt(0).uri ?: return null
+        val mime = contentResolver.getType(uri) ?: return null
+        if (!mime.startsWith("image/")) return null
+
+        val bytes = try {
+            contentResolver.openInputStream(uri)?.use { it.readBytes() }
+        } catch (e: Exception) {
+            null
+        } ?: return null
+        if (bytes.isEmpty()) return null
+
+        return mapOf("bytes" to bytes, "mime" to mime)
+    }
+
+    /// [FORK] 读取剪贴板里的文件条目（文件管理器 / 相册里「复制」放的是 content URI）。
+    ///
+    /// 和 Windows 的 CF_HDROP 对应，但 Android 只有 URI 没有路径，
+    /// 所以这里直接读字节，交给 Dart 侧落到缓存目录。
+    private fun readClipboardFiles(): List<Map<String, Any>> {
+        val manager = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return emptyList()
+        val clip = manager.primaryClip ?: return emptyList()
+        if (clip.itemCount == 0) return emptyList()
+
+        val entries = mutableListOf<Map<String, Any>>()
+        for (index in 0 until minOf(clip.itemCount, MAX_CLIPBOARD_FILES)) {
+            // 纯文本复制没有 URI，直接跳过（Dart 侧会退回普通文本粘贴）。
+            val uri = clip.getItemAt(index).uri ?: continue
+            val mime = contentResolver.getType(uri) ?: continue
+            if (isTooLarge(uri)) continue
+
+            val bytes = try {
+                contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            } catch (e: Exception) {
+                null
+            } ?: continue
+            if (bytes.isEmpty()) continue
+
+            entries.add(
+                mapOf<String, Any>(
+                    "bytes" to bytes,
+                    "mime" to mime,
+                    "name" to (queryDisplayName(uri) ?: uri.lastPathSegment ?: "clipboard-$index"),
+                ),
+            )
+        }
+        return entries
+    }
+
+    private fun isTooLarge(uri: Uri): Boolean {
+        val size = try {
+            contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length }
+        } catch (e: Exception) {
+            null
+        } ?: return false
+        return size > MAX_CLIPBOARD_FILE_BYTES
+    }
+
+    private fun queryDisplayName(uri: Uri): String? {
+        return try {
+            contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) cursor.getString(0) else null
+            }
+        } catch (e: Exception) {
+            null
+        }
     }
 
     private fun handleGetFileDescriptor(call: MethodCall, result: MethodChannel.Result) {

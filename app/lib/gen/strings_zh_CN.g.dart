@@ -358,6 +358,16 @@ class Translations$conversation$zh_CN extends Translations$conversation$en {
   String get peerBusy => '对方正在传输其他内容';
   @override
   String get peerUnreachable => '对方不可达，请确认它已打开 LocalSend';
+  @override
+  String get dropTitle => '确认发送';
+  @override
+  String dropSummary({required Object count, required Object size}) => '共 ${count} 个文件，合计 ${size}。确认要发送？';
+  @override
+  String get dropHint => '松开鼠标，发送到当前会话';
+  @override
+  String get dropFoldersIgnored => '暂不支持拖入文件夹，已跳过。';
+  @override
+  String get pasteSkipped => '有部分内容无法读取，已跳过。';
 }
 
 // Path: receiveHistoryPage

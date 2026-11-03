@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:collection/collection.dart';
+import 'package:desktop_drop/desktop_drop.dart';
+import 'package:file_selector/file_selector.dart' show XFile;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show SelectedContent;
 import 'package:flutter/services.dart';
@@ -8,8 +11,11 @@ import 'package:localsend_app/gen/strings.g.dart';
 import 'package:localsend_app/model/conversation/conversation.dart';
 import 'package:localsend_app/model/cross_file.dart';
 import 'package:localsend_app/provider/conversation_provider.dart';
+import 'package:localsend_app/util/conversation/clipboard_image.dart';
 import 'package:localsend_app/util/conversation/conversation_sender.dart';
+import 'package:localsend_app/util/native/cross_file_converters.dart';
 import 'package:localsend_app/util/native/open_file.dart';
+import 'package:localsend_app/widget/chat/drop_confirm_dialog.dart';
 import 'package:localsend_app/widget/chat/message_bubble.dart';
 import 'package:localsend_app/widget/chat/top_toast.dart';
 import 'package:localsend_isolates/model/device.dart';
@@ -36,6 +42,9 @@ class _ConversationPageState extends State<ConversationPage> {
   /// [FORK] 文字可选中：靠它拿到当前选区锚点，用于定位「复制」菜单。
   final _selectionKey = GlobalKey<SelectionAreaState>();
 
+  /// [FORK] 页面级 Ctrl+V 需要把活交给输入条（剪贴板读取与确认卡片都在那里）。
+  final _composerKey = GlobalKey<_ComposerState>();
+
   /// 当前选中文本；由 [SelectionArea.onSelectionChanged] 维护，仅作字段用（不 setState）。
   String? _selectedText;
 
@@ -47,6 +56,12 @@ class _ConversationPageState extends State<ConversationPage> {
 
   /// 菜单是否已经弹出。避免 pointer up 与后续事件重复弹两次。
   bool _menuOpen = false;
+
+  /// [FORK] 是否有文件正被拖到窗口上方（用于显示「松开即可发送」遮罩）。
+  bool _dragging = false;
+
+  /// 拖拽确认卡片是否已经打开，避免连拖两次叠两层弹窗。
+  bool _dropDialogOpen = false;
 
   @override
   void initState() {
@@ -178,6 +193,102 @@ class _ConversationPageState extends State<ConversationPage> {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // 拖拽文件
+  // ---------------------------------------------------------------------------
+
+  void _handleDragEntered(DropEventDetails details) {
+    if (_dragging) {
+      return;
+    }
+    setState(() => _dragging = true);
+  }
+
+  void _handleDragExited(DropEventDetails details) {
+    if (!_dragging) {
+      return;
+    }
+    setState(() => _dragging = false);
+  }
+
+  /// 拖拽落下：先统计，再确认，最后交给和回形针同一套投递流程。
+  ///
+  /// 拖拽是一次动作就把东西发出去，比点回形针更容易误操作，
+  /// 所以中间加一张确认卡片，把数量和大小摆出来。
+  Future<void> _handleDrop(DropDoneDetails details) async {
+    if (mounted && _dragging) {
+      setState(() => _dragging = false);
+    }
+    if (_dropDialogOpen) {
+      return;
+    }
+
+    // 目录不展开（可能是整个 D 盘），只提示跳过。
+    final files = <CrossFile>[];
+    var skippedFolders = 0;
+    try {
+      for (final item in details.files) {
+        if (Directory(item.path).existsSync()) {
+          skippedFolders++;
+          continue;
+        }
+        files.add(await CrossFileConverters.convertXFile(XFile(item.path)));
+      }
+    } catch (e) {
+      debugPrint('Failed to read dropped files: $e');
+      if (mounted) {
+        TopToast.show(context, t.conversation.sendFailed);
+      }
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+    if (skippedFolders > 0) {
+      TopToast.show(context, t.conversation.dropFoldersIgnored);
+    }
+    if (files.isEmpty) {
+      return;
+    }
+
+    final conversation = context.ref
+        .read(conversationProvider)
+        .firstWhereOrNull((c) => c.peerFingerprint == widget.peerFingerprint);
+    if (conversation == null) {
+      return;
+    }
+    final target = resolveConversationTarget(context.ref, conversation);
+    if (target == null) {
+      TopToast.show(context, t.conversation.peerUnreachable);
+      return;
+    }
+
+    _dropDialogOpen = true;
+    final bool confirmed;
+    try {
+      confirmed = await showDropConfirmDialog(context, files);
+    } finally {
+      _dropDialogOpen = false;
+    }
+    if (!confirmed || !mounted) {
+      return;
+    }
+
+    unawaited(
+      deliverFilesInBackground(
+        ref: context.ref,
+        target: target,
+        files: files,
+        onFailure: (message) {
+          if (mounted) {
+            TopToast.show(context, message);
+          }
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final conversations = context.watch(conversationProvider);
@@ -193,69 +304,179 @@ class _ConversationPageState extends State<ConversationPage> {
     final messages = conversation.messages;
     final initial = conversation.initial;
 
-    return Scaffold(
-      appBar: AppBar(title: Text(conversation.displayName)),
-      body: Column(
+    final content = DropTarget(
+      // [FORK] 会话窗口自己接住拖拽。主页那层 DropTarget 会同时收到事件
+      // （desktop_drop 不做冒泡判定，只按各自 bounds 命中），
+      // 所以在 home_page 里按「当前路由是否最上层」把它关掉。
+      onDragEntered: _handleDragEntered,
+      onDragExited: _handleDragExited,
+      onDragDone: _handleDrop,
+      child: Stack(
         children: [
-          Expanded(
-            child: messages.isEmpty
-                ? Center(child: Text(t.conversation.noMessages))
-                : SelectionArea(
-                    key: _selectionKey,
-                    // 框架自带的工具栏在桌面端只在右键时出现，且无法定制成「只有复制」；
-                    // 这里清空它，改由 _handlePointerUp / 右键回调自己弹菜单。
-                    contextMenuBuilder: (context, state) => const SizedBox.shrink(),
-                    onSelectionChanged: _handleSelectionChanged,
-                    child: Listener(
-                      onPointerDown: _handlePointerDown,
-                      onPointerUp: _handlePointerUp,
-                      child: ListView.builder(
-                        reverse: true,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        itemCount: messages.length,
-                        itemBuilder: (context, index) {
-                          // reverse: true 时 index 0 是最新一条。
-                          final i = messages.length - 1 - index;
-                          final msg = messages[i];
-                          final showDate = i == 0 || _needsDateSeparator(messages[i - 1].timestamp, msg.timestamp);
+          Scaffold(
+            appBar: AppBar(title: Text(conversation.displayName)),
+            body: Column(
+              children: [
+                Expanded(
+                  child: messages.isEmpty
+                      ? Center(child: Text(t.conversation.noMessages))
+                      : SelectionArea(
+                          key: _selectionKey,
+                          // 框架自带的工具栏在桌面端只在右键时出现，且无法定制成「只有复制」；
+                          // 这里清空它，改由 _handlePointerUp / 右键回调自己弹菜单。
+                          contextMenuBuilder: (context, state) => const SizedBox.shrink(),
+                          onSelectionChanged: _handleSelectionChanged,
+                          child: Listener(
+                            onPointerDown: _handlePointerDown,
+                            onPointerUp: _handlePointerUp,
+                            child: ListView.builder(
+                              reverse: true,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              itemCount: messages.length,
+                              itemBuilder: (context, index) {
+                                // reverse: true 时 index 0 是最新一条。
+                                final i = messages.length - 1 - index;
+                                final msg = messages[i];
+                                final showDate = i == 0 || _needsDateSeparator(messages[i - 1].timestamp, msg.timestamp);
 
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              if (showDate) _DateLabel(timestamp: msg.timestamp),
-                              MessageBubble(
-                                message: msg,
-                                peerInitial: initial,
-                                onSecondaryTap: (position) => _handleBubbleSecondaryTap(position, msg),
-                                onFileTap: msg.filePath == null
-                                    ? null
-                                    : () async {
-                                        await openFile(
-                                          context,
-                                          msg.fileType ?? FileType.other,
-                                          msg.filePath!,
-                                        );
-                                      },
-                              ),
-                            ],
-                          );
-                        },
-                      ),
-                    ),
-                  ),
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    if (showDate) _DateLabel(timestamp: msg.timestamp),
+                                    MessageBubble(
+                                      message: msg,
+                                      peerInitial: initial,
+                                      onSecondaryTap: (position) => _handleBubbleSecondaryTap(position, msg),
+                                      onFileTap: msg.filePath == null
+                                          ? null
+                                          : () async {
+                                              await openFile(
+                                                context,
+                                                msg.fileType ?? FileType.other,
+                                                msg.filePath!,
+                                              );
+                                            },
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                ),
+                _Composer(
+                  key: _composerKey,
+                  conversation: conversation,
+                ),
+              ],
+            ),
           ),
-          _Composer(
-            key: ValueKey(conversation.peerFingerprint),
-            conversation: conversation,
-          ),
+          if (_dragging) const Positioned.fill(child: _DropOverlay()),
         ],
       ),
+    );
+
+    return _PasteShortcuts(
+      onPaste: () => _composerKey.currentState?.handlePaste(),
+      child: content,
     );
   }
 
   static bool _needsDateSeparator(DateTime previous, DateTime current) {
     return current.difference(previous) > const Duration(minutes: 10);
   }
+}
+
+/// 拖拽悬停时的提示遮罩：整页盖一层淡色蒙版 + 蓝色虚框，明确「松手就发」。
+class _DropOverlay extends StatelessWidget {
+  const _DropOverlay();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    // 这层遮罩是 Scaffold 的同级而不是它的子节点，拿不到 Material 的
+    // DefaultTextStyle；缺了它 Flutter 会退回 DefaultTextStyle.fallback
+    // （黄色 + 双下划线），文字看着就像被划了两道线。包一层透明 Material 即可。
+    return IgnorePointer(
+      child: Material(
+        type: MaterialType.transparency,
+        child: Container(
+          color: theme.colorScheme.scrim.withValues(alpha: 0.06),
+          padding: const EdgeInsets.all(16),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface.withValues(alpha: 0.88),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: kOutgoingBubbleColor, width: 2),
+            ),
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.file_download_outlined, size: 64, color: kOutgoingBubbleColor),
+                    const SizedBox(height: 12),
+                    Text(
+                      t.conversation.dropHint,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.normal,
+                        color: theme.colorScheme.onSurface,
+                        decoration: TextDecoration.none,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 把发送失败的原因翻译成用户能看懂的文案。
+String _describeSendFailure(SendFailure failure) {
+  switch (failure) {
+    case SendFailure.peerDeclined:
+      return t.conversation.peerDeclined;
+    case SendFailure.peerBusy:
+      return t.conversation.peerBusy;
+    case SendFailure.unreachable:
+      return t.conversation.peerUnreachable;
+    case SendFailure.unknown:
+      return t.conversation.sendFailed;
+  }
+}
+
+/// 后台投递文件，只在最终失败时回调 [onFailure]。
+///
+/// 投递可能要重试到 [textSendRetryWindow]（默认 2 分钟），页面不能 await：
+/// 「发送中」气泡由 deliverFiles 立刻落下，用户随时看得到进度。
+/// 回形针和拖拽两条入口共用它，避免行为分叉。
+Future<void> deliverFilesInBackground({
+  required Ref ref,
+  required Device target,
+  required List<CrossFile> files,
+  required void Function(String message) onFailure,
+}) async {
+  final SendFailure? failure;
+  try {
+    failure = await deliverFiles(ref: ref, target: target, files: files);
+  } catch (e) {
+    // 页面在重试窗口内被销毁时 ref 可能已失效，别让它变成未捕获异常。
+    debugPrint('Failed to deliver files: $e');
+    return;
+  }
+
+  if (failure == null) {
+    return;
+  }
+  onFailure(_describeSendFailure(failure));
 }
 
 class _DateLabel extends StatelessWidget {
@@ -282,6 +503,59 @@ class _DateLabel extends StatelessWidget {
   static String _two(int value) => value.toString().padLeft(2, '0');
 }
 
+/// [FORK] Ctrl+V 的自定义意图。
+///
+/// 输入框默认的粘贴只认纯文本。这里先拦下来看剪贴板里有没有文件或图片：
+/// 有就走「发文件」，都没有才插 text/plain。
+class _PasteClipboardIntent extends Intent {
+  const _PasteClipboardIntent();
+}
+
+/// [FORK] 页面级 Ctrl/Cmd+V。
+///
+/// 挂在会话页而不是输入框上：**不点输入框也能粘贴**。
+/// 输入框获得焦点时，焦点链会先命中这里，再往上是 WidgetsApp 的
+/// `DefaultTextEditingShortcuts`（纯文本粘贴），所以文本分支也由这里接管。
+///
+/// [autofocus] 的 [Focus] 是必需的：刚打开会话、什么都没点的时候，
+/// 之前的焦点是 route 自己的 `FocusScopeNode`，它在整个页面的**外层**，
+/// 沿 context 向上找 Shortcuts 根本不会经过这里（表现为「什么都没聚焦时按 Ctrl+V 无效」）。
+class _PasteShortcuts extends StatelessWidget {
+  final VoidCallback onPaste;
+  final Widget child;
+
+  const _PasteShortcuts({
+    required this.onPaste,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Shortcuts(
+      shortcuts: const <ShortcutActivator, Intent>{
+        SingleActivator(LogicalKeyboardKey.keyV, control: true): _PasteClipboardIntent(),
+        // macOS 用 Command，顺手支持一下；原生侧没接也不影响文本粘贴。
+        SingleActivator(LogicalKeyboardKey.keyV, meta: true): _PasteClipboardIntent(),
+      },
+      child: Actions(
+        actions: <Type, Action<Intent>>{
+          _PasteClipboardIntent: CallbackAction<_PasteClipboardIntent>(
+            onInvoke: (intent) {
+              onPaste();
+              return null;
+            },
+          ),
+        },
+        // 只负责把焦点留在本页：真正要粘贴的是 [onPaste]。
+        child: Focus(
+          autofocus: true,
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
 /// 底部输入条：文本输入框 + 发送文件 + 发送。
 class _Composer extends StatefulWidget {
   final Conversation conversation;
@@ -300,6 +574,9 @@ class _ComposerState extends State<_Composer> {
   final _focusNode = FocusNode();
   bool _hasText = false;
   bool _busy = false;
+
+  /// 粘贴流程是否正在进行（读剪贴板 → 写临时文件 → 等确认卡片）。
+  bool _pasting = false;
 
   @override
   void initState() {
@@ -332,18 +609,7 @@ class _ComposerState extends State<_Composer> {
   }
 
   /// 把发送失败的原因翻译成用户能看懂的文案。
-  String _describeFailure(SendFailure failure) {
-    switch (failure) {
-      case SendFailure.peerDeclined:
-        return t.conversation.peerDeclined;
-      case SendFailure.peerBusy:
-        return t.conversation.peerBusy;
-      case SendFailure.unreachable:
-        return t.conversation.peerUnreachable;
-      case SendFailure.unknown:
-        return t.conversation.sendFailed;
-    }
-  }
+  String _describeFailure(SendFailure failure) => _describeSendFailure(failure);
 
   Future<void> _sendText() async {
     final text = _controller.text.trim();
@@ -393,6 +659,133 @@ class _ComposerState extends State<_Composer> {
     _showMessage(_describeFailure(failure));
   }
 
+  /// [FORK] Ctrl+V：剪贴板里是文件/图片就发出去，否则按普通文本粘贴。
+  ///
+  /// 由页面级的 [_PasteShortcuts] 调用（不要求输入框有焦点）。
+  ///
+  /// 顺序很重要：**先问文件列表**。在资源管理器里复制一张 .jpg 时，剪贴板里
+  /// 放的是 CF_HDROP（一组路径）而不是位图，先去问图片通道永远拿不到东西。
+  ///
+  /// 先读剪贴板再做决定是有代价的（键事件必须同步给出「已处理」），
+  /// 所以文本粘贴也接管了——见 [_insertText] 里为什么不复用 `PasteTextIntent`。
+  Future<void> handlePaste() async {
+    if (_pasting) {
+      return;
+    }
+    _pasting = true;
+    try {
+      final files = await _readClipboardFiles();
+      if (!mounted) {
+        return;
+      }
+      if (files.isNotEmpty) {
+        await _confirmAndSend(files);
+        return;
+      }
+
+      final image = await ClipboardImage.read();
+      if (!mounted) {
+        return;
+      }
+      if (image == null) {
+        // 既没有文件也没有位图：当作普通文本粘贴。
+        final data = await Clipboard.getData(Clipboard.kTextPlain);
+        if (!mounted) {
+          return;
+        }
+        final text = data?.text;
+        if (text != null && text.isNotEmpty) {
+          _insertText(text);
+        }
+        return;
+      }
+
+      final file = await ClipboardImage.writeToCache(image);
+      final crossFile = await CrossFileConverters.convertFile(file);
+      if (!mounted) {
+        return;
+      }
+      await _confirmAndSend([crossFile]);
+    } catch (e) {
+      debugPrint('Failed to paste from the clipboard: $e');
+      _showMessage(t.conversation.sendFailed);
+    } finally {
+      _pasting = false;
+    }
+  }
+
+  /// 把剪贴板里的文件条目变成可发送的 [CrossFile]。
+  Future<List<CrossFile>> _readClipboardFiles() async {
+    final entries = await ClipboardFiles.read();
+    if (entries.isEmpty) {
+      return const [];
+    }
+
+    final files = <CrossFile>[];
+    var skipped = 0;
+    for (final entry in entries) {
+      final path = entry.path;
+      if (path != null && Directory(path).existsSync()) {
+        // 文件夹不展开（可能是整个盘），和拖拽保持一致：只提示。
+        skipped++;
+        continue;
+      }
+      try {
+        final file = await ClipboardFiles.materialize(entry);
+        files.add(await CrossFileConverters.convertFile(file));
+      } catch (e) {
+        debugPrint('Failed to materialize a clipboard file: $e');
+        skipped++;
+      }
+    }
+
+    if (skipped > 0) {
+      _showMessage(t.conversation.pasteSkipped);
+    }
+    return files;
+  }
+
+  /// 粘贴和拖拽同属「一步就把东西发出去」，共用同一张确认卡片。
+  Future<void> _confirmAndSend(List<CrossFile> files) async {
+    final target = resolveConversationTarget(context.ref, widget.conversation);
+    if (target == null) {
+      _showMessage(t.conversation.peerUnreachable);
+      return;
+    }
+
+    final confirmed = await showDropConfirmDialog(context, files);
+    if (!mounted) {
+      return;
+    }
+    // 确认卡片抢走了焦点，关掉之后要把光标还给输入框。
+    _focusNode.requestFocus();
+    if (!confirmed) {
+      return;
+    }
+
+    unawaited(_deliverFiles(context.ref, target, files));
+  }
+
+  /// 把文本插到当前光标处（粘贴的兜底路径）。
+  ///
+  /// 这里不用 `Actions.invoke(context, PasteTextIntent(...))`：那个 action 由
+  /// `EditableTextState` 注册在**它自己的子树里**，而 `Actions.invoke` 只沿
+  /// context 向上找，从输入条的 context 根本找不到它，会静默落到 no-op 上
+  /// （表现为「文本粘不进来」）。
+  void _insertText(String text) {
+    final value = _controller.value;
+    final length = value.text.length;
+    final selection = value.selection;
+    final start = selection.isValid ? selection.start.clamp(0, length) : length;
+    final end = selection.isValid ? selection.end.clamp(0, length) : length;
+
+    _controller.value = TextEditingValue(
+      text: value.text.replaceRange(start, end, text),
+      selection: TextSelection.collapsed(offset: start + text.length),
+    );
+    _focusNode.requestFocus();
+  }
+
   Future<void> _pickAndSendFiles() async {
     if (_busy) {
       return;
@@ -425,20 +818,17 @@ class _ComposerState extends State<_Composer> {
   }
 
   /// 真正等待文件投递结果，只用来弹失败提示。
-  Future<void> _deliverFiles(Ref ref, Device target, List<CrossFile> files) async {
-    final SendFailure? failure;
-    try {
-      failure = await deliverFiles(ref: ref, target: target, files: files);
-    } catch (e) {
-      // 页面在重试窗口内被销毁时 ref 可能已失效，别让它变成未捕获异常。
-      debugPrint('Failed to deliver files: $e');
-      return;
-    }
-
-    if (failure == null || !mounted) {
-      return;
-    }
-    _showMessage(_describeFailure(failure));
+  Future<void> _deliverFiles(Ref ref, Device target, List<CrossFile> files) {
+    return deliverFilesInBackground(
+      ref: ref,
+      target: target,
+      files: files,
+      onFailure: (message) {
+        if (mounted) {
+          _showMessage(message);
+        }
+      },
+    );
   }
 
   @override
@@ -464,6 +854,8 @@ class _ComposerState extends State<_Composer> {
               onPressed: _busy ? null : _pickAndSendFiles,
             ),
             Expanded(
+              // Ctrl+V 的拦截放在页面级（见 [ConversationPage.build]），
+              // 这样不用先把光标点进输入框也能粘贴。
               child: TextField(
                 controller: _controller,
                 focusNode: _focusNode,
