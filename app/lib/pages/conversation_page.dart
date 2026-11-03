@@ -600,6 +600,23 @@ class _ComposerState extends State<_Composer> {
     }
   }
 
+  /// [FORK] 回车键的语义：裸 Enter 发送，Shift+Enter 换行，其他组合键忽略。
+  ///
+  /// 桌面端引擎只在 `inputAction == newline` 时才自己往文本里插换行
+  /// （`TextInputPlugin::EnterPressed`），我们的 action 是 `send`，
+  /// 所以 Shift+Enter 的换行必须在这里补一个。
+  void _handleEnter() {
+    final keyboard = HardwareKeyboard.instance;
+    if (keyboard.isShiftPressed) {
+      _insertText('\n');
+      return;
+    }
+    if (keyboard.isControlPressed || keyboard.isAltPressed || keyboard.isMetaPressed) {
+      return;
+    }
+    unawaited(_sendText());
+  }
+
   void _showMessage(String message) {
     if (!mounted) {
       return;
@@ -860,9 +877,16 @@ class _ComposerState extends State<_Composer> {
                 controller: _controller,
                 focusNode: _focusNode,
                 minLines: 1,
-                maxLines: 1,
+                // [FORK] 多行：Shift+Enter 要能换行并让输入框长高。
+                // action 保持 send（不是 newline），否则桌面端引擎会抢在框架前把
+                // 每个 Enter 都插成换行，连「发送」都轮不到我们。
+                maxLines: 6,
+                keyboardType: TextInputType.multiline,
                 textInputAction: TextInputAction.send,
-                onSubmitted: (_) => _sendText(),
+                // [FORK] 只认「裸回车」发送，Shift+Enter 换行。
+                // 桌面端引擎把 Enter 统一翻成 action，修饰键信息不在 action 里，
+                // 只能在提交回调里查一次键盘状态。
+                onSubmitted: (_) => _handleEnter(),
                 // 默认实现会在回车后收起键盘 / 丢失焦点，聊天输入框必须留住焦点。
                 onEditingComplete: () {},
                 decoration: InputDecoration(
