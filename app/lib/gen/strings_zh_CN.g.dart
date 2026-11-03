@@ -365,7 +365,7 @@ class Translations$conversation$zh_CN extends Translations$conversation$en {
   @override
   String get peerBusy => '对方正在传输其他内容';
   @override
-  String get peerUnreachable => '对方不可达，请确认它已打开 LocalSend';
+  String get peerUnreachable => '对方不可达，请确认对方已打开 LocalSend';
   @override
   String get dropTitle => '确认发送';
   @override

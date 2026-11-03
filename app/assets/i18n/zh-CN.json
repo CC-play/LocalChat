@@ -214,7 +214,7 @@
     "messageTooLong": "消息太长了（最多 {max} 个字符）",
     "peerDeclined": "对方拒绝了这条消息",
     "peerBusy": "对方正在传输其他内容",
-    "peerUnreachable": "对方不可达，请确认它已打开 LocalSend",
+    "peerUnreachable": "对方不可达，请确认对方已打开 LocalSend",
     "dropTitle": "确认发送",
     "dropSummary": "共 {count} 个文件，合计 {size}。确认要发送？",
     "dropHint": "松开鼠标，发送到当前会话",
