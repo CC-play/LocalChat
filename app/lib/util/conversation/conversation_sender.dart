@@ -70,8 +70,40 @@ const Duration uploadStallTimeout = Duration(seconds: 60);
 /// 看门狗的巡检间隔。
 const Duration _stallCheckInterval = Duration(seconds: 10);
 
+/// 界面兜底阈值：超过这个时间仍显示「发送中」，就由气泡直接把它标失败。
+///
+/// 发送流程自己会在 [textSendRetryWindow] + [_timeoutGrace] 后收尾，这个阈值
+/// 只负责兜住「流程已经不在了、气泡却还挂着」的情况：异常逃逸、页面销毁导致
+/// ref 失效（上传看门狗依赖页面 ref，此时会静默退出）。
+/// 它不依赖任何后台任务，只要那条气泡还在屏幕上就会生效。
+final Duration chatSendWatchdogTimeout =
+    textSendRetryWindow + _timeoutGrace + const Duration(seconds: 5);
+
+/// 一条消息正在进行的发送。
+///
+/// 用户可以在气泡上点「取消」直接把这条停下来，不必等满 [textSendRetryWindow]。
+/// 光靠 `closeSession` 不够：它只取消当前还挂着的 prepare-upload，
+/// 重试循环下一轮还会再发一次，所以循环里必须自己检查 [cancelled]。
+class _SendTicket {
+  _SendTicket(this.sessionId);
+
+  /// 会话 id：取消时要靠它清掉后台会话（顺带取消挂起的请求）。
+  final String sessionId;
+
+  bool cancelled = false;
+}
+
+/// 正在进行的发送，按消息 id 索引。
+///
+/// 放在模块级而不是 provider 里：它只是「有没有人在等」的临时登记，
+/// 没有任何 UI 需要观察它，不值得引入一个 provider 的生命周期管理。
+final _inFlight = <String, _SendTicket>{};
+
 /// 文本消息发送失败的原因，由 UI 层翻译成文案。
 enum SendFailure {
+  /// 用户自己点了取消。
+  cancelled,
+
   /// 对方点了拒绝。
   peerDeclined,
 
@@ -169,6 +201,10 @@ Future<SendFailure?> sendTextMessage({
     lastAccessed: null,
   );
 
+  // 登记取消令牌：气泡上的「取消」按钮靠它找到这次发送。
+  final ticket = _SendTicket(sessionId);
+  _inFlight[messageId] = ticket;
+
   SendFailure? failure;
   try {
     // [FORK] 硬上限：光靠循环里的 deadline 检查是不够的。
@@ -181,6 +217,7 @@ Future<SendFailure?> sendTextMessage({
       target: target,
       file: file,
       sessionId: sessionId,
+      ticket: ticket,
     ).timeout(textSendRetryWindow + _timeoutGrace);
   } on TimeoutException {
     _logger.warning('Text message did not finish within $textSendRetryWindow');
@@ -190,10 +227,18 @@ Future<SendFailure?> sendTextMessage({
     _logger.warning('Failed to send a text message', e, st);
     failure = SendFailure.unknown;
   } finally {
+    _inFlight.remove(messageId);
     // 失败的后台会话会留在 map 里，聊天场景不需要它继续存在。
     // closeSession 同时会取消还挂着的 prepare-upload（cancel token），
     // 所以超时之后不会留下一个仍在跑的请求。
     ref.notifier(sendProvider).closeSession(sessionId);
+  }
+
+  if (ticket.cancelled) {
+    // 取消时气泡已经被 [cancelChatMessage] 写成终态了。
+    // 这里再写一次会把它覆盖成「发送失败」或者更糟——把用户刚取消的那条
+    // 又标成已发送，所以直接返回，让取消的结果保持唯一。
+    return SendFailure.cancelled;
   }
 
   await markSentFile(
@@ -217,10 +262,16 @@ Future<SendFailure?> _sendTextWithRetry({
   required Device target,
   required CrossFile file,
   required String sessionId,
+  required _SendTicket ticket,
 }) async {
   final deadline = DateTime.now().add(textSendRetryWindow);
   var attempt = 0;
   while (true) {
+    // 用户点了取消：每轮开头都查一次，避免取消后还继续发出去。
+    if (ticket.cancelled) {
+      return SendFailure.cancelled;
+    }
+
     attempt++;
     final failure = await _attemptTextSend(
       ref: ref,
@@ -228,6 +279,12 @@ Future<SendFailure?> _sendTextWithRetry({
       file: file,
       sessionId: sessionId,
     );
+
+    // 这次尝试可能正是在用户点取消的瞬间完成的：成功也当取消处理，
+    // 否则对方收到了、用户界面上却显示「已取消」。
+    if (ticket.cancelled) {
+      return SendFailure.cancelled;
+    }
 
     if (failure == null) {
       return null;
@@ -282,6 +339,7 @@ bool _isRetryable(SendFailure failure) {
     case SendFailure.unreachable:
     case SendFailure.unknown:
       return true;
+    case SendFailure.cancelled:
     case SendFailure.peerDeclined:
     case SendFailure.peerBusy:
     case SendFailure.fileMissing:
@@ -359,6 +417,13 @@ Future<SendFailure?> deliverFiles({
 
   SendFailure? failure;
   var enteredTransfer = false;
+  // 一个批次共用一个令牌：多点几个文件时，取消其中任意一条就整批停下，
+  // 否则会出现「取消了一条，剩下几条还在后台排队上传」的怪状态。
+  final ticket = _SendTicket(sessionId);
+  for (final id in fileIds) {
+    _inFlight[id] = ticket;
+  }
+
   try {
     // [FORK] 与文本同一个硬上限：握手阶段的 await 可能永不返回，
     // 不能只靠循环内的 deadline 判断。
@@ -369,6 +434,7 @@ Future<SendFailure?> deliverFiles({
       fileIds: fileIds,
       sessionId: sessionId,
       checksums: checksums,
+      ticket: ticket,
     ).timeout(textSendRetryWindow + _timeoutGrace);
     failure = result.failure;
     enteredTransfer = result.enteredTransfer;
@@ -379,6 +445,18 @@ Future<SendFailure?> deliverFiles({
     // 异常也必须落到下面的 _failPendingFiles，否则气泡永远转圈。
     _logger.warning('Failed to deliver files', e, st);
     failure = SendFailure.unknown;
+  } finally {
+    for (final id in fileIds) {
+      // 只在还是自己的令牌时才移除：重发会在旧流程收尾前就注册新令牌。
+      if (identical(_inFlight[id], ticket)) {
+        _inFlight.remove(id);
+      }
+    }
+  }
+
+  if (ticket.cancelled) {
+    // 取消时 [cancelChatMessage] 已经把气泡写成终态，这里不能再覆盖。
+    return SendFailure.cancelled;
   }
 
   if (enteredTransfer) {
@@ -391,6 +469,7 @@ Future<SendFailure?> deliverFiles({
         files: files,
         fileIds: fileIds,
         sessionId: sessionId,
+        ticket: ticket,
       ),
     );
     return null;
@@ -416,12 +495,17 @@ Future<({SendFailure? failure, bool enteredTransfer})> _deliverWithRetry({
   required List<String> fileIds,
   required String sessionId,
   required Map<String, String> checksums,
+  required _SendTicket ticket,
 }) async {
   final deadline = DateTime.now().add(textSendRetryWindow);
   SendFailure? failure;
   var attempt = 0;
 
   while (true) {
+    if (ticket.cancelled) {
+      return (failure: SendFailure.cancelled, enteredTransfer: false);
+    }
+
     attempt++;
     final result = await _attemptFileSend(
       ref: ref,
@@ -431,6 +515,23 @@ Future<({SendFailure? failure, bool enteredTransfer})> _deliverWithRetry({
       sessionId: sessionId,
       checksums: checksums,
     );
+
+    // 令牌拿到手之后用户才点取消：此时文件已经在往对端写了，
+    // 交给 upload 事件收尾（看门狗也会看到取消标记），不能在这里标失败，
+    // 否则对端收到了、本地却显示失败。
+    if (ticket.cancelled) {
+      if (result.enteredTransfer) {
+        final rejected = [
+          for (var i = 0; i < files.length; i++)
+            if (!result.acceptedIds.contains(fileIds[i])) i,
+        ];
+        if (rejected.isNotEmpty) {
+          await _failFilesAt(ref: ref, target: target, files: files, fileIds: fileIds, indexes: rejected);
+        }
+        return (failure: null, enteredTransfer: true);
+      }
+      return (failure: SendFailure.cancelled, enteredTransfer: false);
+    }
 
     if (result.enteredTransfer) {
       // 多选时对端可能只勾了其中几个：没拿到 token 的那些永远不会有
@@ -472,6 +573,7 @@ Future<void> _watchStalledUploads({
   required List<CrossFile> files,
   required List<String> fileIds,
   required String sessionId,
+  required _SendTicket ticket,
 }) async {
   final peerKey = peerKeyOf(target);
   final ChatTransferNotifier transfer;
@@ -486,6 +588,12 @@ Future<void> _watchStalledUploads({
 
   while (true) {
     await Future<void>.delayed(_stallCheckInterval);
+
+    // 用户已取消：气泡状态由 [cancelChatMessage] 负责，看门狗直接退出，
+    // 免得 60 秒后又把「已取消」改写成「传输失败」。
+    if (ticket.cancelled) {
+      return;
+    }
 
     final List<ChatMessage> messages;
     try {
@@ -527,6 +635,81 @@ Future<void> _watchStalledUploads({
     await _failFilesAt(ref: ref, target: target, files: files, fileIds: fileIds, indexes: pending);
     return;
   }
+}
+
+/// 主动取消一条正在发送的消息（点气泡左侧转圈的那颗按钮）。
+///
+/// 返回 `true` 表示确实停掉了某次发送；`false` 表示这条已经不在发送中
+/// （多半是在点下去的同一瞬间刚好发完了），但**气泡状态仍会被修正**。
+///
+/// 取消立即生效：先把气泡写成终态、再断开后台会话，不等下一条 upload 事件。
+/// 发送循环里对令牌的检查只是为了阻止它继续往后发，不代表取消的时机。
+///
+/// `_inFlight` 里找不到条目时同样会标失败：那种情况说明发送流程已经消失
+/// （异常逃逸、页面销毁导致 ref 失效），气泡却还挂在「发送中」——这正是
+/// 「一直转圈」最难看的样子，必须能被修掉。
+Future<bool> cancelChatMessage({
+  required Ref ref,
+  required Device target,
+  required String messageId,
+  /// 气泡下方显示的原因文案（通常是「已取消」）。
+  String? errorMessage,
+}) async {
+  final ticket = _inFlight[messageId];
+  ticket?.cancelled = true;
+
+  // 同一批文件共用一个令牌：整批一起停。否则会出现「取消了一条、
+  // 剩下几条还在后台排队上传」的怪状态。
+  final ids = ticket == null
+      ? [messageId]
+      : [
+          for (final entry in _inFlight.entries)
+            if (identical(entry.value, ticket)) entry.key,
+        ];
+
+  if (ticket != null) {
+    try {
+      // closeSession 会顺带取消还挂着的 prepare-upload。
+      ref.notifier(sendProvider).closeSession(ticket.sessionId);
+    } catch (e, st) {
+      _logger.warning('Failed to close a cancelled session', e, st);
+    }
+  }
+
+  final peerFingerprint = peerKeyOf(target);
+  final messages = ref.read(conversationProvider)
+          .firstWhereOrNull((c) => c.peerFingerprint == peerFingerprint)
+          ?.messages ??
+      const <ChatMessage>[];
+
+  for (final id in ids) {
+    // 只动还在「发送中」的：已经传完的那几条不能被改回失败。
+    if (messages.firstWhereOrNull((m) => m.id == id)?.status != ChatMessageStatus.pending) {
+      continue;
+    }
+
+    try {
+      ref.read(chatTransferProvider).finish(id);
+    } catch (e, st) {
+      _logger.warning('Failed to clear progress of a cancelled message', e, st);
+    }
+
+    try {
+      await ref.redux(conversationProvider).dispatchAsync(
+            UpdateChatMessageAction(
+              peerFingerprint: peerFingerprint,
+              messageId: id,
+              status: ChatMessageStatus.failed,
+              errorMessage: errorMessage,
+            ),
+          );
+    } catch (e, st) {
+      _logger.warning('Failed to mark a cancelled message', e, st);
+    }
+  }
+
+  // 没有令牌 = 已经没有流程可停，只是替它收了个尾。
+  return ticket != null;
 }
 
 /// 重发一条发送失败的消息（点气泡左侧的红色感叹号）。

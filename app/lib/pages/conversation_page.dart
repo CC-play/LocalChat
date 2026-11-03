@@ -110,8 +110,60 @@ class _ConversationPageState extends State<ConversationPage> {
     }
   }
 
-  void _handleSelectionChanged(SelectedContent? content) {
-    final text = content?.plainText;
+  /// [FORK] 点击「发送中」的转圈，立刻停下这次发送。
+  ///
+  /// 之所以需要它：发送最多要等满两分钟的重试窗口（给对方时间打开 App），
+  /// 这期间界面上只有「发送中」，用户无法判断它是在工作还是卡死，
+  /// 也无法中止。把转圈做成按钮，主动权就交回用户手里。
+  Future<void> _cancelMessage(ChatMessage message) async {
+    final target = _currentTarget();
+    if (target == null) {
+      return;
+    }
+
+    final cancelled = await cancelChatMessage(
+      ref: context.ref,
+      target: target,
+      messageId: message.id,
+      errorMessage: t.conversation.sendCancelled,
+    );
+    if (!mounted || !cancelled) {
+      // 没停成说明它刚好已经结束了，气泡上会显示真实结局，不用再提示。
+      return;
+    }
+    TopToast.show(context, t.conversation.sendCancelled);
+  }
+
+  /// [FORK] 兜底：气泡挂在「发送中」太久，直接判失败。
+  ///
+  /// 走到这里说明发送流程本身已经不正常了（异常逃逸，或页面销毁让上传看门狗
+  /// 静默退出），不能继续让它转圈。[cancelChatMessage] 在没有活跃发送时
+  /// 同样会把气泡写成终态。
+  Future<void> _expireStaleMessage(ChatMessage message) async {
+    final target = _currentTarget();
+    if (target == null) {
+      return;
+    }
+    await cancelChatMessage(
+      ref: context.ref,
+      target: target,
+      messageId: message.id,
+      errorMessage: t.conversation.peerUnreachable,
+    );
+  }
+
+  /// 当前会话对应的可发送设备；找不到返回 null。
+  Device? _currentTarget() {
+    final conversation = context.ref
+        .read(conversationProvider)
+        .firstWhereOrNull((c) => c.peerFingerprint == widget.peerFingerprint);
+    if (conversation == null) {
+      return null;
+    }
+    return resolveConversationTarget(context.ref, conversation);
+  }
+
+  void _handleSelectionChanged(SelectedContent? content) {    final text = content?.plainText;
     _selectedText = text;
     if (text != null && text.isNotEmpty) {
       _selectionTouched = true;
@@ -385,6 +437,13 @@ class _ConversationPageState extends State<ConversationPage> {
                                       onRetry: msg.status == ChatMessageStatus.failed
                                           ? () => unawaited(_retryMessage(msg))
                                           : null,
+                                      onCancel: msg.status == ChatMessageStatus.pending
+                                          ? () => unawaited(_cancelMessage(msg))
+                                          : null,
+                                      onStalePending: msg.status == ChatMessageStatus.pending
+                                          ? () => unawaited(_expireStaleMessage(msg))
+                                          : null,
+                                      staleAfter: chatSendWatchdogTimeout,
                                       onFileTap: msg.filePath == null
                                           ? null
                                           : () async {
@@ -488,6 +547,8 @@ String _describeSendFailure(SendFailure failure) {
       return t.conversation.peerUnreachable;
     case SendFailure.fileMissing:
       return t.conversation.fileMissing;
+    case SendFailure.cancelled:
+      return t.conversation.sendCancelled;
     case SendFailure.unknown:
       return t.conversation.sendFailed;
   }

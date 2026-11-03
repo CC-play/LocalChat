@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:localsend_app/gen/strings.g.dart';
 import 'package:localsend_app/model/conversation/conversation.dart';
@@ -25,6 +27,17 @@ class MessageBubble extends StatelessWidget {
   /// [FORK] 点击「发送失败」的红色感叹号时重发。
   final VoidCallback? onRetry;
 
+  /// [FORK] 点击「发送中」的转圈时取消这次发送。
+  final VoidCallback? onCancel;
+
+  /// [FORK] 「发送中」已经挂得太久时回调，由页面直接把它标成失败。
+  ///
+  /// 这是纯 UI 侧的兜底：不依赖任何后台任务，只要气泡还在屏幕上就生效。
+  final VoidCallback? onStalePending;
+
+  /// 超过这个时长仍是「发送中」就触发 [onStalePending]。
+  final Duration staleAfter;
+
   const MessageBubble({
     super.key,
     required this.message,
@@ -32,6 +45,9 @@ class MessageBubble extends StatelessWidget {
     this.onFileTap,
     this.onSecondaryTap,
     this.onRetry,
+    this.onCancel,
+    this.onStalePending,
+    this.staleAfter = const Duration(minutes: 3),
   });
 
   @override
@@ -90,12 +106,22 @@ class MessageBubble extends StatelessWidget {
       statusIndicator = null;
     } else {
       statusIndicator = switch (message.status) {
-        ChatMessageStatus.pending => SizedBox(
-          width: 18,
-          height: 18,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: theme.colorScheme.primary,
+        ChatMessageStatus.pending => Tooltip(
+          // [FORK] 转圈不再是只读的：点一下就把这次发送停掉，
+          // 不必等满两分钟的重试窗口。
+          message: onCancel == null ? t.conversation.sending : t.conversation.cancelSend,
+          child: InkResponse(
+            onTap: onCancel,
+            radius: 16,
+            containedInkWell: false,
+            child: SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: theme.colorScheme.primary,
+              ),
+            ),
           ),
         ),
         ChatMessageStatus.failed => Tooltip(
@@ -158,7 +184,8 @@ class MessageBubble extends StatelessWidget {
                       child: _SendProgressFooter(
                         messageId: message.id,
                         color: theme.colorScheme.primary,
-                        idleHint: t.conversation.sending,
+                        staleAfter: staleAfter,
+                        onStale: onStalePending,
                       ),
                     )
                   else if (statusHint != null)
@@ -190,28 +217,64 @@ class MessageBubble extends StatelessWidget {
 /// [ValueNotifier]，所以并发传几个文件时，进度事件不会让整个消息列表重绘。
 ///
 /// 进度为 null 表示还没开始上传（例如仍在计算校验和，或者正在等对方接受），
-/// 此时显示原来的「发送中…」，不占用额外高度。
-class _SendProgressFooter extends StatelessWidget {
+/// 此时显示「发送中 12s…」——**带上已等待的秒数**。
+/// 原先只写「发送中…」，用户等上几十秒就无法判断是在正常工作还是已经卡死。
+class _SendProgressFooter extends StatefulWidget {
   final String messageId;
   final Color color;
-  final String idleHint;
+  final Duration staleAfter;
+  final VoidCallback? onStale;
 
   const _SendProgressFooter({
     required this.messageId,
     required this.color,
-    required this.idleHint,
+    required this.staleAfter,
+    this.onStale,
   });
 
   @override
+  State<_SendProgressFooter> createState() => _SendProgressFooterState();
+}
+
+class _SendProgressFooterState extends State<_SendProgressFooter> {
+  Timer? _ticker;
+  int _seconds = 0;
+
+  /// 兜底只触发一次：调用方会把它标失败，气泡随即被替换成红叹号。
+  bool _reportedStale = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // 每秒一次，只重建这行小字，不触碰消息列表。
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _seconds++);
+      if (!_reportedStale && _seconds >= widget.staleAfter.inSeconds) {
+        _reportedStale = true;
+        widget.onStale?.call();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final notifier = context.ref.read(chatTransferProvider).progressOf(messageId);
+    final notifier = context.ref.read(chatTransferProvider).progressOf(widget.messageId);
 
     return ValueListenableBuilder<double?>(
       valueListenable: notifier,
       builder: (context, progress, _) {
         if (progress == null) {
           return Text(
-            idleHint,
+            t.conversation.sendingCountdown(seconds: _seconds),
             style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.outline),
           );
         }
@@ -228,15 +291,15 @@ class _SendProgressFooter extends StatelessWidget {
                 child: LinearProgressIndicator(
                   value: progress,
                   minHeight: 3,
-                  backgroundColor: color.withValues(alpha: 0.2),
-                  valueColor: AlwaysStoppedAnimation<Color>(color),
+                  backgroundColor: widget.color.withValues(alpha: 0.2),
+                  valueColor: AlwaysStoppedAnimation<Color>(widget.color),
                 ),
               ),
             ),
             const SizedBox(width: 6),
             Text(
               t.conversation.sendingProgress(percent: percent),
-              style: TextStyle(fontSize: 10, color: color),
+              style: TextStyle(fontSize: 10, color: widget.color),
             ),
           ],
         );

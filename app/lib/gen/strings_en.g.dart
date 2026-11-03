@@ -385,6 +385,15 @@ class Translations$conversation$en {
   /// en: 'Sending {percent}%'
   String sendingProgress({required Object percent}) => 'Sending ${percent}%';
 
+  /// en: 'Sending {seconds}s…'
+  String sendingCountdown({required Object seconds}) => 'Sending ${seconds}s…';
+
+  /// en: 'Click to cancel'
+  String get cancelSend => 'Click to cancel';
+
+  /// en: 'Sending cancelled'
+  String get sendCancelled => 'Sending cancelled';
+
   /// en: 'Failed to send'
   String get sendFailed => 'Failed to send';
 
