@@ -279,4 +279,90 @@ void main() {
     expect(restored.messages.length, 1);
     expect(restored.messages.first.id, 'ok');
   });
+
+  group('MarkChatMessagePendingAction（点感叹号重发）', () {
+    Future<ReduxNotifierTester<List<Conversation>>> seed() async {
+      final service = ReduxNotifier.test(redux: createService());
+      await service.dispatchAsync(
+        AppendChatMessageAction(
+          peerFingerprint: 'fp-a',
+          peerAlias: 'Alice',
+          message: ChatMessage(
+            id: 'failed',
+            direction: ChatMessageDirection.sent,
+            kind: ChatMessageKind.text,
+            timestamp: DateTime(2026, 1, 1, 10),
+            status: ChatMessageStatus.failed,
+            text: 'hi',
+            fileSize: 2,
+            fileType: FileType.text,
+            errorMessage: '对方拒绝',
+          ),
+        ),
+      );
+      return service;
+    }
+
+    test('失败的气泡恢复成发送中，并清掉上一次的错误文案', () async {
+      final service = await seed();
+
+      await service.dispatchAsync(
+        MarkChatMessagePendingAction(peerFingerprint: 'fp-a', messageId: 'failed'),
+      );
+
+      final message = service.state.first.messages.single;
+      expect(message.status, ChatMessageStatus.pending);
+      expect(message.errorMessage, isNull, reason: '重发后不该继续显示上一轮的原因');
+      expect(message.text, 'hi', reason: '正文必须保留');
+      expect(service.state.first.messages.length, 1, reason: '不能新增气泡');
+    });
+
+    test('已发出的消息不会被改回发送中', () async {
+      final service = ReduxNotifier.test(redux: createService());
+      await service.dispatchAsync(
+        AppendChatMessageAction(
+          peerFingerprint: 'fp-a',
+          peerAlias: 'Alice',
+          message: textMessage(id: 'sent', direction: ChatMessageDirection.sent),
+        ),
+      );
+
+      await service.dispatchAsync(
+        MarkChatMessagePendingAction(peerFingerprint: 'fp-a', messageId: 'sent'),
+      );
+
+      expect(service.state.first.messages.single.status, ChatMessageStatus.sent);
+    });
+
+    test('接收到的消息不会被改成发送中', () async {
+      final service = ReduxNotifier.test(redux: createService());
+      await service.dispatchAsync(
+        AppendChatMessageAction(
+          peerFingerprint: 'fp-a',
+          peerAlias: 'Alice',
+          message: textMessage(id: 'in'),
+        ),
+      );
+
+      await service.dispatchAsync(
+        MarkChatMessagePendingAction(peerFingerprint: 'fp-a', messageId: 'in'),
+      );
+
+      expect(service.state.first.messages.single.status, ChatMessageStatus.received);
+    });
+
+    test('消息或会话不存在时静默退出', () async {
+      final service = await seed();
+
+      await service.dispatchAsync(
+        MarkChatMessagePendingAction(peerFingerprint: 'fp-missing', messageId: 'failed'),
+      );
+      expect(service.state.first.messages.single.status, ChatMessageStatus.failed);
+
+      await service.dispatchAsync(
+        MarkChatMessagePendingAction(peerFingerprint: 'fp-a', messageId: 'missing'),
+      );
+      expect(service.state.first.messages.single.status, ChatMessageStatus.failed);
+    });
+  });
 }

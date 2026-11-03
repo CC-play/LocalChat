@@ -215,7 +215,9 @@
     "dropSummary": "共 {count} 个文件，合计 {size}。确认要发送？",
     "dropHint": "松开鼠标，发送到当前会话",
     "dropFoldersIgnored": "暂不支持拖入文件夹，已跳过。",
-    "pasteSkipped": "有部分内容无法读取，已跳过。"
+    "pasteSkipped": "有部分内容无法读取，已跳过。",
+    "retryHint": "点击重发",
+    "fileMissing": "原文件已经不在了，无法重发"
   },
   "receiveHistoryPage": {
     "title": "历史",

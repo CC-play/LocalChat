@@ -20,12 +20,16 @@ class MessageBubble extends StatelessWidget {
   /// [FORK] 右键（桌面）点击气泡时回调，参数是全局坐标，用于在该点弹出菜单。
   final ValueChanged<Offset>? onSecondaryTap;
 
+  /// [FORK] 点击「发送失败」的红色感叹号时重发。
+  final VoidCallback? onRetry;
+
   const MessageBubble({
     super.key,
     required this.message,
     required this.peerInitial,
     this.onFileTap,
     this.onSecondaryTap,
+    this.onRetry,
   });
 
   @override
@@ -92,10 +96,21 @@ class MessageBubble extends StatelessWidget {
             color: theme.colorScheme.primary,
           ),
         ),
-        ChatMessageStatus.failed => Icon(
-          Icons.error,
-          size: 18,
-          color: theme.colorScheme.error,
+        ChatMessageStatus.failed => Tooltip(
+          message: onRetry == null ? statusHint ?? '' : t.conversation.retryHint,
+          child: InkResponse(
+            onTap: onRetry,
+            radius: 16,
+            containedInkWell: false,
+            child: Padding(
+              padding: const EdgeInsets.all(2),
+              child: Icon(
+                Icons.error,
+                size: 18,
+                color: theme.colorScheme.error,
+              ),
+            ),
+          ),
         ),
         _ => null,
       };

@@ -131,6 +131,49 @@ class UpdateChatMessageAction extends AsyncReduxAction<ConversationService, List
   }
 }
 
+/// 重发：把失败的气泡恢复成「发送中」。
+///
+/// 只对**发送方向且已失败**的消息生效——否则会把正在传的消息打回 pending，
+/// 或者把一条接收到的消息改成「发送中」这种荒谬状态。
+class MarkChatMessagePendingAction extends AsyncReduxAction<ConversationService, List<Conversation>> {
+  final String peerFingerprint;
+  final String messageId;
+
+  MarkChatMessagePendingAction({
+    required this.peerFingerprint,
+    required this.messageId,
+  });
+
+  @override
+  Future<List<Conversation>> reduce() async {
+    final index = state.indexWhere((e) => e.peerFingerprint == peerFingerprint);
+    if (index == -1) {
+      return state;
+    }
+
+    final conversation = state[index];
+    final messageIndex = conversation.messages.indexWhere((m) => m.id == messageId);
+    if (messageIndex == -1) {
+      return state;
+    }
+    final message = conversation.messages[messageIndex];
+    if (!message.isOutgoing || message.status != ChatMessageStatus.failed) {
+      return state;
+    }
+
+    final messages = [...conversation.messages];
+    messages[messageIndex] = message.copyWith(
+      status: ChatMessageStatus.pending,
+      clearError: true,
+    );
+
+    final next = [...state];
+    next[index] = conversation.copyWith(messages: messages);
+    await notifier._persistence.setConversations(next);
+    return next;
+  }
+}
+
 /// 清除未读数（进入会话页时调用）。
 class MarkConversationReadAction extends AsyncReduxAction<ConversationService, List<Conversation>> {
   final String peerFingerprint;

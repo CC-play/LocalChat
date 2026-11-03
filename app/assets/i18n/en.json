@@ -215,7 +215,9 @@
     "dropSummary": "{count} file(s), {size} in total. Send them to this chat?",
     "dropHint": "Release to send files to this chat",
     "dropFoldersIgnored": "Folders can't be dropped here and were skipped.",
-    "pasteSkipped": "Some items couldn't be read and were skipped."
+    "pasteSkipped": "Some items couldn't be read and were skipped.",
+    "retryHint": "Click to resend",
+    "fileMissing": "The original file is gone, can't resend"
   },
   "receiveHistoryPage": {
     "title": "History",

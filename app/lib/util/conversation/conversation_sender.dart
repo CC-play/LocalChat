@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io' show File, Platform;
 
 import 'package:collection/collection.dart';
 import 'package:file_selector/file_selector.dart';
@@ -61,6 +62,9 @@ enum SendFailure {
   /// 找不到对方的地址（设备已离线且没有历史 IP）。
   unreachable,
 
+  /// 重发时原文件已经不在了（被移动 / 删除，或缓存目录被系统清理）。
+  fileMissing,
+
   /// 其它错误（网络、TLS 指纹不匹配等）。
   unknown,
 }
@@ -107,6 +111,8 @@ Future<SendFailure?> sendTextMessage({
   required Ref ref,
   required Device target,
   required String text,
+  /// [FORK] 重发时传入原消息 id：复用已有气泡，不再插一条新的。
+  String? messageIdOverride,
 }) async {
   final trimmed = text.trim();
   if (trimmed.isEmpty) {
@@ -115,20 +121,22 @@ Future<SendFailure?> sendTextMessage({
 
   final bytes = Uint8List.fromList(utf8.encode(trimmed));
   // 消息 id 与文件 id 复用同一个值：气泡、重试、去重都靠它对齐。
-  final messageId = _uuid.v4();
+  final messageId = messageIdOverride ?? _uuid.v4();
   final sessionId = _uuid.v4();
   final fileName = '$messageId.txt';
 
-  await recordSentFileStart(
-    ref: ref,
-    target: target,
-    messageId: messageId,
-    fileName: fileName,
-    filePath: null,
-    fileSize: bytes.length,
-    fileType: FileType.text,
-    text: trimmed,
-  );
+  if (messageIdOverride == null) {
+    await recordSentFileStart(
+      ref: ref,
+      target: target,
+      messageId: messageId,
+      fileName: fileName,
+      filePath: null,
+      fileSize: bytes.length,
+      fileType: FileType.text,
+      text: trimmed,
+    );
+  }
 
   final file = CrossFile(
     name: fileName,
@@ -228,6 +236,7 @@ bool _isRetryable(SendFailure failure) {
       return true;
     case SendFailure.peerDeclined:
     case SendFailure.peerBusy:
+    case SendFailure.fileMissing:
       return false;
   }
 }
@@ -269,26 +278,31 @@ Future<SendFailure?> deliverFiles({
   required Ref ref,
   required Device target,
   required List<CrossFile> files,
+  /// [FORK] 重发时传入原消息 id：复用已有气泡，不再插新的。
+  List<String>? messageIds,
 }) async {
   if (files.isEmpty) {
     return null;
   }
 
   // 文件 id 预分配：气泡、上传事件、失败标记三处必须用同一批 id。
-  final fileIds = [for (final _ in files) _uuid.v4()];
+  final fileIds = messageIds ?? [for (final _ in files) _uuid.v4()];
 
   // 先把「发送中」气泡落下来。对方离线时最长要等两分钟，
   // 这期间界面上必须看得见「这条正在等」，否则用户会以为没发出去。
-  for (var i = 0; i < files.length; i++) {
-    await recordSentFileStart(
-      ref: ref,
-      target: target,
-      messageId: fileIds[i],
-      fileName: files[i].name,
-      filePath: files[i].path,
-      fileSize: files[i].size,
-      fileType: files[i].fileType,
-    );
+  // 重发场景气泡已经存在（页面已把它改回「发送中」），不能再插一条。
+  if (messageIds == null) {
+    for (var i = 0; i < files.length; i++) {
+      await recordSentFileStart(
+        ref: ref,
+        target: target,
+        messageId: fileIds[i],
+        fileName: files[i].name,
+        filePath: files[i].path,
+        fileSize: files[i].size,
+        fileType: files[i].fileType,
+      );
+    }
   }
 
   final sessionId = _uuid.v4();
@@ -353,6 +367,86 @@ Future<SendFailure?> deliverFiles({
     return null;
   }
   return failure;
+}
+
+/// 重发一条发送失败的消息（点气泡左侧的红色感叹号）。
+///
+/// **复用原消息 id**：不新增气泡，状态在原来那条上 `pending -> sent/failed`，
+/// 所以重发后消息仍停在历史位置，不会跳到最下面，也不会出现「一条变两条」。
+///
+/// 返回 `null` 表示已发出（或已交给后台传输），否则为失败原因。
+Future<SendFailure?> retryChatMessage({
+  required Ref ref,
+  required Device target,
+  required ChatMessage message,
+}) async {
+  if (!message.isOutgoing || message.status != ChatMessageStatus.failed) {
+    return null;
+  }
+
+  // 先恢复成「发送中」：点下去立刻有反馈，也顺手挡掉连点。
+  await ref.redux(conversationProvider).dispatchAsync(
+        MarkChatMessagePendingAction(
+          peerFingerprint: peerKeyOf(target),
+          messageId: message.id,
+        ),
+      );
+
+  if (message.kind == ChatMessageKind.text) {
+    final text = message.text;
+    if (text == null || text.trim().isEmpty) {
+      await _markMessageFailed(ref, target, message);
+      return SendFailure.unknown;
+    }
+    return sendTextMessage(
+      ref: ref,
+      target: target,
+      text: text,
+      messageIdOverride: message.id,
+    );
+  }
+
+  // 文件：源文件必须还在。它可能被移动/删除，或者缓存目录被系统清理过
+  // （粘贴图片就是落在缓存里的），这两种情况只能明确告诉用户「找不到了」。
+  final path = message.filePath;
+  if (path == null || !File(path).existsSync()) {
+    _logger.info('Cannot retry, source file is gone: $path');
+    await _markMessageFailed(ref, target, message);
+    return SendFailure.fileMissing;
+  }
+
+  final file = CrossFile(
+    name: message.fileName ?? path.split(Platform.pathSeparator).last,
+    fileType: message.fileType ?? FileType.other,
+    size: message.fileSize,
+    thumbnail: null,
+    asset: null,
+    path: path,
+    bytes: null,
+    lastModified: null,
+    lastAccessed: null,
+  );
+  return deliverFiles(
+    ref: ref,
+    target: target,
+    files: [file],
+    messageIds: [message.id],
+  );
+}
+
+/// 把气泡标回失败（重发过程中发现根本发不出去时用）。
+Future<void> _markMessageFailed(Ref ref, Device target, ChatMessage message) async {
+  try {
+    await ref.redux(conversationProvider).dispatchAsync(
+          UpdateChatMessageAction(
+            peerFingerprint: peerKeyOf(target),
+            messageId: message.id,
+            status: ChatMessageStatus.failed,
+          ),
+        );
+  } catch (e, st) {
+    _logger.warning('Failed to mark message as failed', e, st);
+  }
 }
 
 /// 单次投递尝试。

@@ -65,6 +65,14 @@ LocalSend **没有**可调的「发送超时」：对端 App 没开时 prepare-u
 - 跨重试复用 `checksumCache`（`send_provider.startSession` 的 `[FORK]` 参数），否则两分钟内会把几百 MB 文件反复读盘哈希。
 - 投递全程在后台：页面不 `await`，输入框不锁；结果由气泡状态（转圈 / 红色感叹号）和顶部 Toast 表达。
 
+## 失败重发（点红色感叹号）
+
+- 入口：`MessageBubble.onRetry`。感叹号是 `InkResponse`（带 `Tooltip`「点击重发」），只在**发出方向 + `failed`** 时挂回调。
+- 状态回退用 `MarkChatMessagePendingAction`：只接受「发出方向且已失败」的消息，改回 `pending` 并清掉 `errorMessage`。清空靠 `ChatMessage.copyWith(clearError: true)`——`copyWith` 原本是 `errorMessage ?? this.errorMessage`，传 null 无法置空。
+- 重发**复用原 message id**：`sendTextMessage(messageIdOverride:)` / `deliverFiles(messageIds:)` 在拿到 id 时跳过 `recordSentFileStart`，所以不会多出气泡；结局仍由 `markSentFile` 和 upload 事件写回同一条，消息也留在历史位置不跳到底部。
+- 文件重发前 `File(path).existsSync()`：粘贴的图片落在缓存目录，可能已被系统清理 → 返回 `SendFailure.fileMissing`（`t.conversation.fileMissing`「原文件已经不在了」），并把气泡标回失败。
+- 页面用 `_retrying` 集合挡连点：重发期间点同一颗感叹号不再响应（气泡此时也已经是「发送中」）。
+
 ## 文字选区 / 复制菜单
 
 `conversation_page.dart` 用 `SelectionArea` 让气泡文字可选，但**菜单是自己弹的**，不走框架工具条：

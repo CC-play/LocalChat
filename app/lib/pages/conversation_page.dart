@@ -63,6 +63,9 @@ class _ConversationPageState extends State<ConversationPage> {
   /// 拖拽确认卡片是否已经打开，避免连拖两次叠两层弹窗。
   bool _dropDialogOpen = false;
 
+  /// [FORK] 正在重发的消息 id。重发期间点同一颗感叹号不再响应。
+  final _retrying = <String>{};
+
   @override
   void initState() {
     super.initState();
@@ -73,6 +76,38 @@ class _ConversationPageState extends State<ConversationPage> {
       }
       unawaited(context.ref.redux(conversationProvider).dispatchAsync(MarkConversationReadAction(widget.peerFingerprint)));
     });
+  }
+
+  /// [FORK] 点击红色感叹号重发。
+  ///
+  /// 复用原消息 id：气泡原地从「失败」变回「发送中」，不会再插一条。
+  Future<void> _retryMessage(ChatMessage message) async {
+    if (!_retrying.add(message.id)) {
+      return;
+    }
+    try {
+      final conversation = context.ref
+          .read(conversationProvider)
+          .firstWhereOrNull((c) => c.peerFingerprint == widget.peerFingerprint);
+      if (conversation == null) {
+        return;
+      }
+      final target = resolveConversationTarget(context.ref, conversation);
+      if (target == null) {
+        if (mounted) {
+          TopToast.show(context, t.conversation.peerUnreachable);
+        }
+        return;
+      }
+
+      final failure = await retryChatMessage(ref: context.ref, target: target, message: message);
+      if (!mounted || failure == null) {
+        return;
+      }
+      TopToast.show(context, _describeSendFailure(failure));
+    } finally {
+      _retrying.remove(message.id);
+    }
   }
 
   void _handleSelectionChanged(SelectedContent? content) {
@@ -347,6 +382,9 @@ class _ConversationPageState extends State<ConversationPage> {
                                       message: msg,
                                       peerInitial: initial,
                                       onSecondaryTap: (position) => _handleBubbleSecondaryTap(position, msg),
+                                      onRetry: msg.status == ChatMessageStatus.failed
+                                          ? () => unawaited(_retryMessage(msg))
+                                          : null,
                                       onFileTap: msg.filePath == null
                                           ? null
                                           : () async {
@@ -448,6 +486,8 @@ String _describeSendFailure(SendFailure failure) {
       return t.conversation.peerBusy;
     case SendFailure.unreachable:
       return t.conversation.peerUnreachable;
+    case SendFailure.fileMissing:
+      return t.conversation.fileMissing;
     case SendFailure.unknown:
       return t.conversation.sendFailed;
   }

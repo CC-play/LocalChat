@@ -368,6 +368,10 @@ class Translations$conversation$zh_CN extends Translations$conversation$en {
   String get dropFoldersIgnored => '暂不支持拖入文件夹，已跳过。';
   @override
   String get pasteSkipped => '有部分内容无法读取，已跳过。';
+  @override
+  String get retryHint => '点击重发';
+  @override
+  String get fileMissing => '原文件已经不在了，无法重发';
 }
 
 // Path: receiveHistoryPage

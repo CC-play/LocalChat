@@ -96,6 +96,8 @@ class ChatMessage {
     ChatMessageStatus? status,
     String? filePath,
     String? errorMessage,
+    /// [FORK] 为 true 时把 [errorMessage] 清空（重发时要抹掉上一次的失败原因）。
+    bool clearError = false,
   }) {
     return ChatMessage(
       id: id,
@@ -108,7 +110,7 @@ class ChatMessage {
       filePath: filePath ?? this.filePath,
       fileSize: fileSize,
       fileType: fileType,
-      errorMessage: errorMessage ?? this.errorMessage,
+      errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
     );
   }
 

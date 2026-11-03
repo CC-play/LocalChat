@@ -55,25 +55,27 @@
 | `app/android/.../MainActivity.kt` | `getClipboardImage` / `getClipboardFiles` 分支 + `readClipboardImage()` / `readClipboardFiles()` |
 | `app/lib/util/conversation/clipboard_image.dart` | 整个文件为 fork 新增（剪贴板文件与图片读取） |
 | `app/lib/widget/chat/drop_confirm_dialog.dart` | 整个文件为 fork 新增（拖拽/粘贴共用确认卡片） |
+| `app/lib/model/conversation/conversation.dart` | `copyWith(clearError)`：`errorMessage` 需要能被置空（重发） |
+| `app/lib/util/conversation/conversation_sender.dart` | `sendTextMessage(messageIdOverride)` / `deliverFiles(messageIds)` / `retryChatMessage` |
 
 ## fork 独占文件（上游不存在）
 
 ```
-app/lib/model/conversation/conversation.dart          264 行
+app/lib/model/conversation/conversation.dart          266 行
 app/lib/util/conversation/conversation_recorder.dart  200 行
-app/lib/util/conversation/conversation_sender.dart    255 行
+app/lib/util/conversation/conversation_sender.dart    555 行
 app/lib/util/conversation/clipboard_image.dart         199 行（图片 + 文件列表两条通道）
-app/lib/provider/conversation_provider.dart           186 行
+app/lib/provider/conversation_provider.dart           229 行
 app/lib/pages/conversations_page.dart                 173 行
-app/lib/pages/conversation_page.dart                  922 行
-app/lib/widget/chat/message_bubble.dart               128 行
+app/lib/pages/conversation_page.dart                  962 行
+app/lib/widget/chat/message_bubble.dart               172 行
 app/lib/widget/chat/file_message_card.dart             76 行
 app/lib/widget/chat/top_toast.dart                    168 行
 app/lib/widget/chat/drop_confirm_dialog.dart          128 行
 app/windows/runner/clipboard_image_win.cpp            217 行（纯 Win32/WIC，可单独编译验证）
 app/windows/runner/clipboard_files_win.cpp            74 行（CF_HDROP → 路径，shellapi）
 app/windows/runner/clipboard_ext.cpp                   67 行
-app/test/unit/provider/conversation_provider_test.dart 282 行（12 用例）
+app/test/unit/provider/conversation_provider_test.dart 368 行（16 用例）
 app/test/unit/util/clipboard_image_test.dart           75 行（9 用例）
 ```
 

@@ -429,6 +429,12 @@ class Translations$conversation$en {
 
   /// en: 'Some items couldn't be read and were skipped.'
   String get pasteSkipped => 'Some items couldn\'t be read and were skipped.';
+
+  /// en: 'Click to resend'
+  String get retryHint => 'Click to resend';
+
+  /// en: 'The original file is gone, can't resend'
+  String get fileMissing => 'The original file is gone, can\'t resend';
 }
 
 // Path: receiveHistoryPage
