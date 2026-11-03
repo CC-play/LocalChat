@@ -126,8 +126,15 @@ LocalSend **没有**可调的「发送超时」：对端 App 没开时 prepare-u
 - 节流 0.5%：上传事件按块回报，1GB 文件上千次，逐次重绘没有意义。允许回退（重发从 0 重来）。
 - 清理只有一处：`markSentFile` 开头 `finish(messageId)`。所有终态（成功 / 上传失败 / 对端未勾选 / 源文件丢失 / 重试超时）都经过它。
 - `finish` 只从 map 移除、**不 `dispose`**：气泡可能还在同一帧挂着监听，dispose 过的 notifier 再加监听会抛错。
-- 进度为 `null`（还没进入上传，例如正在算校验和、或正等对方接受）时退回原来的「发送中…」文字，不占额外高度。
+- 进度为 `null`（还没进入上传）时分两段表达，见下。
 - 百分比用 `floor` 而不是 `round`：99.6% 还没传完，显示 100% 会让人以为卡住了。
+
+**等待阶段（`progress == null`）为什么要分两段**：`createChecksums` 默认开启，几十 MB 的文件在真正上传前要先被 Rust 整个读一遍算校验和，**这个阶段不会发出任何进度事件**。所以：
+
+- 前 3 秒只说事实「发送中 3s…」（`sendingCountdown`），避免每条小消息都闪一下扫动效果；
+- 超过 3 秒追加一条**不确定态**的 `LinearProgressIndicator(value: null)`，明确「在动，只是还不知道百分比」。
+- 确定态与不确定态共用同一个 `_bar()`，固定 96×3，切换时不跳布局。
+- 秒数由 `_SendProgressFooter` 自己的 1s ticker 驱动（只重建这一行小字），同一 ticker 还负责 `chatSendWatchdogTimeout` 的兜底（见「主动取消与界面兜底」）。
 
 ## 文字选区 / 复制菜单
 

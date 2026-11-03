@@ -216,10 +216,20 @@ class MessageBubble extends StatelessWidget {
 /// 只订阅**这一条消息**的进度：[ChatTransferNotifier] 给每条消息一个独立的
 /// [ValueNotifier]，所以并发传几个文件时，进度事件不会让整个消息列表重绘。
 ///
-/// 进度为 null 表示还没开始上传（例如仍在计算校验和，或者正在等对方接受），
-/// 此时显示「发送中 12s…」——**带上已等待的秒数**。
-/// 原先只写「发送中…」，用户等上几十秒就无法判断是在正常工作还是已经卡死。
+/// 进度为 null 表示还没开始上传（例如仍在计算校验和，或者正在等对方接受）。
+///
+/// 这段等待原本只有一个「发送中…」，用户等上几十秒就无法判断是在正常工作
+/// 还是已经卡死。现在分两段表达：
+/// - 前 [indeterminateAfter] 秒只说事实「发送中 3s…」，避免每条小消息都闪一下；
+/// - 超过之后补一条**不确定态**的进度条（来回扫动），明确「在动，
+///   只是还不知道百分比」。
+///
+/// 之所以需要后者：`createChecksums` 默认开启，几十 MB 的文件在真正上传前
+/// 要先整个读一遍算校验和，这个阶段 Rust 侧不会发出任何进度事件。
 class _SendProgressFooter extends StatefulWidget {
+  /// 超过这个时长仍没有真实进度，就从纯文字切到「不确定态进度条 + 文字」。
+  static const indeterminateAfter = Duration(seconds: 3);
+
   final String messageId;
   final Color color;
   final Duration staleAfter;
@@ -273,9 +283,21 @@ class _SendProgressFooterState extends State<_SendProgressFooter> {
       valueListenable: notifier,
       builder: (context, progress, _) {
         if (progress == null) {
-          return Text(
+          final hint = Text(
             t.conversation.sendingCountdown(seconds: _seconds),
             style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.outline),
+          );
+          if (_seconds < _SendProgressFooter.indeterminateAfter.inSeconds) {
+            return hint;
+          }
+          // 等太久了还不知道百分比：画一条扫动的条，至少让人看到它没停。
+          return Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _bar(value: null),
+              const SizedBox(width: 6),
+              hint,
+            ],
           );
         }
 
@@ -284,18 +306,7 @@ class _SendProgressFooterState extends State<_SendProgressFooter> {
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            SizedBox(
-              width: 96,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(2),
-                child: LinearProgressIndicator(
-                  value: progress,
-                  minHeight: 3,
-                  backgroundColor: widget.color.withValues(alpha: 0.2),
-                  valueColor: AlwaysStoppedAnimation<Color>(widget.color),
-                ),
-              ),
-            ),
+            _bar(value: progress),
             const SizedBox(width: 6),
             Text(
               t.conversation.sendingProgress(percent: percent),
@@ -304,6 +315,23 @@ class _SendProgressFooterState extends State<_SendProgressFooter> {
           ],
         );
       },
+    );
+  }
+
+  /// 固定 96px 宽、3px 厚：确定态与不确定态共用同一尺寸，切换时不跳布局。
+  Widget _bar({required double? value}) {
+    return SizedBox(
+      width: 96,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(2),
+        child: LinearProgressIndicator(
+          // null = 不确定态（来回扫动），由 Flutter 自带的 indeterminate 动画驱动。
+          value: value,
+          minHeight: 3,
+          backgroundColor: widget.color.withValues(alpha: 0.2),
+          valueColor: AlwaysStoppedAnimation<Color>(widget.color),
+        ),
+      ),
     );
   }
 }

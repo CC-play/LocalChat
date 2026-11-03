@@ -74,7 +74,7 @@ app/lib/provider/conversation_provider.dart           229 行
 app/lib/provider/conversation/chat_transfer_provider.dart  77 行（上传进度旁路）
 app/lib/pages/conversations_page.dart                 173 行
 app/lib/pages/conversation_page.dart                 1023 行
-app/lib/widget/chat/message_bubble.dart               309 行
+app/lib/widget/chat/message_bubble.dart               337 行
 app/lib/widget/chat/file_message_card.dart             76 行
 app/lib/widget/chat/top_toast.dart                    168 行
 app/lib/widget/chat/drop_confirm_dialog.dart          128 行
