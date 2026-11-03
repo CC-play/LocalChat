@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show File, Platform;
 
@@ -51,6 +52,23 @@ const Duration textSendRetryWindow = Duration(minutes: 2);
 /// 局域网一次连接尝试通常在 1 秒内就有结论，2 秒足够及时地命中「对方刚好打开 App」，
 /// 又不会把连接请求打得太密。
 const Duration _retryInterval = Duration(seconds: 2);
+
+/// 硬上限相对 [textSendRetryWindow] 的余量。
+///
+/// 内部的 deadline 判断会在「最后一次尝试结束后」正常返回，硬超时只负责兜住
+/// 「某次 await 永远不返回」的情况，所以要比窗口本身略长，避免抢先一步
+/// 把本来会正常结束的流程判成超时。
+const Duration _timeoutGrace = Duration(seconds: 10);
+
+/// 上传阶段的无进展上限。
+///
+/// 进入上传之后不再有任何重试（重来会在对端留下半截文件），结局完全由
+/// upload 事件写入。如果对端在传输中途消失、TCP 半开，事件就再也不来了。
+/// 局域网上正常传输每秒都会有进度回报，60 秒毫无进展即可判定已停滞。
+const Duration uploadStallTimeout = Duration(seconds: 60);
+
+/// 看门狗的巡检间隔。
+const Duration _stallCheckInterval = Duration(seconds: 10);
 
 /// 文本消息发送失败的原因，由 UI 层翻译成文案。
 enum SendFailure {
@@ -151,36 +169,30 @@ Future<SendFailure?> sendTextMessage({
     lastAccessed: null,
   );
 
-  final deadline = DateTime.now().add(textSendRetryWindow);
   SendFailure? failure;
   try {
-    var attempt = 0;
-    while (true) {
-      attempt++;
-      failure = await _attemptTextSend(
-        ref: ref,
-        target: target,
-        file: file,
-        sessionId: sessionId,
-      );
-
-      if (failure == null) {
-        break;
-      }
-      // 对方明确拒绝 / 正在忙：重试只会打扰对方，立刻结束。
-      if (!_isRetryable(failure)) {
-        break;
-      }
-      if (!DateTime.now().isBefore(deadline)) {
-        _logger.info('Giving up after $attempt attempt(s): $failure');
-        break;
-      }
-
-      _logger.info('Attempt $attempt failed ($failure), retrying in ${_retryInterval.inSeconds}s');
-      await Future<void>.delayed(_retryInterval);
-    }
+    // [FORK] 硬上限：光靠循环里的 deadline 检查是不够的。
+    // Rust 的 reqwest 客户端没有配总超时（`http_provider.dart` 建 client 时
+    // 没传 timeout），prepare-upload 对着一个「TCP 能连上但不应答」的地址会
+    // 永久挂起，循环里的 deadline 判断在 await 之后，永远执行不到，
+    // 气泡就会一直转圈。整段再包一层超时，保证最坏情况也能落到失败态。
+    failure = await _sendTextWithRetry(
+      ref: ref,
+      target: target,
+      file: file,
+      sessionId: sessionId,
+    ).timeout(textSendRetryWindow + _timeoutGrace);
+  } on TimeoutException {
+    _logger.warning('Text message did not finish within $textSendRetryWindow');
+    failure = SendFailure.unreachable;
+  } catch (e, st) {
+    // 任何逃逸的异常都必须落成失败，否则气泡会永远停在「发送中」。
+    _logger.warning('Failed to send a text message', e, st);
+    failure = SendFailure.unknown;
   } finally {
     // 失败的后台会话会留在 map 里，聊天场景不需要它继续存在。
+    // closeSession 同时会取消还挂着的 prepare-upload（cancel token），
+    // 所以超时之后不会留下一个仍在跑的请求。
     ref.notifier(sendProvider).closeSession(sessionId);
   }
 
@@ -197,6 +209,41 @@ Future<SendFailure?> sendTextMessage({
   );
 
   return failure;
+}
+
+/// 在 [textSendRetryWindow] 内反复尝试，直到成功、被对方明确拒绝或超出窗口。
+Future<SendFailure?> _sendTextWithRetry({
+  required Ref ref,
+  required Device target,
+  required CrossFile file,
+  required String sessionId,
+}) async {
+  final deadline = DateTime.now().add(textSendRetryWindow);
+  var attempt = 0;
+  while (true) {
+    attempt++;
+    final failure = await _attemptTextSend(
+      ref: ref,
+      target: target,
+      file: file,
+      sessionId: sessionId,
+    );
+
+    if (failure == null) {
+      return null;
+    }
+    // 对方明确拒绝 / 正在忙：重试只会打扰对方，立刻结束。
+    if (!_isRetryable(failure)) {
+      return failure;
+    }
+    if (!DateTime.now().isBefore(deadline)) {
+      _logger.info('Giving up after $attempt attempt(s): $failure');
+      return failure;
+    }
+
+    _logger.info('Attempt $attempt failed ($failure), retrying in ${_retryInterval.inSeconds}s');
+    await Future<void>.delayed(_retryInterval);
+  }
 }
 
 /// 单次发送尝试。会话 id 在多次重试间复用，避免 fileTransfer 里堆积大量一次性状态。
@@ -307,12 +354,71 @@ Future<SendFailure?> deliverFiles({
   }
 
   final sessionId = _uuid.v4();
-  final deadline = DateTime.now().add(textSendRetryWindow);
   // 校验和跨重试复用：几百 MB 的文件不该在两分钟里被反复读盘哈希。
   final checksums = <String, String>{};
 
   SendFailure? failure;
   var enteredTransfer = false;
+  try {
+    // [FORK] 与文本同一个硬上限：握手阶段的 await 可能永不返回，
+    // 不能只靠循环内的 deadline 判断。
+    final result = await _deliverWithRetry(
+      ref: ref,
+      target: target,
+      files: files,
+      fileIds: fileIds,
+      sessionId: sessionId,
+      checksums: checksums,
+    ).timeout(textSendRetryWindow + _timeoutGrace);
+    failure = result.failure;
+    enteredTransfer = result.enteredTransfer;
+  } on TimeoutException {
+    _logger.warning('File delivery did not finish within $textSendRetryWindow');
+    failure = SendFailure.unreachable;
+  } catch (e, st) {
+    // 异常也必须落到下面的 _failPendingFiles，否则气泡永远转圈。
+    _logger.warning('Failed to deliver files', e, st);
+    failure = SendFailure.unknown;
+  }
+
+  if (enteredTransfer) {
+    // 上传已开始，后续状态由 upload 事件写入，这里不能收会话。
+    // 但事件可能永远不来（对端中途消失 / TCP 半开），所以另起一个看门狗。
+    unawaited(
+      _watchStalledUploads(
+        ref: ref,
+        target: target,
+        files: files,
+        fileIds: fileIds,
+        sessionId: sessionId,
+      ),
+    );
+    return null;
+  }
+
+  ref.notifier(sendProvider).closeSession(sessionId);
+  final pendingCount = await _failPendingFiles(ref: ref, target: target, files: files, fileIds: fileIds);
+  if (pendingCount == 0) {
+    // 所有气泡都已是终态：说明它们在重试期间已经传完了，不该报失败。
+    return null;
+  }
+  return failure;
+}
+
+/// 握手阶段的重试循环。
+///
+/// 返回的 `enteredTransfer` 为真表示至少有一个文件拿到了上传 token，
+/// 此后不能再重试（会在对端留下重复文件）。
+Future<({SendFailure? failure, bool enteredTransfer})> _deliverWithRetry({
+  required Ref ref,
+  required Device target,
+  required List<CrossFile> files,
+  required List<String> fileIds,
+  required String sessionId,
+  required Map<String, String> checksums,
+}) async {
+  final deadline = DateTime.now().add(textSendRetryWindow);
+  SendFailure? failure;
   var attempt = 0;
 
   while (true) {
@@ -327,7 +433,6 @@ Future<SendFailure?> deliverFiles({
     );
 
     if (result.enteredTransfer) {
-      enteredTransfer = true;
       // 多选时对端可能只勾了其中几个：没拿到 token 的那些永远不会有
       // upload 事件，气泡会一直转圈，这里直接标失败。
       final rejected = [
@@ -337,17 +442,17 @@ Future<SendFailure?> deliverFiles({
       if (rejected.isNotEmpty) {
         await _failFilesAt(ref: ref, target: target, files: files, fileIds: fileIds, indexes: rejected);
       }
-      break;
+      return (failure: null, enteredTransfer: true);
     }
 
     failure = result.failure;
     // 对方明确拒绝 / 正在忙：重试只会打扰对方。
     if (failure == null || !_isRetryable(failure)) {
-      break;
+      return (failure: failure, enteredTransfer: false);
     }
     if (!DateTime.now().isBefore(deadline)) {
       _logger.info('Giving up on files after $attempt attempt(s): $failure');
-      break;
+      return (failure: failure, enteredTransfer: false);
     }
 
     _logger.info('File send attempt $attempt failed ($failure), retrying in ${_retryInterval.inSeconds}s');
@@ -355,19 +460,73 @@ Future<SendFailure?> deliverFiles({
     ref.notifier(sendProvider).closeSession(sessionId);
     await Future<void>.delayed(_retryInterval);
   }
+}
 
-  if (enteredTransfer) {
-    // 上传已开始，后续状态由 upload 事件写入，这里不能收会话。
-    return null;
+/// 上传看门狗：进入上传后，若 [uploadStallTimeout] 内毫无进展就把气泡标失败。
+///
+/// 进入上传阶段后 `deliverFiles` 就返回了，终态完全依赖 upload 事件。
+/// 对端在传输中途消失时事件再也不会来，没有这个看门狗气泡会永远转圈。
+Future<void> _watchStalledUploads({
+  required Ref ref,
+  required Device target,
+  required List<CrossFile> files,
+  required List<String> fileIds,
+  required String sessionId,
+}) async {
+  final peerKey = peerKeyOf(target);
+  final ChatTransferNotifier transfer;
+  try {
+    transfer = ref.read(chatTransferProvider);
+  } catch (e, st) {
+    // 容器已失效：看门狗无从工作，直接退出，别让异常变成未处理的 future 错误。
+    _logger.warning('Cannot watch uploads, ref is no longer valid', e, st);
+    return;
   }
+  final startedAt = DateTime.now();
 
-  ref.notifier(sendProvider).closeSession(sessionId);
-  final pendingCount = await _failPendingFiles(ref: ref, target: target, files: files, fileIds: fileIds);
-  if (pendingCount == 0) {
-    // 所有气泡都已是终态：说明它们在重试期间已经传完了，不该报失败。
-    return null;
+  while (true) {
+    await Future<void>.delayed(_stallCheckInterval);
+
+    final List<ChatMessage> messages;
+    try {
+      messages = ref.read(conversationProvider).firstWhereOrNull((c) => c.peerFingerprint == peerKey)?.messages ?? const <ChatMessage>[];
+    } catch (e) {
+      // 容器已销毁：没有气泡可更新，继续看下去也没有意义。
+      return;
+    }
+
+    final pending = [
+      for (var i = 0; i < fileIds.length; i++)
+        if (messages.firstWhereOrNull((m) => m.id == fileIds[i])?.status == ChatMessageStatus.pending) i,
+    ];
+    if (pending.isEmpty) {
+      // 全部已有终态（成功或失败），看门狗使命结束。
+      return;
+    }
+
+    // 按「整批文件」而不是单个文件判断活跃度：多文件是顺序上传的，
+    // 逐文件计时会误伤那些排在后面、还没开始传的正常文件。
+    var lastActivity = startedAt;
+    for (final id in fileIds) {
+      final at = transfer.lastProgressOf(id);
+      if (at != null && at.isAfter(lastActivity)) {
+        lastActivity = at;
+      }
+    }
+
+    if (DateTime.now().difference(lastActivity) < uploadStallTimeout) {
+      continue;
+    }
+
+    _logger.warning('Upload stalled for over $uploadStallTimeout, aborting ${pending.length} file(s)');
+    try {
+      ref.notifier(sendProvider).closeSession(sessionId);
+    } catch (e, st) {
+      _logger.warning('Failed to close a stalled session', e, st);
+    }
+    await _failFilesAt(ref: ref, target: target, files: files, fileIds: fileIds, indexes: pending);
+    return;
   }
-  return failure;
 }
 
 /// 重发一条发送失败的消息（点气泡左侧的红色感叹号）。

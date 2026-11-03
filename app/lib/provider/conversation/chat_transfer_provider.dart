@@ -20,6 +20,13 @@ class ChatTransferNotifier {
   /// messageId -> 进度（0..1）。条目只在「确实有一条气泡在等这个进度」时存在。
   final _progress = <String, ValueNotifier<double?>>{};
 
+  /// messageId -> 最后一次收到进度事件的时间。
+  ///
+  /// 与 [_progress] 不同，这里**无条件**记录：上传看门狗需要在「用户根本没打开
+  /// 会话页、没有气泡在等」的情况下也能判断传输是否还活着。少了它，看门狗会
+  /// 把后台正常传输的大文件误判成停滞。
+  final _lastProgressAt = <String, DateTime>{};
+
   /// 聊天气泡订阅入口。
   ///
   /// 惰性创建：气泡第一次渲染时登记，之后 [report] 才有地方可写。
@@ -28,11 +35,16 @@ class ChatTransferNotifier {
     return _progress.putIfAbsent(messageId, () => ValueNotifier<double?>(null));
   }
 
+  /// 最后一次进度事件的时间；从未有过进度时返回 null。
+  DateTime? lastProgressOf(String messageId) => _lastProgressAt[messageId];
+
   /// 回报上传进度。
   ///
-  /// 没有气泡在等（例如这是「发送文件」页发出去的，不是聊天消息）就直接丢弃，
-  /// 避免给每个普通传输都建一个没人用的 [ValueNotifier]。
+  /// 没有气泡在等（例如这是「发送文件」页发出去的，不是聊天消息）就只更新时间戳，
+  /// 不建 [ValueNotifier]，避免给每个普通传输都留一个没人用的对象。
   void report({required String messageId, required double progress}) {
+    _lastProgressAt[messageId] = DateTime.now();
+
     final notifier = _progress[messageId];
     if (notifier == null) {
       return;
@@ -54,10 +66,12 @@ class ChatTransferNotifier {
   /// 再加监听会抛错。移除引用即可，剩下的交给 GC。
   void finish(String messageId) {
     _progress.remove(messageId);
+    _lastProgressAt.remove(messageId);
   }
 
   /// 重发前复位，否则新的一轮会先闪一下上一轮的 100%。
   void reset(String messageId) {
     _progress[messageId]?.value = null;
+    _lastProgressAt.remove(messageId);
   }
 }

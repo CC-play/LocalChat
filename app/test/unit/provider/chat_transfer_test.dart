@@ -1,5 +1,5 @@
-import 'package:flutter_test/flutter_test.dart';
 import 'package:localsend_app/provider/conversation/chat_transfer_provider.dart';
+import 'package:test/test.dart';
 
 void main() {
   group('ChatTransferNotifier', () {
@@ -86,6 +86,42 @@ void main() {
 
       expect(listenable.value, isNull);
       expect(identical(notifier.progressOf('m1'), listenable), isTrue);
+    });
+
+    group('活动时间戳（上传看门狗依赖）', () {
+      test('没有气泡登记时也记录时间戳，否则后台传输会被误判成停滞', () {
+        final notifier = ChatTransferNotifier();
+        expect(notifier.lastProgressOf('m1'), isNull);
+
+        notifier.report(messageId: 'm1', progress: 0.5);
+
+        expect(notifier.lastProgressOf('m1'), isNotNull);
+      });
+
+      test('被节流掉的进度仍然算活动', () async {
+        final notifier = ChatTransferNotifier();
+        notifier.progressOf('m1');
+        notifier.report(messageId: 'm1', progress: 0.2);
+        final first = notifier.lastProgressOf('m1');
+
+        // Windows 上 DateTime.now() 的分辨率只有十几毫秒，必须真的等一段时间。
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+        // 0.001 的增量不会刷新 UI，但传输显然还在推进。
+        notifier.report(messageId: 'm1', progress: 0.201);
+
+        expect(notifier.lastProgressOf('m1')!.isAfter(first!), isTrue);
+      });
+
+      test('finish 与 reset 都会清掉时间戳', () {
+        final notifier = ChatTransferNotifier();
+        notifier.report(messageId: 'm1', progress: 0.5);
+        notifier.finish('m1');
+        expect(notifier.lastProgressOf('m1'), isNull);
+
+        notifier.report(messageId: 'm1', progress: 0.5);
+        notifier.reset('m1');
+        expect(notifier.lastProgressOf('m1'), isNull);
+      });
     });
   });
 }
