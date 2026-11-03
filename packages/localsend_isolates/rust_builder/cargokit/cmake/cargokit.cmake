@@ -5,7 +5,20 @@ get_filename_component(cargokit_cmake_root "${cargokit_cmake_root}" REALPATH)
 
 if(WIN32)
     # REALPATH does not properly resolve symlinks on windows :-/
-    execute_process(COMMAND powershell -ExecutionPolicy Bypass -File "${CMAKE_CURRENT_LIST_DIR}/resolve_symlinks.ps1" "${cargokit_cmake_root}" OUTPUT_VARIABLE cargokit_cmake_root OUTPUT_STRIP_TRAILING_WHITESPACE)
+    # [FORK] -NoProfile: 若用户的 PowerShell profile 里有 Write-Host（常见于加载提示），
+    # 那些文本会被下面的 OUTPUT_VARIABLE 一起捕获，拼进 cargokit_cmake_root，
+    # 导致生成的自定义构建命令被污染（表现为 MSB8066 / exit code 9009）。
+    execute_process(COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File "${CMAKE_CURRENT_LIST_DIR}/resolve_symlinks.ps1" "${cargokit_cmake_root}" OUTPUT_VARIABLE _cargokit_resolved_raw OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+    # [FORK] 兜底：只取最后一行（脚本自身的输出总在 profile 输出之后）。
+    # 注意不要用正则 [^\r\n]，CMake 会把 \r 当作字面字符 r，导致路径在 'D:/Users' 处被截断。
+    string(REPLACE "\r\n" "\n" _cargokit_resolved_raw "${_cargokit_resolved_raw}")
+    string(REPLACE "\r" "\n" _cargokit_resolved_raw "${_cargokit_resolved_raw}")
+    string(REPLACE "\n" ";" _cargokit_resolved_lines "${_cargokit_resolved_raw}")
+    list(LENGTH _cargokit_resolved_lines _cargokit_line_count)
+    math(EXPR _cargokit_last_index "${_cargokit_line_count} - 1")
+    list(GET _cargokit_resolved_lines ${_cargokit_last_index} cargokit_cmake_root)
+    string(STRIP "${cargokit_cmake_root}" cargokit_cmake_root)
 endif()
 
 # Arguments
