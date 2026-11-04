@@ -120,6 +120,25 @@ Start-Process -FilePath "$env:LOCALAPPDATA\Android\Sdk\emulator\emulator.exe" `
   - **不要把 emulator 的输出接进 `| Select-Object -First N`**：管道被提前关闭会把模拟器一起带走（表现为进程秒退、退出码 0）。
   - 后台任务方式启动会卡在 shell 起来的那一步（只有 3 行日志、没有 qemu 子进程），用 `Start-Process` 才正常。
 
+### 0.7 `flutter test` 会被 `http_proxy` 打死
+
+本机环境里带着 `http_proxy=http://127.0.0.1:12815`（宿主的沙箱代理）。Dart 的 `HttpClient`
+认这个变量，于是 `flutter test` 连 `flutter_tester` 的本地 WebSocket 也走代理，报：
+
+```
+Unable to connect to flutter_tester process:
+WebSocketException: Invalid WebSocket upgrade request  (HTTP status code: 400)
+```
+
+而且它表现为 **17 个测试文件全部 "loading … failed"**，看起来像代码编译不过，实际是环境问题。
+跑测试前先摘掉代理：
+
+```bash
+env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY flutter test
+```
+
+- [x] 摘掉代理后 **107 个测试全过**
+
 ---
 
 ## 1. 构建与安装
@@ -150,6 +169,11 @@ cargokit 也就为每个 ABI 跑一遍 cargo（**20 分钟还没编完**）。
 重跑即过，且 **Gradle 仍报 BUILD SUCCESSFUL** —— 只是 APK 里没有 so，装上去会在启动时报
 `Failed to load dynamic library 'librust_lib_localsend_app.so'`。
 看到这个运行时错误，先解包确认 `lib/<abi>/librust_lib_localsend_app.so` 在不在。
+
+另有一次更邪门的：`:app:compileFlutterBuildDebug` 的 `kernel_snapshot_program` 把
+**`analysis_options.yaml` 当 Dart 源码**编译，刷了一百多行
+`analysis_options.yaml:1:1: Error: Expected a declaration, but got '#'`，构建直接失败。
+什么都没改、原样重跑就过了 —— 遇到这种「YAML 被当 Dart 编译」的日志，别去动代码，直接重跑。
 
 ---
 
@@ -189,6 +213,9 @@ cargokit 也就为每个 ABI 跑一遍 cargo（**20 分钟还没编完**）。
 - [x] 发送失败 → 红色感叹号 + "Failed to send" / "The device is not reachable…"
 - [x] 点红色感叹号可重发（同一气泡复用，不新增一条）
 - [ ] **外接键盘裸回车 = 换行，不是发送** —— 与桌面端不一致，原因与取舍见 §4.1
+- [x] **长按发送按钮 → 插入换行**（§4.1.1；长按后输入框变两行、不发送、不弹 tooltip）
+- [x] 短按发送按钮仍然正常发送（加了 `GestureDetector` 之后手势没有互相抢）
+- [x] 两行文本 `AAA\nBBB` 发送后气泡里仍然分成两行（`trim()` 只裁首尾，内部换行保留）
 - ⬜ 输入框长到 6 行后内部滚动
 - ⬜ Android → Windows 发文本（本机网络限制，见 §3.6 末尾）
 - [x] Windows → Android 发文本：**不弹确认页**，直接落进会话，未读角标 +1
@@ -238,10 +265,10 @@ cargokit 也就为每个 ABI 跑一遍 cargo（**20 分钟还没编完**）。
 
 结论表：
 
-| 平台 | 外接/物理键盘回车 | 软键盘回车 | Shift+Enter |
-|---|---|---|---|
-| Windows | **发送** | — | 换行 |
-| Android | **换行** | **发送**（`action=send` 显示为 ➤） | 换行（与裸回车无法区分） |
+| 平台 | 外接/物理键盘回车 | 软键盘回车 | Shift+Enter | 长按发送按钮 |
+|---|---|---|---|---|
+| Windows | **发送** | — | 换行 | —（未启用，桌面有 Shift+Enter） |
+| Android | **换行** | **发送**（`action=send` 显示为 ➤） | 换行（与裸回车无法区分） | **换行** |
 
 原因：桌面端引擎会把 Enter 翻成 `TextInputAction.send`，`onSubmitted` 收得到；
 Android 引擎没有这一步，**软键盘的回车本身就是发送键**，而外接键盘的回车会被 IME
@@ -256,6 +283,23 @@ Android 引擎没有这一步，**软键盘的回车本身就是发送键**，�
 如果要让 Android 也「裸回车发送」，只有两个选择，都要付代价：
 1. 改成单行输入框（`maxLines: 1`）—— 彻底没有换行，长消息只能横向滚；
 2. 加一个「回车发送 / 回车换行」设置项，默认按平台给不同值。
+
+### 4.1.1 换行入口：长按发送按钮（已实现）
+
+「长按软键盘的回车键换行」在框架层**做不到**：软键盘的键是输入法自己画的，
+长按事件在输入法进程内部消化，连 KeyEvent 都不会传给 App（同 §4.1 的实测）。
+能挂手势的只有我们自己渲染的那个发送按钮，于是换行挂在那里：
+
+- 短按发送按钮 → 发送（原行为）
+- **长按发送按钮 → 在光标处插入换行**，同时给一次 `selectionClick` 触觉反馈
+- 只在 Android 启用（`Platform.isAndroid`）；Windows 已有 Shift+Enter，不改手感
+- 实现：`conversation_page.dart` 的 `_handleSendButtonLongPress` + `_buildSendButton`
+- 坑：`IconButton` 的 `tooltip` 在移动端默认**也是长按弹出**，会和换行抢同一个手势。
+  所以 Android 上传 `tooltip: null`，外面套一个 `Tooltip(triggerMode: manual)`
+  只为保住无障碍标签（TalkBack 仍能念出「发送」）。
+- 空输入框时长按无反应（插一个孤零零的换行没有意义）。
+- 实测（Pixel_8 / `adb shell input swipe … 900ms`）：长按后光标落到第二行、输入框长高，
+  **没有发送、没有弹 tooltip**；短按仍照常发送。`AAA` → 长按 → `BBB` 发出去，气泡里是两行。
 
 ### 4.2 软键盘的「粘贴」不走 `Shortcuts`
 
@@ -287,7 +331,7 @@ Dart 侧收不到。要支持得给 `TextField` 传 `contextMenuBuilder`，在�
 
 ## 5. 待定的设计决策
 
-- [ ] 回车语义：Android 是否要为了「裸回车发送」牺牲多行输入（见 §4.1 的两个选项）
+- [x] 回车语义：维持「软键盘回车 = 发送」，换行改由**长按发送按钮**提供（见 §4.1.1），不为它牺牲多行输入
 - [ ] 「自动接收文本消息」要不要做成设置项（当前硬编码 `autoAcceptTextMessages = true`）
 - [ ] 收到文本时要不要发系统通知（后台场景），与现有「传输中」前台服务的关系
 - [ ] 拖拽确认卡片在手机上是否改用底部 Sheet（当前是居中 Dialog）
@@ -297,7 +341,7 @@ Dart 侧收不到。要支持得给 `TextField` 传 `contextMenuBuilder`，在�
 ## 6. 已知限制（Windows / Android 共有）
 
 - Windows 输入框多行：裸 Enter 发送，Shift+Enter 换行，Ctrl / Alt / Cmd + Enter 忽略。
-- Android 输入框多行，但**软键盘没有换行键**（回车即发送）；换行只能靠外接键盘。
+- Android 输入框多行，但**软键盘没有换行键**（回车即发送）；要换行只能**长按发送按钮**，或接外接键盘。
 - 单条文本上限 4000 字符（正文放在 `preview` 字段里传输）。
 - 对端若是**原版** LocalSend，收到文本仍会弹「接受」卡片——对方版本的限制。
 - 剪贴板文件一次最多 100 个（Windows）/ 20 个且单文件 ≤256MB（Android）。
