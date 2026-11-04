@@ -1,10 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:localsend_app/gen/strings.g.dart';
-import 'package:localsend_app/model/conversation/conversation.dart';
-import 'package:localsend_app/provider/conversation/chat_transfer_provider.dart';
-import 'package:localsend_app/widget/chat/file_message_card.dart';
+import 'package:localchat_app/gen/strings.g.dart';
+import 'package:localchat_app/model/conversation/conversation.dart';
+import 'package:localchat_app/provider/conversation/chat_transfer_provider.dart';
+import 'package:localchat_app/widget/chat/file_message_card.dart';
 import 'package:refena_flutter/refena_flutter.dart';
 
 /// [FORK] 自己发出的气泡固定用这个蓝色；文字因此固定走白色系（不跟主题走，

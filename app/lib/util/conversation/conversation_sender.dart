@@ -5,19 +5,19 @@ import 'dart:io' show File, Platform;
 import 'package:collection/collection.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart';
-import 'package:localsend_app/model/conversation/conversation.dart';
-import 'package:localsend_app/model/cross_file.dart';
-import 'package:localsend_app/provider/conversation/chat_transfer_provider.dart';
-import 'package:localsend_app/provider/conversation_provider.dart';
-import 'package:localsend_app/provider/network/nearby_devices_provider.dart';
-import 'package:localsend_app/provider/network/send_provider.dart';
-import 'package:localsend_app/util/conversation/conversation_recorder.dart';
-import 'package:localsend_app/util/native/channel/android_channel.dart' as android_channel;
-import 'package:localsend_app/util/native/cross_file_converters.dart';
-import 'package:localsend_isolates/constants.dart';
-import 'package:localsend_isolates/model/device.dart';
-import 'package:localsend_isolates/model/file_type.dart';
-import 'package:localsend_isolates/model/session_status.dart';
+import 'package:localchat_app/model/conversation/conversation.dart';
+import 'package:localchat_app/model/cross_file.dart';
+import 'package:localchat_app/provider/conversation/chat_transfer_provider.dart';
+import 'package:localchat_app/provider/conversation_provider.dart';
+import 'package:localchat_app/provider/network/nearby_devices_provider.dart';
+import 'package:localchat_app/provider/network/send_provider.dart';
+import 'package:localchat_app/util/conversation/conversation_recorder.dart';
+import 'package:localchat_app/util/native/channel/android_channel.dart' as android_channel;
+import 'package:localchat_app/util/native/cross_file_converters.dart';
+import 'package:localchat_isolates/constants.dart';
+import 'package:localchat_isolates/model/device.dart';
+import 'package:localchat_isolates/model/file_type.dart';
+import 'package:localchat_isolates/model/session_status.dart';
 import 'package:logging/logging.dart';
 import 'package:refena_flutter/refena_flutter.dart';
 import 'package:uuid/uuid.dart';
@@ -35,13 +35,13 @@ const _uuid = Uuid();
 
 /// 文本消息的长度上限。
 ///
-/// LocalSend 把文本塞进 `preview`，整个 prepare-upload 请求是一个 JSON。
+/// 文本消息沿用 LocalSend 协议的做法：塞进 `preview`，整个 prepare-upload 请求是一个 JSON。
 /// 太长既浪费内存也不符合局域网瞬时消息的定位，这里保守地限制在 4000 字符。
 const int maxTextMessageLength = 4000;
 
 /// 「对方不在线」时的重试窗口。
 ///
-/// 注意 LocalSend 并没有一个「发送超时」常量可以调大：prepare-upload 是一次普通
+/// 注意 `send_provider` 里并没有一个「发送超时」常量可以调大：prepare-upload 是一次普通
 /// TCP 请求，对方的 App 没开时连接会立即失败（通常是秒级，由系统 TCP 栈决定，
 /// 不是我们能配置的值）。所以「给对方时间去拿起手机、打开 App」只能靠在时间窗口
 /// 内**反复重试**，而不是把某个 timeout 改大。
@@ -156,7 +156,7 @@ Device? resolveConversationTarget(Ref ref, Conversation conversation) {
 /// 返回 `null` 表示成功，否则为失败原因。
 /// 「发送中」气泡会立刻写入，因此用户在请求往返期间就能看到反馈。
 ///
-/// 对方不在线时会在 [textSendRetryWindow] 内反复重试：LocalSend 没有离线消息队列，
+/// 对方不在线时会在 [textSendRetryWindow] 内反复重试：LocalSend 协议没有离线消息队列，
 /// 对方 App 没打开时请求会立刻被拒绝，只有重试才能等到「对方打开 App」的那一刻。
 Future<SendFailure?> sendTextMessage({
   required Ref ref,

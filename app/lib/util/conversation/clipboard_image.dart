@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:localsend_app/util/native/directories.dart';
+import 'package:localchat_app/util/native/directories.dart';
 import 'package:logging/logging.dart';
 
 final _logger = Logger('ClipboardImage');

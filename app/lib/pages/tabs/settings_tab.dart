@@ -2,35 +2,35 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:localsend_app/config/theme.dart';
-import 'package:localsend_app/gen/strings.g.dart';
-import 'package:localsend_app/model/persistence/color_mode.dart';
-import 'package:localsend_app/pages/about/about_page.dart';
-import 'package:localsend_app/pages/changelog_page.dart';
-import 'package:localsend_app/pages/donation/donation_page.dart';
-import 'package:localsend_app/pages/settings/network_interfaces_page.dart';
-import 'package:localsend_app/pages/tabs/settings_tab_controller.dart';
-import 'package:localsend_app/provider/network/server/server_provider.dart';
-import 'package:localsend_app/provider/settings_provider.dart';
-import 'package:localsend_app/provider/version_provider.dart';
-import 'package:localsend_app/util/alias_generator.dart';
-import 'package:localsend_app/util/device_type_ext.dart';
-import 'package:localsend_app/util/i18n.dart';
-import 'package:localsend_app/util/native/macos_channel.dart';
-import 'package:localsend_app/util/native/pick_directory_path.dart';
-import 'package:localsend_app/util/native/platform_check.dart';
-import 'package:localsend_app/widget/custom_dropdown_button.dart';
-import 'package:localsend_app/widget/dialogs/encryption_disabled_notice.dart';
-import 'package:localsend_app/widget/dialogs/pin_dialog.dart';
-import 'package:localsend_app/widget/dialogs/quick_save_from_favorites_notice.dart';
-import 'package:localsend_app/widget/dialogs/quick_save_notice.dart';
-import 'package:localsend_app/widget/dialogs/text_field_tv.dart';
-import 'package:localsend_app/widget/dialogs/text_field_with_actions.dart';
-import 'package:localsend_app/widget/labeled_checkbox.dart';
-import 'package:localsend_app/widget/local_send_logo.dart';
-import 'package:localsend_app/widget/responsive_list_view.dart';
-import 'package:localsend_isolates/constants.dart';
-import 'package:localsend_isolates/model/device.dart';
+import 'package:localchat_app/config/theme.dart';
+import 'package:localchat_app/gen/strings.g.dart';
+import 'package:localchat_app/model/persistence/color_mode.dart';
+import 'package:localchat_app/pages/about/about_page.dart';
+import 'package:localchat_app/pages/changelog_page.dart';
+import 'package:localchat_app/pages/donation/donation_page.dart';
+import 'package:localchat_app/pages/settings/network_interfaces_page.dart';
+import 'package:localchat_app/pages/tabs/settings_tab_controller.dart';
+import 'package:localchat_app/provider/network/server/server_provider.dart';
+import 'package:localchat_app/provider/settings_provider.dart';
+import 'package:localchat_app/provider/version_provider.dart';
+import 'package:localchat_app/util/alias_generator.dart';
+import 'package:localchat_app/util/device_type_ext.dart';
+import 'package:localchat_app/util/i18n.dart';
+import 'package:localchat_app/util/native/macos_channel.dart';
+import 'package:localchat_app/util/native/pick_directory_path.dart';
+import 'package:localchat_app/util/native/platform_check.dart';
+import 'package:localchat_app/widget/custom_dropdown_button.dart';
+import 'package:localchat_app/widget/dialogs/encryption_disabled_notice.dart';
+import 'package:localchat_app/widget/dialogs/pin_dialog.dart';
+import 'package:localchat_app/widget/dialogs/quick_save_from_favorites_notice.dart';
+import 'package:localchat_app/widget/dialogs/quick_save_notice.dart';
+import 'package:localchat_app/widget/dialogs/text_field_tv.dart';
+import 'package:localchat_app/widget/dialogs/text_field_with_actions.dart';
+import 'package:localchat_app/widget/labeled_checkbox.dart';
+import 'package:localchat_app/widget/local_chat_logo.dart';
+import 'package:localchat_app/widget/responsive_list_view.dart';
+import 'package:localchat_isolates/constants.dart';
+import 'package:localchat_isolates/model/device.dart';
 import 'package:refena_flutter/refena_flutter.dart';
 import 'package:routerino/routerino.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -574,7 +574,7 @@ class SettingsTab extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 20),
-            const LocalSendLogo(withText: true),
+            const LocalChatLogo(withText: true),
             const SizedBox(height: 5),
             ref
                 .watch(versionProvider)
@@ -765,7 +765,7 @@ extension on ColorMode {
   String get humanName {
     return switch (this) {
       ColorMode.system => t.settingsTab.general.colorOptions.system,
-      ColorMode.localsend => t.appName,
+      ColorMode.localchat => t.appName,
       ColorMode.oled => t.settingsTab.general.colorOptions.oled,
       ColorMode.yaru => 'Yaru',
       ColorMode.custom => t.settingsTab.general.colorOptions.custom,

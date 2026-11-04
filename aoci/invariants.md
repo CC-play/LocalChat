@@ -11,7 +11,7 @@
 | i18n 用 `fvm dart run slang`（**不是** build_runner，`build.yaml` 里 `slang_build_runner: enabled: false`） | 生成空实现，文案全部显示 key |
 | 一次 slang 生成会改动 60+ 个 `strings_*.g.dart`，属正常 | 误以为是无关改动而 revert → 文案缺失 |
 | CI 在 format 前删掉 `lib/gen`，生成物不参与格式检查 | 用 80 列工具重排生成物 = 纯噪音 diff |
-| 改 Rust API 签名后跑 `flutter_rust_bridge_codegen generate`（在 `packages/localsend_isolates/`） | Dart 侧调用参数错位，运行期崩溃而非编译期 |
+| 改 Rust API 签名后跑 `flutter_rust_bridge_codegen generate`（在 `packages/localchat_isolates/`） | Dart 侧调用参数错位，运行期崩溃而非编译期 |
 
 ## 构建
 
@@ -19,8 +19,8 @@
 |---|---|
 | `packages/core` 一律 `--features full` 构建/测试 | 裸 `cargo check` 会因 feature 门控直接失败（模块无条件声明、依赖可选） |
 | Windows 构建前把 VS18 的 `CMake\bin`、`Ninja` 前置到 PATH，并 `export CL="/source-charset:utf-8"` | PATH 里的 cmake 是坏的 venv shim（ModuleNotFoundError）；中文插件源码触发 C4819 被 `/WX` 升级为错误 |
-| `app/windows/localsend_msix_helper.msix` 被 gitignore，需手工生成 | 干净检出后 Windows install 步骤失败 |
-| 测启动存活前必须先关掉旧实例 | LocalSend 有单实例机制，第二个实例发 `/show` 后 `exit 0`，会误判为崩溃 |
+| `app/windows/localchat_msix_helper.msix` 被 gitignore，需手工生成 | 干净检出后 Windows install 步骤失败 |
+| 测启动存活前必须先关掉旧实例 | LocalChat 有单实例机制，第二个实例发 `/show` 后 `exit 0`，会误判为崩溃 |
 | 本机用系统 Flutter 3.44.0（`fvm` 未装，`.fvmrc` 要求 3.41.9，`pubspec` 约束 `^3.41.0`） | 装 fvm 后行为可能变化，不要假设两端等价 |
 
 ## 状态管理
@@ -37,7 +37,7 @@
 
 | 约束 | 违反后果 |
 |---|---|
-| LocalSend 没有聊天协议：一条消息 = 单文件 `FileType.text`，正文在 `FileDto.preview` | 自造端点 → 无法与官方客户端互通 |
+| LocalSend 协议没有聊天协议：一条消息 = 单文件 `FileType.text`，正文在 `FileDto.preview` | 自造端点 → 无法与官方客户端互通 |
 | 接收端识别文本后 `acceptFileRequest({})` 返回空文件表 | 传了文件表 → 落盘 0 字节垃圾文件 |
 | 文本消息判定必须排在 `showFromTray()` **之前** | 对方每说一句都抢走窗口焦点 |
 | 消息 ID 复用 `fileId` / 源 `file.id` | 重传、重试会产生重复气泡 |

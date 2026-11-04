@@ -1,4 +1,4 @@
-import 'package:localsend_app/util/conversation/clipboard_image.dart';
+import 'package:localchat_app/util/conversation/clipboard_image.dart';
 import 'package:test/test.dart';
 
 void main() {

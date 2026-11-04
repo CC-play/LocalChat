@@ -4,7 +4,7 @@ contact_links:
     url: https://github.com/localsend/localsend/blob/main/CONTRIBUTING.md#security-issues
     about: Help us address security issues as quickly and effectively as possible
 
-  - name: Get latest LocalSend
+  - name: Get latest LocalChat
     url: https://localsend.org/download
     about: Your issue may be version related, so try updating first
 

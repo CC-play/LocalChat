@@ -2176,6 +2176,35 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "11d3d7f243d5c5a8b9bb5d6dd2b1602c0cb0b9db1621bafc7ed66e35ff9fe092"
 
 [[package]]
+name = "localchat-cli"
+version = "1.18.2"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "clap",
+ "crossterm",
+ "dirs",
+ "futures-util",
+ "gethostname",
+ "localsend",
+ "mime_guess",
+ "pem 4.0.0",
+ "qrcode",
+ "ratatui",
+ "ratatui-explorer",
+ "rcgen 0.14.8",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "toml",
+ "unicode-width",
+ "uuid",
+ "winresource",
+]
+
+[[package]]
 name = "localsend"
 version = "0.1.0"
 dependencies = [
@@ -2216,35 +2245,6 @@ dependencies = [
  "uuid",
  "webrtc",
  "x509-parser 0.18.1",
-]
-
-[[package]]
-name = "localsend-cli"
-version = "1.18.2"
-dependencies = [
- "anyhow",
- "bytes",
- "clap",
- "crossterm",
- "dirs",
- "futures-util",
- "gethostname",
- "localsend",
- "mime_guess",
- "pem 4.0.0",
- "qrcode",
- "ratatui",
- "ratatui-explorer",
- "rcgen 0.14.8",
- "serde",
- "serde_json",
- "tokio",
- "tokio-stream",
- "tokio-util",
- "toml",
- "unicode-width",
- "uuid",
- "winresource",
 ]
 
 [[package]]

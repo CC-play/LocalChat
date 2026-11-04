@@ -1,8 +1,11 @@
-# Contributing to LocalSend
+# Contributing to LocalChat
 
-LocalSend is an open-source project, and we welcome contributions from anyone who is interested in helping improve the app. Whether you're a developer, a translator, or a documentation writer, there are many ways to get involved.
+> [!NOTE]
+> This guide is inherited from the upstream LocalSend project. Everything below describes how the **upstream** project accepts contributions — the translation platform, the release workflow, the signing policy and the store packaging all belong to upstream infrastructure and are not operated by this fork. Replace `localsend` with your own repository name when reusing any of it.
 
-LocalSend disallows AI generated contributions unless:
+LocalChat is an open-source project, and we welcome contributions from anyone who is interested in helping improve the app. Whether you're a developer, a translator, or a documentation writer, there are many ways to get involved.
+
+Upstream disallows AI generated contributions unless:
 
 - they are bug fixes or
 - very small or
@@ -10,7 +13,7 @@ LocalSend disallows AI generated contributions unless:
 
 ## Getting Started
 
-If you're interested in contributing code to LocalSend, you'll need to follow these steps:
+If you're interested in contributing code to LocalChat, you'll need to follow these steps:
 
 ## Run
 
@@ -45,7 +48,7 @@ Thanks to all [translators](https://github.com/localsend/localsend/tree/main/app
 
 ## Contributing Guidelines
 
-Before you submit a pull request to LocalSend, please ensure that you have followed these guidelines:
+Before you submit a pull request to LocalChat, please ensure that you have followed these guidelines:
 
 - Code should be well-documented and formatted according to the [Dart Style Guide](https://dart.dev/guides/language/effective-dart/style).
 - All changes should be covered by tests.
@@ -54,11 +57,11 @@ Before you submit a pull request to LocalSend, please ensure that you have follo
 
 ## Bug Reports and Feature Requests
 
-If you encounter a bug in LocalSend or have a feature request, please submit an issue to the [issue tracker](https://github.com/localsend/localsend/issues). Please be sure to provide a clear description of the problem or feature request, along with any relevant context or steps to reproduce the issue.
+If you encounter a bug in LocalChat or have a feature request, please submit an issue to the [issue tracker](https://github.com/localsend/localsend/issues). Please be sure to provide a clear description of the problem or feature request, along with any relevant context or steps to reproduce the issue.
 
 ## Security Issues
 
-If you discover a security issue in LocalSend, please do not submit an issue to the public issue tracker. Instead, please email us directly at [support@localsend.org](mailto:support@localsend.org) so that we can address the issue as quickly and effectively as possible.
+If you discover a security issue in LocalChat, please do not submit an issue to the public issue tracker. Instead, please email us directly at [support@localsend.org](mailto:support@localsend.org) so that we can address the issue as quickly and effectively as possible.
 
 ## Distribution
 
@@ -133,7 +136,7 @@ Binary distribution:
 
 TODO:
 
-You can help in publishing LocalSend on more platforms. Please create an issue to notify us!
+You can help in publishing LocalChat on more platforms. Please create an issue to notify us!
 
 - Traditional Linux distributions (Debian, Fedora, etc.)
 - (Your idea here)

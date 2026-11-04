@@ -1,4 +1,4 @@
-import 'package:localsend_app/provider/conversation/chat_transfer_provider.dart';
+import 'package:localchat_app/provider/conversation/chat_transfer_provider.dart';
 import 'package:test/test.dart';
 
 void main() {

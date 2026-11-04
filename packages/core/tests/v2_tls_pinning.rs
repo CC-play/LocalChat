@@ -20,7 +20,7 @@ use tokio::sync::{mpsc, oneshot, Mutex};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 
-/// A generated self-signed certificate, as LocalSend peers use them.
+/// A generated self-signed certificate, as LocalChat peers use them.
 struct Identity {
     cert: String,
     private_key: String,
@@ -238,7 +238,7 @@ async fn test_transfer_with_matching_fingerprint() {
     let server = start_tls_server(&server_identity).await;
     let client = client(&sender, Some(&server_identity.fingerprint));
 
-    let content = b"hello localsend".repeat(100);
+    let content = b"hello localchat".repeat(100);
     let files = vec![file_dto("file-1", content.len() as u64)];
 
     let result = client
@@ -396,7 +396,7 @@ async fn test_client_without_cert_allowed_in_web_mode() {
     assert_eq!(response.status().as_u16(), 200);
     assert!(response.text().await.unwrap().contains("prepare-upload"));
 
-    // A LocalSend peer still authenticates with its certificate.
+    // A LocalChat peer still authenticates with its certificate.
     let client = client(&sender, Some(&server_identity.fingerprint));
     let response = client
         .register(

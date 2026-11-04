@@ -23,7 +23,7 @@ class AppDelegate: FlutterAppDelegate {
     }
     
     override func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        // LocalSend handles the close event manually
+        // LocalChat handles the close event manually
         return false
     }
     
@@ -34,8 +34,8 @@ class AppDelegate: FlutterAppDelegate {
         
         NSApplication.shared.servicesProvider = self
         
-        let localsendBrandColor = NSColor(red: 0, green: 0.392, blue: 0.353, alpha: 0.8) // #00645a
-        DockProgress.style = .squircle(color: localsendBrandColor)
+        let localchatBrandColor = NSColor(red: 0, green: 0.392, blue: 0.353, alpha: 0.8) // #00645a
+        DockProgress.style = .squircle(color: localchatBrandColor)
         
         isLaunchedAsLoginItem = LaunchAtLogin.wasLaunchedAtLogin
         
@@ -43,7 +43,7 @@ class AppDelegate: FlutterAppDelegate {
     }
     
     override func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        showLocalSendFromMenuBar()
+        showLocalChatFromMenuBar()
         return false
     }
     
@@ -81,7 +81,7 @@ class AppDelegate: FlutterAppDelegate {
             let menu = NSMenu()
             
             let openString = i18n["open"]!
-            let openItem = NSMenuItem(title: openString, action: #selector(showLocalSendFromMenuBar), keyEquivalent: "o")
+            let openItem = NSMenuItem(title: openString, action: #selector(showLocalChatFromMenuBar), keyEquivalent: "o")
             menu.addItem(openItem)
             
             let quitString = i18n["quit"]!
@@ -103,8 +103,8 @@ class AppDelegate: FlutterAppDelegate {
         }
     }
     
-    @objc func showLocalSendFromMenuBar() {
-        channel?.invokeMethod("showLocalSendFromMenuBar", arguments: nil)
+    @objc func showLocalChatFromMenuBar() {
+        channel?.invokeMethod("showLocalChatFromMenuBar", arguments: nil)
     }
     
     @objc private func quitApp() {
@@ -132,7 +132,7 @@ class AppDelegate: FlutterAppDelegate {
         Defaults[.pendingFiles] = []
         Defaults[.pendingStrings] = []
         
-        self.showLocalSendFromMenuBar()
+        self.showLocalChatFromMenuBar()
     }
     
     // START: handle opened files

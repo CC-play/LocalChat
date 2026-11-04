@@ -98,7 +98,7 @@ cmake.dir=C\:\\Users\\94184\\AppData\\Local\\Android\\Sdk\\cmake\\3.22.1
 
 ### 0.5 Rust target
 
-`packages/localsend_isolates/rust-toolchain.toml` 锁了 1.97.1 并声明了三个 Android target，
+`packages/localchat_isolates/rust-toolchain.toml` 锁了 1.97.1 并声明了三个 Android target，
 rustup 进入该目录会自动装；预装一份可以避免首次构建把网络问题误判成代码问题。
 
 ```bash
@@ -160,7 +160,7 @@ adb shell am start -n org.localsend.localsend_app.debug/org.localsend.localsend_
 不限制 ABI 时 AGP 会为 arm64-v8a / armeabi-v7a / x86 / x86_64 各配一遍 CMake，
 cargokit 也就为每个 ABI 跑一遍 cargo（**20 分钟还没编完**）。
 `--target-platform android-x64` 只影响 Flutter 引擎，插件仍按 abiFilters 走，
-所以在 `~/.gradle/init.gradle` 里把 `android.defaultConfig.ndk.abiFilters` 收成 `x86_64`（可用 `-Plocalsend.abi=...` 覆盖）。
+所以在 `~/.gradle/init.gradle` 里把 `android.defaultConfig.ndk.abiFilters` 收成 `x86_64`（可用 `-Plocalchat.abi=...` 覆盖）。
 出正式包时要显式放开成 `arm64-v8a,armeabi-v7a,x86_64`。
 
 ### 已知偶发失败

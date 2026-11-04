@@ -2,7 +2,7 @@
 
 ## 职责
 
-把 LocalSend 的「收发事件」投影成微信式会话视图：按对端设备聚合、双向记录、按最近活动排序。**不参与任何传输逻辑**——它只读事件，写自己的存储，失败时静默降级。
+把 LocalChat 的「收发事件」投影成微信式会话视图：按对端设备聚合、双向记录、按最近活动排序。**不参与任何传输逻辑**——它只读事件，写自己的存储，失败时静默降级。
 
 ## 数据流
 
@@ -57,7 +57,7 @@
 
 ## 离线重试（2 分钟窗口）
 
-LocalSend **没有**可调的「发送超时」：对端 App 没开时 prepare-upload 会被系统 TCP 栈秒级拒绝（值不可配置）。所以「给对方时间拿起手机」只能靠重试。
+LocalChat **没有**可调的「发送超时」：对端 App 没开时 prepare-upload 会被系统 TCP 栈秒级拒绝（值不可配置）。所以「给对方时间拿起手机」只能靠重试。
 
 - `textSendRetryWindow = 2min`，`_retryInterval = 2s`；全程复用同一个 `sessionId`，避免 `fileTransferProvider` 里堆积一次性状态。
 - 只重试 `unreachable` / `unknown`；`peerDeclined` / `peerBusy` 是明确答复，立即失败。
@@ -193,7 +193,7 @@ ChatMessageStatus:  pending ──成功──> sent
 |---|---|
 | 图片/缩略图预览 | `ChatMessage` 加字段 + `file_message_card.dart` + `preview` 逻辑 |
 | 消息重试 | `conversation_page.dart` 的 failed 气泡 + 复用 `sendTextMessage`（`messageId` 需换新） |
-| 已读回执 | 需新协议：LocalSend 无此能力，只能在文本消息里塞约定字段 |
+| 已读回执 | 需新协议：LocalChat 无此能力，只能在文本消息里塞约定字段 |
 | 群聊 | 协议层不支持（一条消息只有一个对端），需自定义 `FileType.text` 载荷 + 新聚合键 |
 | 搜索 | `conversations_page` 加 TextField，直接在 `state.messages` 上过滤，无需新存储 |
 

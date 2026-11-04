@@ -1,10 +1,10 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:localsend_app/gen/strings.g.dart';
-import 'package:localsend_app/model/cross_file.dart';
-import 'package:localsend_app/widget/chat/message_bubble.dart' show kOnOutgoingBubbleColor, kOutgoingBubbleColor;
-import 'package:localsend_isolates/util/file_size_helper.dart';
+import 'package:localchat_app/gen/strings.g.dart';
+import 'package:localchat_app/model/cross_file.dart';
+import 'package:localchat_app/widget/chat/message_bubble.dart' show kOnOutgoingBubbleColor, kOutgoingBubbleColor;
+import 'package:localchat_isolates/util/file_size_helper.dart';
 
 /// [FORK] 拖拽文件进会话窗口后的确认卡片。
 ///

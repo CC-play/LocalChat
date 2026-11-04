@@ -28,4 +28,4 @@ dart run build_runner build -d
 flutter build apk
 
 popd
-cd localsend
+cd localchat

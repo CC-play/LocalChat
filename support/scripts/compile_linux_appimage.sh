@@ -30,11 +30,11 @@ mkdir AppDir
 cp -r build/linux/x64/release/bundle/* AppDir
 cp support/build/appimage/AppImageBuilder_x86_64.yml AppImageBuilder.yml
 appimage-builder
-sudo chmod +x LocalSend-*-x86_64.AppImage
+sudo chmod +x LocalChat-*-x86_64.AppImage
 
 rm -rf AppDir
 rm -rf appimage-build
 
 popd
-cd localsend
-cp /tmp/build/LocalSend-*-x86_64.AppImage .
+cd localchat
+cp /tmp/build/LocalChat-*-x86_64.AppImage .

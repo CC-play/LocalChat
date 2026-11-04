@@ -1371,7 +1371,7 @@ packages:
   rust_lib_localsend_app:
     dependency: transitive
     description:
-      path: "packages/localsend_isolates/rust_builder"
+      path: "packages/localchat_isolates/rust_builder"
       relative: true
     source: path
     version: "0.0.1"

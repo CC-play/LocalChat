@@ -182,7 +182,7 @@ fn web_send_config(
 ) {
     let disk_content: Vec<u8> = (0..100_000u32).map(|i| i as u8).collect();
     let disk_path =
-        std::env::temp_dir().join(format!("localsend-web-send-{}", uuid::Uuid::new_v4()));
+        std::env::temp_dir().join(format!("localchat-web-send-{}", uuid::Uuid::new_v4()));
     std::fs::write(&disk_path, &disk_content).expect("Failed to write test file");
 
     // The config only carries the metadata; the content is streamed by the
@@ -243,7 +243,7 @@ async fn test_web_page() {
     let response = client.get(&base_url).send().await.unwrap();
     assert_eq!(response.status().as_u16(), 200);
     let body = response.text().await.unwrap();
-    assert!(body.contains("LocalSend"));
+    assert!(body.contains("LocalChat"));
     assert!(body.contains("prepare-download"));
 
     let response = client
@@ -332,7 +332,7 @@ async fn test_upload_page() {
     let response = client.get(&base_url).send().await.unwrap();
     assert_eq!(response.status().as_u16(), 200);
     let body = response.text().await.unwrap();
-    assert!(body.contains("LocalSend"));
+    assert!(body.contains("LocalChat"));
     assert!(body.contains("prepare-upload"));
     // The download page is not served without web send.
     assert!(!body.contains("prepare-download"));

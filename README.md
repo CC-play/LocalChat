@@ -1,271 +1,130 @@
-# LocalSend
+# LocalChat
 
-[![CI status][ci-badge]][ci-workflow]
-[![Translations][translate-badge]][translate-link]
-[![Packaging status][packaging-badge]][packaging-link]
+LocalChat is a free, open-source app that lets you send files and messages to nearby devices over your local network — no internet connection, no account, no server in the middle.
 
-[ci-badge]: https://github.com/localsend/localsend/actions/workflows/ci.yml/badge.svg
-[ci-workflow]: https://github.com/localsend/localsend/actions/workflows/ci.yml
-[translate-badge]: https://hosted.weblate.org/widget/localsend/app/svg-badge.svg
-[translate-link]: https://hosted.weblate.org/engage/localsend/
-[packaging-badge]: https://repology.org/badge/tiny-repos/localsend.svg
-[packaging-link]: https://repology.org/project/localsend/versions
+It is a personal **fork of [LocalSend](https://github.com/localsend/localsend)** that keeps the original transfer engine and adds a conversation-style UI on top of it: pairing is no longer a one-shot "pick files → send" flow, but a list of peers you can talk to repeatedly.
 
-[Homepage][homepage] • [Discord][discord] • [GitHub][github] • [Codeberg][codeberg]
+> [!IMPORTANT]
+> This is an unofficial fork and is **not** affiliated with the LocalSend project. Upstream is the work of [Tien Do Nam (@Tienisto)](https://github.com/Tienisto) and its contributors. Bug reports about this fork do not belong in the upstream issue tracker.
 
-[English (Default)](README.md) • [Беларуская](/support/readme/README_BE.md) • [Español](/support/readme/README_ES.md) • [فارسی](/support/readme/README_FA.md) • [Filipino](/support/readme/README_PH.md) • [Français](/support/readme/README_FR.md) • [Indonesia](/support/readme/README_ID.md) • [Italiano](/support/readme/README_IT.md) • [日本語](/support/readme/README_JA.md) • [ភាសាខ្មែរ](/support/readme/README_KM.md) • [한국어](/support/readme/README_KO.md) • [Polski](/support/readme/README_PL.md) • [Português Brasil](/support/readme/README_PT_BR.md) • [Русский](/support/readme/README_RU.md) • [ภาษาไทย](/support/readme/README_TH.md) • [Türkçe](/support/readme/README_TR.md) • [Українська](/support/readme/README_UK.md) • [Tiếng Việt](/support/readme/README_VI.md) • [中文](/support/readme/README_ZH.md)
+[Upstream homepage][homepage] • [Upstream GitHub][github] • [Upstream Codeberg][codeberg] • [LocalSend protocol][protocol]
 
-[homepage]: https://localsend.org
-[discord]: https://discord.gg/GSRWmQNP87
-[github]: https://github.com/localsend/localsend
-[codeberg]: https://codeberg.org/localsend/localsend
+## What this fork changes
 
-LocalSend is a free, open-source app that allows you to securely share files and messages with nearby devices over your local network without needing an internet connection.
+- **Conversations.** Peers are aggregated into a chat-style list, ordered by the most recent activity, with a bidirectional history. Transfers started from the classic "Send" tab still behave exactly as before.
+- **Send into a conversation.** Drag files onto a conversation window, or paste from the clipboard (Ctrl/Cmd+V) — images, files, or plain text. Both paths share one confirmation sheet.
+- **Per-bubble transfer feedback.** Upload progress is rendered inside the message bubble; long transfers can be cancelled, and failed messages can be resent by clicking the red exclamation mark.
+- **Text composer.** Enter sends, Shift+Enter inserts a newline. On Android, long-press the send button to insert a newline (the soft keyboard cannot report a long-press on its return key).
+- **Chat rendering of text messages.** A message is still a single-file `FileType.text` request with the body in `preview`, so no new endpoint is introduced — see the next section.
 
-- [About](#about)
-- [Sponsors](#sponsors)
-- [Screenshots](#screenshots)
-- [Download](#download)
-- [How It Works](#how-it-works)
-- [Dependency Hierarchy](#dependency-hierarchy)
-- [Getting Started](#getting-started)
-- [Contributing](#contributing)
-  - [Translation](#translation)
-  - [Bug Fixes and Improvements](#bug-fixes-and-improvements)
-- [Troubleshooting](#troubleshooting)
-- [Building](#building)
-  - [Android](#android)
-  - [iOS](#ios)
-  - [macOS](#macos)
-  - [Windows](#windows)
-  - [Linux](#linux)
+## What is *not* changed
 
-## About
+Wire compatibility is a hard requirement: a LocalChat device must still talk to a stock LocalSend installation.
 
-LocalSend is a cross-platform app that enables secure communication between devices using a REST API and HTTPS encryption. Unlike other messaging apps that rely on external servers, LocalSend doesn't require an internet connection or third-party servers, making it a fast and reliable solution for local communication.
+- Endpoints stay at `/api/localsend/v1/...` and `/api/localsend/v2/...`
+- The default port stays `TCP/UDP 53317`, multicast discovery stays on `224.0.0.167`
+- The Android application id stays `org.localsend.localsend_app`, the iOS bundle id stays `org.localsend.localsendApp`
+- The Rust core crate is still named `localsend`, the FRB plugin crate is still `rust_lib_localsend_app`
 
-## Sponsors
+Renaming any of those would silently break interoperability with other clients or require regenerating the generated bindings, so they are deliberately left alone. User-visible names — window title, package display name, executable `localchat_app`, CLI `localchat-cli` — are renamed.
 
-Browser testing via
+## Repository layout
 
-<a href="https://www.testmuai.com/?utm_medium=sponsor&utm_source=localsend" target="_blank">
-    <img src="https://localsend.org/img/sponsors/tesmu.svg" style="vertical-align: middle;" width="250" height="45" />
-</a>
+| Path                           | What it is                                                               |
+|--------------------------------|--------------------------------------------------------------------------|
+| `app/`                         | Flutter app (`localchat_app`): UI, providers, persistence, native channels |
+| `packages/localchat_isolates/` | Dart isolate layer + `flutter_rust_bridge` bindings                       |
+| `packages/core/`               | Rust crate `localsend`: protocol, HTTP server/client, crypto, WebRTC      |
+| `server/`, `cli/`              | Headless server and the `localchat-cli` terminal client                   |
+| `aoci/`                        | AI-oriented code index: routing, invariants, fork insertion points        |
 
-## Screenshots
+See [AGENTS.md](AGENTS.md) for the engineering guide and [aoci/index.md](aoci/index.md) for the intent → file routing table.
 
-<img src="https://localsend.org/img/screenshot-iphone.webp" alt="iPhone screenshot" height="300"/> <img src="https://localsend.org/img/screenshot-pc.webp" alt="PC screenshot" height="300"/>
+![Dependency hierarchy](support/docs/dependency-hierarchy.svg)
 
-## Download
+## Getting started
 
-[![Packaging status](https://repology.org/badge/tiny-repos/localsend.svg)](https://repology.org/project/localsend/versions)
+1. Install [Flutter](https://flutter.dev) (see [.fvmrc](.fvmrc) for the version this repository is built with) or use [fvm](https://fvm.app)
+2. Install [Rust](https://www.rust-lang.org/tools/install)
+3. Clone this repository
+4. `cd app`
+5. `flutter pub get`
+6. `flutter run`
 
-It is recommended to download the app either from an app store or from a package manager because the app does not have an auto-update.
+> [!NOTE]
+> The pub workspace is rooted at the repository root, so `pub get` from any member resolves all Dart packages at once. `packages/localchat_isolates` additionally needs its own `build_runner` run when its models change.
 
-| Windows                 | macOS                   | Linux              | Android        | iOS           | Fire OS    |
-|-------------------------|-------------------------|--------------------|----------------|---------------|------------|
-| [Winget][]              | [App Store][]           | [Flathub][]        | [Play Store][] | [App Store][] | [Amazon][] |
-| [Scoop][]               | [Homebrew][]            | [Nixpkgs][]        | [F-Droid][]    |               |            |
-| [Chocolatey][]          | [DMG Installer][latest] | [Snap][]           | [APK][latest]  |               |            |
-| [EXE Installer][latest] |                         | [AUR][]            |                |               |            |
-| [Portable ZIP][latest]  |                         | [TAR][latest]      |                |               |            |
-|                         |                         | [DEB][latest]      |                |               |            |
-|                         |                         | [AppImage][latest] |                |               |            |
+### Building
 
-Read more about [distribution channels][].
+Run from the `app` directory.
 
-Windows binaries are signed. Read more about the [Code signing policy][].
+```bash
+flutter build windows     # -> build/windows/x64/runner/Release/localchat_app.exe
+flutter build apk         # Android
+flutter build linux       # Linux
+flutter build macos       # macOS
+flutter build ipa         # iOS
+```
 
-> [!CAUTION]
-> **Unofficial MSIX preview:** you can try builds from the latest commits at [localsend.ob-buff.dev](https://localsend.ob-buff.dev/). Stability is not guaranteed and all custom code tweaks are listed on that site.
+Close a running instance before rebuilding on Windows, otherwise the linker fails with `LNK1168` because the executable is locked.
 
-[windows store]: https://www.microsoft.com/store/apps/9NCB4Z0TZ6RR
-[app store]: https://apps.apple.com/us/app/localsend/id1661733229
-[play store]: https://play.google.com/store/apps/details?id=org.localsend.localsend_app
-[f-droid]: https://f-droid.org/packages/org.localsend.localsend_app
-[amazon]: https://www.amazon.com/dp/B0BW6MP732
-[winget]: https://github.com/microsoft/winget-pkgs/tree/master/manifests/l/LocalSend/LocalSend
-[scoop]: https://scoop.sh/#/apps?s=0&d=1&o=true&q=localsend&id=fb88113be361ca32c0dcac423cb4afdeda0b0c66
-[chocolatey]: https://community.chocolatey.org/packages/localsend
-[homebrew]: https://formulae.brew.sh/cask/localsend
-[flathub]: https://flathub.org/apps/details/org.localsend.localsend_app
-[nixpkgs]: https://search.nixos.org/packages?show=localsend
-[snap]: https://snapcraft.io/localsend
-[aur]: https://aur.archlinux.org/packages/localsend-bin
-[latest]: https://github.com/localsend/localsend/releases/latest
-[distribution channels]: https://github.com/localsend/localsend/blob/main/CONTRIBUTING.md#distribution
-[code signing policy]: https://github.com/localsend/localsend/blob/main/CODE_SIGNING.md
+### Running the CLI
 
-**Compatibility**
-
-| Platform | Minimum Version | Note                                                                                                                        |
-|----------|-----------------|-----------------------------------------------------------------------------------------------------------------------------|
-| Android  | 5.0             | -                                                                                                                           |
-| iOS      | 12.0            | -                                                                                                                           |
-| macOS    | 11 Big Sur      | Use OpenCore Legacy Patcher 2.0.2 (See [#1005](https://github.com/localsend/localsend/issues/1005#issuecomment-2449899384)) |
-| Windows  | 10              | The last version to support Windows 7 is v1.15.4. There might be backports of newer versions for Windows 7 in the future.   |
-| Linux    | N.A.            | Deps: Gnome: `xdg-desktop-portal` and `xdg-desktop-portal-gtk`, KDE: `xdg-desktop-portal` and `xdg-desktop-portal-kde`      |
+```bash
+cargo run -p localchat-cli -- --help
+```
 
 ## Setup
 
-In most cases, LocalSend should work out of the box. However, if you are having trouble sending or receiving files, you may need to configure your firewall to allow LocalSend to communicate over your local network.
+In most cases LocalChat works out of the box. If devices cannot find each other, allow the app through the firewall.
 
 | Traffic Type | Protocol | Port  | Action |
 |--------------|----------|-------|--------|
 | Incoming     | TCP, UDP | 53317 | Allow  |
 | Outgoing     | TCP, UDP | Any   | Allow  |
 
-Also make sure to disable AP isolation on your router. It should be usually disabled by default but some routers may have it enabled (especially guest networks).
-See [troubleshooting](#troubleshooting) for more information.
+Also make sure AP isolation is disabled on the router — it is usually off by default, but some routers (especially guest networks) enable it.
 
-**Portable Mode**
+**Portable mode.** Create an empty file named `settings.json` next to the executable; settings are then stored there instead of `%APPDATA%\LocalChat`.
 
-(Introduced in v1.13.0)
+**Start hidden.** `localchat_app.exe --hidden` starts the app in the tray only.
 
-Create a file named `settings.json` located in the same directory as the executable.
-This file can be empty.
-The app will use this file to store settings instead of the default location.
+## Storage locations
 
-**Start hidden**
+| Platform         | Location                                                                                        |
+|------------------|-------------------------------------------------------------------------------------------------|
+| Windows          | `%APPDATA%\LocalChat\settings.json`                                                             |
+| Android          | app-private storage of `org.localsend.localsend_app` (unchanged by the rename, so data is kept)  |
+| Desktop portable | `settings.json` next to the executable                                                           |
 
-(Updated in v1.15.0)
+Settings written by this fork before the rename lived in `%APPDATA%\LocalSend\settings.json`. On first start the old file is moved to the new location, so conversations, favorites, window placement and the TLS key survive the rename.
 
-To start the app hidden (only in tray), use the `--hidden` flag (example: `localsend_app.exe --hidden`).
+## How it works
 
-On v1.14.0 and earlier, the app starts hidden if `autostart` flag is set, and the hidden setting is enabled.
+LocalChat speaks the LocalSend protocol: devices announce themselves over multicast, then exchange files through a REST API over HTTPS, with a self-signed certificate generated on the fly on each device. The protocol itself is documented in the upstream [specification][protocol].
 
-## How It Works
+For the conversation feature specifically, read [aoci/modules/conversation.md](aoci/modules/conversation.md) — it describes how chat events are projected onto the transfer engine without touching it.
 
-LocalSend uses a secure communication protocol that allows devices to communicate with each other using a REST API. All data is sent securely over HTTPS, and the TLS/SSL certificate is generated on the fly on each device, ensuring maximum security.
+## Documentation languages
 
-For more information on the LocalSend Protocol, see the [documentation](https://github.com/localsend/protocol).
-
-## Dependency Hierarchy
-
-![Dependency hierarchy](support/docs/dependency-hierarchy.svg)
-
-## Getting Started
-
-To compile LocalSend from the source code, follow these steps:
-
-1. Install Flutter [directly](https://flutter.dev) or using [fvm](https://fvm.app) (see [version required](.fvmrc))
-2. Install [Rust](https://www.rust-lang.org/tools/install)
-3. Clone the `LocalSend` repository
-4. Run `cd app` to enter the app directory
-5. Run `flutter pub get` to download dependencies
-6. Run `flutter run` to start the app
-
-> [!NOTE]
-> LocalSend currently requires an older Flutter version (specified in [.fvmrc](.fvmrc))
-> and thus build issues may be caused by a mismatch between the required and the (system-wide) installed Flutter version.  
-> To make development more consistent, LocalSend uses [fvm](https://fvm.app) to manage the project Flutter version.
-> After installing `fvm`, run `fvm flutter` instead of `flutter`.
-
-## Contributing
-
-We welcome contributions from anyone interested in helping improve LocalSend. If you'd like to contribute, there are a few ways to get involved:
-
-### Translation
-
-You can help translate LocalSend into other languages. We use the [Weblate](https://hosted.weblate.org/projects/localsend/app) platform to manage translations.
-
-Alternatively, you can also contribute by forking this repository and adding translations manually.
-
-The translations are located in the [app/assets/i18n](https://github.com/localsend/localsend/tree/main/app/assets/i18n) directory. Edit the `_missing_translations_<locale>.json` or `strings_<locale>.i18n.json` file to add or update translations.
-
-<a href="https://hosted.weblate.org/engage/localsend/">
-<img src="https://hosted.weblate.org/widget/localsend/app/multi-auto.svg" alt="Translation status" />
-</a>
-
-**_Take note:_ Fields decorated with `@` are not meant to be translated; they are not used in the app in any way, being merely informative text about the file or to give context to the translator.**
-
-### Bug Fixes and Improvements
-
-- **Bug Fixes:** If you find a bug, please create a pull request with a clear description of the issue and how to fix it.
-- **Improvements:** Have an idea for how to improve LocalSend? Please create an issue first to discuss why the improvement is needed.
-
-For more information, see the [contributing guide](https://github.com/localsend/localsend/blob/main/CONTRIBUTING.md).
+`support/readme/` contains the **upstream** README translations, kept verbatim for reference. They describe the upstream project, including its download badges and store links, and are not maintained for this fork.
 
 ## Troubleshooting
 
-| Issue              | Platform (Sending) | Platform (Receiving) | Solution                                                                                                                                |
-|--------------------|--------------------|----------------------|-----------------------------------------------------------------------------------------------------------------------------------------|
-| Device not visible | Any                | Any                  | Make sure to disable AP-Isolation on your router. If it is enabled, connections between devices are forbidden.                          |
-| Device not visible | Any                | Windows              | Make sure to configure your network as a "private" network. Windows might be more restrictive when the network is configured as public. |
-| Device not visible | macOS, iOS         | Any                  | You can try to toggle the "Local Network" permission under "Privacy" in the OS settings.                                                |
-| Speed too slow     | Any                | Any                  | Use 5 Ghz; Disable encryption on both devices                                                                                           |
-| Speed too slow     | Any                | Android              | Known issue. https://github.com/flutter-cavalry/saf_stream/issues/4                                                                     |
+| Issue              | Platform (Sending) | Platform (Receiving) | Solution                                                                                |
+|--------------------|--------------------|----------------------|-----------------------------------------------------------------------------------------|
+| Device not visible | Any                | Any                  | Make sure AP isolation is disabled on the router. If enabled, connections between devices are forbidden. |
+| Device not visible | Any                | Windows              | Set the network profile to "private". Windows is more restrictive on public networks.     |
+| Device not visible | macOS, iOS         | Any                  | Toggle the "Local Network" permission under "Privacy" in the OS settings.                 |
+| Speed too slow     | Any                | Any                  | Use 5 GHz; disable encryption on both devices.                                            |
 
-## Building
+Stuck sending? Open the conversation, click the spinner to cancel, then the red exclamation mark to resend. The retry window is two minutes; a transfer that makes no progress for 60 seconds is marked as failed.
 
-These commands are intended for maintainers only. Make sure to run them from the `app` directory.
+## License and attribution
 
-### Android
+Apache-2.0, inherited from the upstream project. Copyright remains with the original author and contributors; see [LICENSE](LICENSE) and the in-app license notices.
 
-Traditional APK
-
-```bash
-flutter build apk
-```
-
-AppBundle for Google Play
-
-```bash
-flutter build appbundle
-```
-
-### iOS
-
-```bash
-flutter build ipa
-```
-
-### macOS
-
-```bash
-flutter build macos
-```
-
-### Windows
-
-**Traditional**
-
-```bash
-flutter build windows
-```
-
-**Local MSIX App**
-
-```bash
-flutter pub run msix:create
-```
-
-**Store ready**
-
-```bash
-flutter pub run msix:create --store
-```
-
-### Linux
-
-**Traditional**
-
-```bash
-flutter build linux
-```
-
-**AppImage**
-
-```bash
-appimage-builder --recipe AppImageBuilder.yml
-```
-
-**Snap**
-
-Instructions in [localsend/snap/README.md](https://github.com/localsend/snap/blob/main/README.md)
-
-## Contributors
-
-<a href="https://github.com/localsend/localsend/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=localsend/localsend"  alt="Localsend Contributors"/>
-</a>
+[homepage]: https://localsend.org
+[github]: https://github.com/localsend/localsend
+[codeberg]: https://codeberg.org/localsend/localsend
+[protocol]: https://github.com/localsend/protocol

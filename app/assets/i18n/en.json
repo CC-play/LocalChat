@@ -1,5 +1,5 @@
 {
-  "appName": "LocalSend",
+  "appName": "LocalChat",
   "general": {
     "accept": "Accept",
     "accepted": "Accepted",
@@ -109,7 +109,7 @@
       "minimizeToTray": "Minimize to the System Tray/Menu Bar when closing",
       "launchAtStartup": "Autostart after login",
       "launchMinimized": "Autostart: Start hidden",
-      "showInContextMenu": "Show LocalSend in context menu",
+      "showInContextMenu": "Show LocalChat in context menu",
       "animations": "Animations"
     },
     "receive": {
@@ -180,7 +180,7 @@
   },
   "networkInterfacesPage": {
     "title": "Network Interfaces",
-    "info": "By default, LocalSend uses all available network interfaces. You can exclude unwanted networks here. You need to restart the server to apply the changes.",
+    "info": "By default, LocalChat uses all available network interfaces. You can exclude unwanted networks here. You need to restart the server to apply the changes.",
     "preview": "Preview",
     "whitelist": "Whitelist",
     "blacklist": "Blacklist"
@@ -214,7 +214,7 @@
     "messageTooLong": "The message is too long (at most {max} characters).",
     "peerDeclined": "The receiver declined it.",
     "peerBusy": "The receiver is busy with another transfer.",
-    "peerUnreachable": "The device is not reachable. Make sure LocalSend is running on it.",
+    "peerUnreachable": "The device is not reachable. Make sure LocalChat is running on it.",
     "dropTitle": "Send these files?",
     "dropSummary": "{count} file(s), {size} in total. Send them to this chat?",
     "dropHint": "Release to send files to this chat",
@@ -279,7 +279,7 @@
   "receiveOptionsPage": {
     "title": "Options",
     "destination": "@:settingsTab.receive.destination",
-    "appDirectory": "(LocalSend folder)",
+    "appDirectory": "(LocalChat folder)",
     "saveToGallery": "@:settingsTab.receive.saveToGallery",
     "saveToGalleryOff": "Turned off automatically because there are folders."
   },
@@ -331,16 +331,16 @@
     "autoAccept": "Automatically accept requests",
     "requirePin": "Require PIN",
     "pinHint": "The PIN is \"{pin}\"",
-    "encryptionHint": "LocalSend uses a self-signed certificate. You need to accept it in your browser.",
+    "encryptionHint": "LocalChat uses a self-signed certificate. You need to accept it in your browser.",
     "pendingRequests": "Pending requests: {n}"
   },
   "webReceivePage": {
     "title": "Receive via link"
   },
   "aboutPage": {
-    "title": "About LocalSend",
+    "title": "About LocalChat",
     "description": [
-      "LocalSend is a free, open-source app that allows you to securely share files and messages with nearby devices over your local network without needing an internet connection.",
+      "LocalChat is a free, open-source app that allows you to securely share files and messages with nearby devices over your local network without needing an internet connection.",
       "This app is available on Android, iOS, macOS, Windows and Linux. You can find all download options on the official homepage."
     ],
     "author": "Author",
@@ -506,7 +506,7 @@
     },
     "localNetworkUnauthorized": {
       "title": "@:dialogs.noPermission.title",
-      "description": "LocalSend can't find other devices without having the permission to scan the local network. Please grant this permission in the settings.",
+      "description": "LocalChat can't find other devices without having the permission to scan the local network. Please grant this permission in the settings.",
       "gotoSettings": "Settings"
     },
     "messageInput": {
@@ -553,7 +553,7 @@
       "title": "Send modes",
       "single": "Sends files to one recipient. Selection will be cleared after finished files transfer.",
       "multiple": "Sends files to multiple recipients. Selection will not be cleared after finished files transfer.",
-      "link": "Recipients who do not have LocalSend installed can download the selected files by opening the link in their browser."
+      "link": "Recipients who do not have LocalChat installed can download the selected files by opening the link in their browser."
     },
     "zoom": {
       "title": "URL"
@@ -566,7 +566,7 @@
   "tray": {
     "@info": "Apple Guidelines are very strict about the \"close\" wording.",
     "open": "@:general.open",
-    "close": "Quit LocalSend",
+    "close": "Quit LocalChat",
     "closeWindows": "Exit"
   },
   "web": {

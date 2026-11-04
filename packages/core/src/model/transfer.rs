@@ -233,7 +233,7 @@ mod tests {
     #[test]
     fn reads_file_timestamps() {
         let path =
-            std::env::temp_dir().join(format!("localsend-metadata-{}", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("localchat-metadata-{}", uuid::Uuid::new_v4()));
         std::fs::write(&path, b"hello").unwrap();
         // 100 ns aligned, so the values are exactly representable on NTFS.
         let modified = SystemTime::UNIX_EPOCH + Duration::new(1_600_000_000, 123_456_700);
@@ -256,7 +256,7 @@ mod tests {
     #[test]
     fn reads_no_metadata_from_missing_file() {
         assert!(
-            FileMetadata::from_path(std::path::Path::new("/nonexistent/localsend-test")).is_none()
+            FileMetadata::from_path(std::path::Path::new("/nonexistent/localchat-test")).is_none()
         );
     }
 

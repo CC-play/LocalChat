@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:localsend_app/provider/settings_provider.dart';
-import 'package:localsend_isolates/util/sleep.dart';
+import 'package:localchat_app/provider/settings_provider.dart';
+import 'package:localchat_isolates/util/sleep.dart';
 import 'package:refena_flutter/refena_flutter.dart';
 
 class InitialFadeTransition extends StatefulWidget {

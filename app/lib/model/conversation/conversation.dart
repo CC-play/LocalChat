@@ -9,7 +9,7 @@
 library;
 
 import 'package:collection/collection.dart';
-import 'package:localsend_isolates/model/file_type.dart';
+import 'package:localchat_isolates/model/file_type.dart';
 
 
 /// 会话中单条消息的方向。
@@ -20,7 +20,7 @@ enum ChatMessageDirection {
 
 /// 会话中单条消息的类型。
 enum ChatMessageKind {
-  /// 纯文本消息（LocalSend 的 message 字段）。
+  /// 纯文本消息（LocalSend 协议的 message 字段）。
   text,
 
   /// 文件消息。

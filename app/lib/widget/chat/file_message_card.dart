@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:localsend_app/model/conversation/conversation.dart';
-import 'package:localsend_isolates/model/file_type.dart';
-import 'package:localsend_isolates/util/file_size_helper.dart';
+import 'package:localchat_app/model/conversation/conversation.dart';
+import 'package:localchat_isolates/model/file_type.dart';
+import 'package:localchat_isolates/util/file_size_helper.dart';
 
 IconData iconForFileType(FileType? type) {
   return switch (type) {

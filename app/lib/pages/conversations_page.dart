@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:localsend_app/gen/strings.g.dart';
-import 'package:localsend_app/model/conversation/conversation.dart';
-import 'package:localsend_app/pages/conversation_page.dart';
-import 'package:localsend_app/provider/conversation_provider.dart';
+import 'package:localchat_app/gen/strings.g.dart';
+import 'package:localchat_app/model/conversation/conversation.dart';
+import 'package:localchat_app/pages/conversation_page.dart';
+import 'package:localchat_app/provider/conversation_provider.dart';
 import 'package:refena_flutter/refena_flutter.dart';
 import 'package:routerino/routerino.dart';
 
@@ -15,7 +15,7 @@ class ConversationsPage extends StatelessWidget {
     final conversations = context.watch(conversationProvider);
 
     return Scaffold(
-      // 这里不用 basicLocalSendAppbar：列表页需要 actions，而该 helper 目前只接受标题。
+      // 这里不用 basicLocalChatAppbar：列表页需要 actions，而该 helper 目前只接受标题。
       appBar: AppBar(
         title: Text(t.conversation.title),
         actions: [

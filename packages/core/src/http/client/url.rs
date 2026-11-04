@@ -98,7 +98,7 @@ mod tests {
         .to_string();
         assert_eq!(
             url,
-            "https://fe80--1s3.scoped.localsend.internal:53317/api/localsend/v2/register"
+            "https://fe80--1s3.scoped.localchat.internal:53317/api/localsend/v2/register"
         );
     }
 

@@ -1,6 +1,6 @@
 import 'package:collection/collection.dart';
-import 'package:localsend_app/model/conversation/conversation.dart';
-import 'package:localsend_app/provider/persistence_provider.dart';
+import 'package:localchat_app/model/conversation/conversation.dart';
+import 'package:localchat_app/provider/persistence_provider.dart';
 import 'package:refena_flutter/refena_flutter.dart';
 
 /// 会话状态：全部会话，按最近活动时间倒序。

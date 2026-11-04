@@ -1,6 +1,6 @@
-import 'package:localsend_app/model/conversation/conversation.dart';
-import 'package:localsend_app/provider/conversation_provider.dart';
-import 'package:localsend_isolates/model/file_type.dart';
+import 'package:localchat_app/model/conversation/conversation.dart';
+import 'package:localchat_app/provider/conversation_provider.dart';
+import 'package:localchat_isolates/model/file_type.dart';
 import 'package:refena_flutter/refena_flutter.dart';
 import 'package:test/test.dart';
 
