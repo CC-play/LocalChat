@@ -707,6 +707,7 @@ class _ComposerState extends State<_Composer> {
   /// 所以 Android 上保持引擎默认语义：
   /// - 软键盘回车 / 输入框右侧按钮 → 发送
   /// - 外接键盘的回车 → 换行
+  /// - 软键盘上根本没有换行键 → 长按右侧发送按钮补一个，见 [_handleSendButtonLongPress]
   void _handleTextChanged() {
     final hasText = _controller.text.trim().isNotEmpty;
     if (hasText != _hasText) {
@@ -729,6 +730,21 @@ class _ComposerState extends State<_Composer> {
       return;
     }
     unawaited(_sendText());
+  }
+
+  /// [FORK] 长按发送按钮 = 插入换行（Android 上唯一可行的换行入口）。
+  ///
+  /// 软键盘的键是输入法自己画的：`textInputAction: send` 时回车被渲染成 ➤，
+  /// 输入法里就再没有「换行」这个键了。输入法的按键事件又不经过框架
+  /// （见 [_handleTextChanged] 上方的实测），所以「长按软键盘回车」这件事
+  /// 在框架层无从监听 —— 能挂手势的只有我们自己画的这个按钮。
+  void _handleSendButtonLongPress() {
+    if (_busy || _controller.text.isEmpty) {
+      return;
+    }
+    // 同样的手指动作平时是「发送」，给一点触觉反馈，免得以为按漏了。
+    unawaited(HapticFeedback.selectionClick());
+    _insertText('\n');
   }
 
   void _showMessage(String message) {
@@ -1017,19 +1033,41 @@ class _ComposerState extends State<_Composer> {
               ),
             ),
             const SizedBox(width: 4),
-            IconButton(
-              tooltip: t.conversation.send,
-              icon: _busy
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.send),
-              onPressed: _hasText && !_busy ? _sendText : null,
-            ),
+            _buildSendButton(),
           ],
         ),
+      ),
+    );
+  }
+
+  /// 发送按钮。Android 上长按 = 换行，见 [_handleSendButtonLongPress]。
+  Widget _buildSendButton() {
+    final button = IconButton(
+      // Android 上长按已经被换行占用：tooltip 默认也是「长按弹出」，
+      // 两个长按识别器会抢同一个手势，所以这里不给它 tooltip（下面用
+      // 手动触发的 Tooltip 补回无障碍标签）。
+      tooltip: Platform.isAndroid ? null : t.conversation.send,
+      icon: _busy
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.send),
+      onPressed: _hasText && !_busy ? _sendText : null,
+    );
+
+    if (!Platform.isAndroid) {
+      return button;
+    }
+
+    // `triggerMode: manual`：只保留语义标签，绝不自己弹，把长按让给换行。
+    return Tooltip(
+      message: t.conversation.send,
+      triggerMode: TooltipTriggerMode.manual,
+      child: GestureDetector(
+        onLongPress: _handleSendButtonLongPress,
+        child: button,
       ),
     );
   }
