@@ -451,6 +451,9 @@ class Translations$conversation$en {
   /// en: 'Click to resend'
   String get retryHint => 'Click to resend';
 
+  /// en: 'Delete message'
+  String get deleteBubble => 'Delete message';
+
   /// en: 'The original file is gone, can't resend'
   String get fileMissing => 'The original file is gone, can\'t resend';
 

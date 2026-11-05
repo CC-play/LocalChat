@@ -25,6 +25,12 @@ class MessageBubble extends StatelessWidget {
   /// [FORK] 右键（桌面）点击气泡时回调，参数是全局坐标，用于在该点弹出菜单。
   final ValueChanged<Offset>? onSecondaryTap;
 
+  /// [FORK] 长按（移动端）气泡时回调，参数是全局坐标，用于在该点弹出菜单。
+  ///
+  /// 手机上没有任何「右键」入口，长按是气泡菜单唯一的打开方式。
+  /// 桌面端不接这个手势（鼠标长按没有语义），保持原来的拖选 + 右键。
+  final ValueChanged<Offset>? onLongPress;
+
   /// [FORK] 点击「发送失败」的红色感叹号时重发。
   final VoidCallback? onRetry;
 
@@ -45,6 +51,7 @@ class MessageBubble extends StatelessWidget {
     required this.peerInitial,
     this.onFileTap,
     this.onSecondaryTap,
+    this.onLongPress,
     this.onRetry,
     this.onCancel,
     this.onStalePending,
@@ -151,6 +158,8 @@ class MessageBubble extends StatelessWidget {
       // 用 translucent：子节点（文件卡片）自己的点击照旧生效。
       behavior: HitTestBehavior.translucent,
       onSecondaryTapUp: onSecondaryTap == null ? null : (details) => onSecondaryTap!(details.globalPosition),
+      // [FORK] 手机上的右键：长按。桌面端 onLongPress 为 null，不参与手势竞技场。
+      onLongPressStart: onLongPress == null ? null : (details) => onLongPress!(details.globalPosition),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
         child: Row(

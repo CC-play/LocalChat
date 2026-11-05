@@ -550,7 +550,40 @@ Dart 侧收不到。要支持得给 `TextField` 传 `contextMenuBuilder`，在�
 - [ ] 后台保活：实测切后台 10 秒内进程 `isFrozen=true`，之后完全收不到消息。
       要不要上一个常驻前台服务（或引导用户把 App 加进「后台高耗电/自启动」白名单），
       让「后台收消息」真的可用
+      → **2026-11-05 决定：先不做，只记在案**。设计与代价见 §5.1
 - [ ] 拖拽确认卡片在手机上是否改用底部 Sheet（当前是居中 Dialog）
+
+### 5.1 后台保活（本轮不做，方案留档）
+
+**现状（真机实测，vivo / Android）**
+
+- 按 HOME 后 1 秒内仍能收消息、能弹通知；约 10 秒后 `dumpsys activity processes` 里
+  `isFrozen=true`，53317 端口的监听随进程一起被冻，对方发任何东西都是 TLS 握手超时。
+- 不是我们的 bug，也不需要改 Dart 代码：Android 的 cached-app freezer 对「无前台服务、
+  无白名单」的应用就是这么处理的。通知功能本身是好的，只是那时没有内容可通知。
+
+**三条可选路子**
+
+| 方案 | 做法 | 代价 |
+|---|---|---|
+| A. 常驻前台服务（唯一真正可靠） | 单开一条 `IMPORTANCE_LOW` 且**静音**的常驻通知，进程因此不被冻结 | 状态栏长期挂一条通知；耗电增加；vivo 上仍需用户允许「自启动」 |
+| B. 只做引导 | 设置页加一条说明 + 「去设置」按钮，引导用户开「后台高耗电 / 自启动」白名单 | 不改代码即可上线，但厂商策略差异大，vivo 上不保证有效 |
+| C. 不处理 | 保持现状：后台只有刚切走那几秒可用 | 「后台收消息」实际不可用，只能靠打开 App 拉取 |
+
+**如果要做 A（实现草图，别重新设计）**
+
+- 不要复用传输那条前台服务通知（它是一个独立 `NotificationChannel`，`LOW` 且不可横幅），
+  也不要用现成的 `flutter_foreground_task`（它自带的 LOW 通知文案不可改）。
+  照 §3.9 的通知通道写法自建第二个 channel，例如 `localchat_keepalive`，
+  `IMPORTANCE_LOW`、`setSilent(true)`、`setOngoing(true)`、`setShowWhen(false)`。
+- 入口：`MainActivity` 的 MethodChannel 加 `startKeepAlive` / `stopKeepAlive`，
+  Dart 侧在设置页给一个开关，默认**关**（用户明确知道它会常驻一条通知再开）。
+- 必须在 `startForegroundService` 后 5 秒内 `startForeground`，否则 ANR；
+  Android 13+ 前台服务若声明类型要选对（`dataSync` 或 `specialUse`），
+  14+ 还需在 manifest 里写明用途，否则启动即崩。
+- 打开后 `adb shell dumpsys activity processes | grep isFrozen` 应不再出现 `true`，
+  用 §3.9 的验证脚本重跑「后台 30 秒 / 5 分钟各发一条」。
+- 关掉开关必须 `stopForeground(STOP_FOREGROUND_REMOVE)` + `stopSelf()`，否则通知摘不掉。
 
 ---
 

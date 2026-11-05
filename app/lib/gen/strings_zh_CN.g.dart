@@ -383,6 +383,8 @@ class Translations$conversation$zh_CN extends Translations$conversation$en {
   @override
   String get retryHint => '点击重发';
   @override
+  String get deleteBubble => '删除该条记录';
+  @override
   String get fileMissing => '原文件已经不在了，无法重发';
   @override
   String get notificationsOff => '通知已关闭';

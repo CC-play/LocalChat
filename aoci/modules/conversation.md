@@ -141,7 +141,38 @@ LocalChat **没有**可调的「发送超时」：对端 App 没开时 prepare-u
 - 确定态与不确定态共用同一个 `_bar()`，固定 96×3，切换时不跳布局。
 - 秒数由 `_SendProgressFooter` 自己的 1s ticker 驱动（只重建这一行小字），同一 ticker 还负责 `chatSendWatchdogTimeout` 的兜底（见「主动取消与界面兜底」）。
 
-## 文字选区 / 复制菜单
+## 气泡菜单：复制 / 删除该条记录
+
+菜单由页面统一弹（`_showMessageMenu`），桌面右键、移动端长按、桌面拖选三条入口共用一份。
+
+| 入口 | 平台 | 菜单项 |
+|---|---|---|
+| 气泡右键（`MessageBubble.onSecondaryTap`） | 桌面 | 复制 + 删除该条记录 |
+| 气泡长按（`MessageBubble.onLongPress`） | 移动端 | 复制 + 删除该条记录 |
+| 拖选 / 双击选词后自动弹（`Listener.onPointerUp` → `_autoShowMenu`） | 桌面 | 只有复制（选区不属于某一条消息） |
+
+**文字选区只在桌面开**（`_selectableTextSupported`）：移动端 `SelectionArea` 的选词手势
+会在手势竞技场里赢走长按，而它的工具条又被 `contextMenuBuilder` 置空，导致手机上
+选中文字**没有任何复制入口**——占着长按却不可用。所以移动端不套 `SelectionArea`，
+把长按让给菜单，「复制」变成菜单项反而可用。
+
+### 删除该条记录
+
+`_deleteMessage(message)` 按固定顺序做三件事：
+
+1. **还在 `pending` 的先取消**（`cancelChatMessage`）：气泡马上要从列表消失，
+   不取消的话后台会把文件继续传完，对端照样收到。
+2. **删接收历史里同 id 的条目**（`RemoveHistoryEntryAction(message.id)`）：
+   只有收到的文件才有对应条目（`entryId == fileId == message.id`），
+   与 §「文件：两边都留，但删除联动」正好是反方向，两个视图始终一致。
+3. **删会话里的这条消息**（`DeleteChatMessagesAction({id})`）。
+   删空时会连会话一起移除，页面随即 `maybePop` 退回列表——
+   否则留在页上只会看到「该会话已被删除」。
+   （第 2 步内部也会联动删会话消息，第 3 步此时是幂等空转。）
+
+不删磁盘上的文件：删除的是「记录」，不是用户的文件。
+
+## 文字选区的两个实现坑
 
 `conversation_page.dart` 用 `SelectionArea` 让气泡文字可选，但**菜单是自己弹的**，不走框架工具条：
 

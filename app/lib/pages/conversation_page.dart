@@ -12,6 +12,7 @@ import 'package:localchat_app/gen/strings.g.dart';
 import 'package:localchat_app/model/conversation/conversation.dart';
 import 'package:localchat_app/model/cross_file.dart';
 import 'package:localchat_app/provider/conversation_provider.dart';
+import 'package:localchat_app/provider/receive_history_provider.dart';
 import 'package:localchat_app/util/conversation/clipboard_image.dart';
 import 'package:localchat_app/util/conversation/conversation_media_picker.dart';
 import 'package:localchat_app/util/conversation/conversation_sender.dart';
@@ -25,8 +26,10 @@ import 'package:localchat_isolates/model/device.dart';
 import 'package:localchat_isolates/model/file_type.dart';
 import 'package:refena_flutter/refena_flutter.dart';
 
-/// 气泡右键 / 选中后弹出的菜单项。目前只有复制，留枚举方便后续加「转发」「删除」。
-enum _ChatMenuAction { copy }
+/// 气泡右键 / 长按 / 选中后弹出的菜单项。
+///
+/// [FORK] 「删除该条记录」是本 fork 加的；「复制」沿用上游的选区带出逻辑。
+enum _ChatMenuAction { copy, delete }
 
 /// 单个对端设备的会话窗口。
 class ConversationPage extends StatefulWidget {
@@ -211,24 +214,68 @@ class _ConversationPageState extends State<ConversationPage> {
       if (!_selectionTouched || selected == null || selected.isEmpty) {
         continue;
       }
-      await _showCopyMenu(fallbackPosition, selected);
+      await _showMessageMenu(position: fallbackPosition, text: selected);
       return;
     }
   }
 
   /// 右键气泡：有选区就用选区，否则复制这一条气泡的正文。
-  void _handleBubbleSecondaryTap(Offset position, ChatMessage message) {
+  ///
+  /// [FORK] 菜单里除「复制」外还有「删除该条记录」，所以这里把整条 message 传下去。
+  void _handleBubbleMenu(Offset position, ChatMessage message) {
     final body = message.kind == ChatMessageKind.text ? (message.text ?? '') : (message.fileName ?? '');
-    if (body.isEmpty) {
-      return;
-    }
     final selected = _selectedText;
     // 选区必须确实落在这一条气泡里，才按「复制选中部分」处理，否则容易复制到别处的内容。
     final text = (selected != null && selected.isNotEmpty && body.contains(selected)) ? selected : body;
-    unawaited(_showCopyMenu(position, text));
+    unawaited(
+      _showMessageMenu(
+        position: position,
+        message: message,
+        text: text.isEmpty ? null : text,
+      ),
+    );
   }
 
-  Future<void> _showCopyMenu(Offset position, String text) async {
+  /// [FORK] 删除单条消息（文本气泡与文件卡片共用）。
+  ///
+  /// 三件事按顺序做，顺序不能换：
+  /// 1. 还在「发送中」的先取消 —— 否则气泡从列表里消失后，后台仍会把文件传完；
+  /// 2. 删接收历史里同 id 的条目（只有**收到的文件**才有，`entryId == fileId == message.id`），
+  ///    两个视图是同一份数据的两种呈现，用户删的是「这条记录」，不该只删一半；
+  /// 3. 删会话里的这条消息。`DeleteChatMessagesAction` 在删空时会一并移除会话。
+  Future<void> _deleteMessage(ChatMessage message) async {
+    final ref = context.ref;
+
+    if (message.status == ChatMessageStatus.pending) {
+      final target = _currentTarget();
+      if (target != null) {
+        await cancelChatMessage(
+          ref: ref,
+          target: target,
+          messageId: message.id,
+          errorMessage: t.conversation.sendCancelled,
+        );
+      }
+    }
+
+    await ref.redux(receiveHistoryProvider).dispatchAsync(RemoveHistoryEntryAction(message.id));
+    await ref.redux(conversationProvider).dispatchAsync(DeleteChatMessagesAction({message.id}));
+
+    if (!mounted) {
+      return;
+    }
+    // 会话被删空时整条会话都没了，留在页面上只会看到「该会话已被删除」，直接退回列表。
+    final stillExists = ref.read(conversationProvider).any((c) => c.peerFingerprint == widget.peerFingerprint);
+    if (!stillExists) {
+      unawaited(Navigator.of(context).maybePop());
+    }
+  }
+
+  Future<void> _showMessageMenu({
+    required Offset position,
+    ChatMessage? message,
+    String? text,
+  }) async {
     final overlay = Overlay.of(context).context.findRenderObject();
     if (overlay is! RenderBox || _menuOpen) {
       return;
@@ -255,18 +302,36 @@ class _ConversationPageState extends State<ConversationPage> {
           side: BorderSide(color: theme.colorScheme.outlineVariant),
         ),
         items: [
-          PopupMenuItem(
-            value: _ChatMenuAction.copy,
-            height: 40,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.copy, size: 16),
-                const SizedBox(width: 10),
-                Text(t.general.copy),
-              ],
+          // 选中文字拖出来的菜单没有具体消息可删，只有复制。
+          if (text != null && text.isNotEmpty)
+            PopupMenuItem(
+              value: _ChatMenuAction.copy,
+              height: 40,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.copy, size: 16),
+                  const SizedBox(width: 10),
+                  Text(t.general.copy),
+                ],
+              ),
             ),
-          ),
+          if (message != null)
+            PopupMenuItem(
+              value: _ChatMenuAction.delete,
+              height: 40,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.delete_outline, size: 16, color: theme.colorScheme.error),
+                  const SizedBox(width: 10),
+                  Text(
+                    t.conversation.deleteBubble,
+                    style: TextStyle(color: theme.colorScheme.error),
+                  ),
+                ],
+              ),
+            ),
         ],
       );
     } finally {
@@ -276,13 +341,22 @@ class _ConversationPageState extends State<ConversationPage> {
     if (!mounted) {
       return;
     }
-    // 复制完顺手取消高亮，避免残留一片蓝色选区。
+    // 关掉菜单就取消高亮，避免残留一片蓝色选区。
     _selectionKey.currentState?.selectableRegion.clearSelection();
     _selectedText = null;
     _selectionTouched = false;
 
-    if (action == _ChatMenuAction.copy) {
-      await Clipboard.setData(ClipboardData(text: text));
+    switch (action) {
+      case _ChatMenuAction.copy:
+        if (text != null) {
+          await Clipboard.setData(ClipboardData(text: text));
+        }
+      case _ChatMenuAction.delete:
+        if (message != null) {
+          await _deleteMessage(message);
+        }
+      case null:
+        break;
     }
   }
 
@@ -345,9 +419,7 @@ class _ConversationPageState extends State<ConversationPage> {
       return;
     }
 
-    final conversation = context.ref
-        .read(conversationProvider)
-        .firstWhereOrNull((c) => c.peerFingerprint == widget.peerFingerprint);
+    final conversation = context.ref.read(conversationProvider).firstWhereOrNull((c) => c.peerFingerprint == widget.peerFingerprint);
     if (conversation == null) {
       return;
     }
@@ -421,57 +493,44 @@ class _ConversationPageState extends State<ConversationPage> {
                 Expanded(
                   child: messages.isEmpty
                       ? Center(child: Text(t.conversation.noMessages))
-                      : SelectionArea(
-                          key: _selectionKey,
-                          // 框架自带的工具栏在桌面端只在右键时出现，且无法定制成「只有复制」；
-                          // 这里清空它，改由 _handlePointerUp / 右键回调自己弹菜单。
-                          contextMenuBuilder: (context, state) => const SizedBox.shrink(),
-                          onSelectionChanged: _handleSelectionChanged,
-                          child: Listener(
-                            onPointerDown: _handlePointerDown,
-                            onPointerUp: _handlePointerUp,
-                            child: ListView.builder(
-                              reverse: true,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              itemCount: messages.length,
-                              itemBuilder: (context, index) {
-                                // reverse: true 时 index 0 是最新一条。
-                                final i = messages.length - 1 - index;
-                                final msg = messages[i];
-                                final showDate = i == 0 || _needsDateSeparator(messages[i - 1].timestamp, msg.timestamp);
+                      : _wrapWithSelection(
+                          ListView.builder(
+                            reverse: true,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            itemCount: messages.length,
+                            itemBuilder: (context, index) {
+                              // reverse: true 时 index 0 是最新一条。
+                              final i = messages.length - 1 - index;
+                              final msg = messages[i];
+                              final showDate = i == 0 || _needsDateSeparator(messages[i - 1].timestamp, msg.timestamp);
 
-                                return Column(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                                  children: [
-                                    if (showDate) _DateLabel(timestamp: msg.timestamp),
-                                    MessageBubble(
-                                      message: msg,
-                                      peerInitial: initial,
-                                      onSecondaryTap: (position) => _handleBubbleSecondaryTap(position, msg),
-                                      onRetry: msg.status == ChatMessageStatus.failed
-                                          ? () => unawaited(_retryMessage(msg))
-                                          : null,
-                                      onCancel: msg.status == ChatMessageStatus.pending
-                                          ? () => unawaited(_cancelMessage(msg))
-                                          : null,
-                                      onStalePending: msg.status == ChatMessageStatus.pending
-                                          ? () => unawaited(_expireStaleMessage(msg))
-                                          : null,
-                                      staleAfter: chatSendWatchdogTimeout,
-                                      onFileTap: msg.filePath == null
-                                          ? null
-                                          : () async {
-                                              await openFile(
-                                                context,
-                                                msg.fileType ?? FileType.other,
-                                                msg.filePath!,
-                                              );
-                                            },
-                                    ),
-                                  ],
-                                );
-                              },
-                            ),
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  if (showDate) _DateLabel(timestamp: msg.timestamp),
+                                  MessageBubble(
+                                    message: msg,
+                                    peerInitial: initial,
+                                    // 桌面：右键；移动端：长按。两者走同一个菜单。
+                                    onSecondaryTap: (position) => _handleBubbleMenu(position, msg),
+                                    onLongPress: _selectableTextSupported ? null : (position) => _handleBubbleMenu(position, msg),
+                                    onRetry: msg.status == ChatMessageStatus.failed ? () => unawaited(_retryMessage(msg)) : null,
+                                    onCancel: msg.status == ChatMessageStatus.pending ? () => unawaited(_cancelMessage(msg)) : null,
+                                    onStalePending: msg.status == ChatMessageStatus.pending ? () => unawaited(_expireStaleMessage(msg)) : null,
+                                    staleAfter: chatSendWatchdogTimeout,
+                                    onFileTap: msg.filePath == null
+                                        ? null
+                                        : () async {
+                                            await openFile(
+                                              context,
+                                              msg.fileType ?? FileType.other,
+                                              msg.filePath!,
+                                            );
+                                          },
+                                  ),
+                                ],
+                              );
+                            },
                           ),
                         ),
                 ),
@@ -490,6 +549,36 @@ class _ConversationPageState extends State<ConversationPage> {
     return _PasteShortcuts(
       onPaste: () => _composerKey.currentState?.handlePaste(),
       child: content,
+    );
+  }
+
+  /// [FORK] 文字选区只在桌面端开启。
+  ///
+  /// 移动端的长按要留给气泡菜单：[SelectionArea] 的选词手势会在手势竞技场里赢走
+  /// 长按（它比气泡更靠近子节点），而它自带的工具条又被我们置空了
+  /// （`contextMenuBuilder` 返回 shrink），于是手机上选中文字**没有任何复制入口**——
+  /// 留一个只能看不能用的选区没有意义。把长按让给菜单后，「复制」变成菜单项，
+  /// 反而比之前可用。
+  ///
+  /// 桌面端完全维持原行为：拖选 / 双击选词即弹菜单，右键气泡也弹。
+  static bool get _selectableTextSupported => Platform.isWindows || Platform.isMacOS || Platform.isLinux;
+
+  /// 桌面端给消息列表套上选区能力，移动端原样返回。
+  Widget _wrapWithSelection(Widget child) {
+    if (!_selectableTextSupported) {
+      return child;
+    }
+    return SelectionArea(
+      key: _selectionKey,
+      // 框架自带的工具栏在桌面端只在右键时出现，且无法定制成「只有复制」；
+      // 这里清空它，改由 _handlePointerUp / 右键回调自己弹菜单。
+      contextMenuBuilder: (context, state) => const SizedBox.shrink(),
+      onSelectionChanged: _handleSelectionChanged,
+      child: Listener(
+        onPointerDown: _handlePointerDown,
+        onPointerUp: _handlePointerUp,
+        child: child,
+      ),
     );
   }
 
@@ -602,7 +691,8 @@ class _DateLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final local = timestamp.toLocal();
-    final text = '${local.year}-${_two(local.month)}-${_two(local.day)} '
+    final text =
+        '${local.year}-${_two(local.month)}-${_two(local.day)} '
         '${_two(local.hour)}:${_two(local.minute)}';
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
