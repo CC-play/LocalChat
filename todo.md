@@ -324,6 +324,45 @@ cargokit 也就为每个 ABI 跑一遍 cargo（**20 分钟还没编完**）。
 
 ---
 
+### 3.9 2026-11-05 消息通知
+
+之前收到文本消息**没有任何系统提醒**：App 在后台时，对方发了什么用户只能事后自己翻。这次补上。
+
+**实现要点**
+- 原生侧加在 `MainActivity` 既有的 MethodChannel 上（新增 `showChatNotification` /
+  `clearChatNotification` / `getChatNotificationStatus` / `openChatNotificationSettings` /
+  `chatNotificationsReady`），**不引入 `flutter_local_notifications`**：项目已有这条通道，
+  而现成的 `flutter_foreground_task` 只会弹它那个 LOW 优先级、静音、不可横幅的前台服务通知。
+- 渠道 `localchat_messages` 用 `IMPORTANCE_HIGH`（响铃 / 震动 / 亮屏），与传输进度的
+  `localchat_foreground_service`（LOW）分开 —— 一个要尽量安静，一个必须吵起来。
+- 同一对端合并成一封通知：id = 指纹哈希，`InboxStyle` 最多 6 行，超出显示 `+N`，未读数累加。
+- 只在 App **不在前台**时弹。前台判断直接读 `WidgetsBinding.instance.lifecycleState`，不维护副本。
+- 点通知 → `PendingIntent` 带对端指纹 → 热启动走 `onNewIntent`、冷启动走 `chatNotificationsReady`
+  回放 → Dart 侧 push `ConversationPage`；点开即视为已读，通知和未读累计一起清掉。
+- 会话列表顶部在通知不可用时显示「通知已关闭」横幅：点「去开启」先试权限框，拿不到就跳系统设置，
+  从设置回来（`AppLifecycleListener.onResume`）横幅自动消失。
+
+**真机实测（vivo / Android 15，同一 Wi-Fi，假对端 `lspeer/send2.py`）**
+
+| 场景 | 结果 |
+|---|---|
+| App 在后台收到文本 | 通知栏出现「Fake Peer / notify-background-1」，`dumpsys` 里渠道 `localchat_messages`、`mImportance=4` |
+| 后台连发三条 | 只有**一封**通知，展开后是 merge-a / merge-b / merge-c 三行 |
+| 点通知 | 直接进入对应会话页，通知同时消失 |
+| App 在前台收到文本 | 不弹通知（前台判断见下条坑 2） |
+| `pm revoke POST_NOTIFICATIONS` 后重启 | 会话列表顶部出现提示条；点「去开启」跳到 vivo 的「允许通知」页；打开开关返回，横幅自动消失 |
+
+**踩到的坑**
+1. **vivo 不弹横幅**：`AppSettings` 里 `isShowHeadsUp=false`（vivo 默认关掉第三方 App 的悬浮通知）。
+   即使渠道是 `IMPORTANCE_HIGH`，通知也只进通知栏 + 响铃，不会从顶部弹出。这是系统设置，
+   代码改不了；提示条文案因此写的是「后台收到新消息时不会有提醒」，避免让用户以为一定会弹出来。
+2. **前台判断不要自己维护副本**：最初用 `LifeCycleWatcher` 回调维护 `bool _foreground`，
+   出现过一次「后台收到消息但没提醒」。改为直接读 `WidgetsBinding.instance.lifecycleState` 后一致。
+3. 锁屏状态下 `adb install` 会直接失败（`INSTALL_FAILED_ABORTED: User rejected permissions`），
+   要先解锁手机；不是包的问题。
+
+---
+
 ## 4. 需要知道的平台差异
 
 ### 4.1 回车键：Android 上无法接管（已实测，别再试了）

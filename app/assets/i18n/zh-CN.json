@@ -221,7 +221,10 @@
     "dropFoldersIgnored": "暂不支持拖入文件夹，已跳过。",
     "pasteSkipped": "有部分内容无法读取，已跳过。",
     "retryHint": "点击重发",
-    "fileMissing": "原文件已经不在了，无法重发"
+    "fileMissing": "原文件已经不在了，无法重发",
+    "notificationsOff": "通知已关闭",
+    "notificationsOffHint": "后台收到新消息时不会有提醒",
+    "notificationsEnable": "去开启"
   },
   "receiveHistoryPage": {
     "title": "历史",

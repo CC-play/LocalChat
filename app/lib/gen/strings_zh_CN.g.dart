@@ -380,6 +380,12 @@ class Translations$conversation$zh_CN extends Translations$conversation$en {
   String get retryHint => '点击重发';
   @override
   String get fileMissing => '原文件已经不在了，无法重发';
+  @override
+  String get notificationsOff => '通知已关闭';
+  @override
+  String get notificationsOffHint => '后台收到新消息时不会有提醒';
+  @override
+  String get notificationsEnable => '去开启';
 }
 
 // Path: receiveHistoryPage

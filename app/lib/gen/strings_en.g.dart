@@ -447,6 +447,15 @@ class Translations$conversation$en {
 
   /// en: 'The original file is gone, can't resend'
   String get fileMissing => 'The original file is gone, can\'t resend';
+
+  /// en: 'Notifications are off'
+  String get notificationsOff => 'Notifications are off';
+
+  /// en: 'No alerts for new messages in the background.'
+  String get notificationsOffHint => 'No alerts for new messages in the background.';
+
+  /// en: 'Turn on'
+  String get notificationsEnable => 'Turn on';
 }
 
 // Path: receiveHistoryPage

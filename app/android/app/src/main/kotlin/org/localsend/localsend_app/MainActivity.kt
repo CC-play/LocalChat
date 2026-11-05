@@ -2,6 +2,9 @@ package org.localsend.localsend_app
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.ClipboardManager
 import android.content.ContentResolver
 import android.content.Context
@@ -14,6 +17,8 @@ import android.os.Environment
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import android.provider.Settings
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
@@ -38,9 +43,40 @@ private const val API_LEVEL_ANDROID_17 = 37
 private const val MAX_CLIPBOARD_FILES = 20
 private const val MAX_CLIPBOARD_FILE_BYTES = 256L * 1024 * 1024
 
+// [FORK] 聊天消息通知。
+//
+// 与传输进度用的前台服务通知是两套东西：那个由 flutter_foreground_task 以 LOW 优先级
+// 常驻、静音、不能弹出；消息提醒必须能横幅 + 响铃 + 亮屏，所以这里单独建一个
+// IMPORTANCE_HIGH 的渠道，用系统通知而不是前台服务。
+private const val CHAT_CHANNEL_ID = "localchat_messages"
+private const val EXTRA_CHAT_PEER = "localchat.chatPeer"
+
+/// 通知 id 从 1000 起：1 被前台服务占用，两者不能互相覆盖。
+private const val CHAT_NOTIFICATION_ID_BASE = 1000
+
+/// 合并同一个对端的多条消息时，通知里最多列这么多行。
+private const val MAX_INBOX_LINES = 6
+
+/// 渠道名只在第一次创建时生效；Dart 侧会传当前语言的标题，这里只是兜底。
+private const val DEFAULT_CHAT_CHANNEL_NAME = "Messages"
+
 class MainActivity : FlutterActivity() {
     private var pendingResult: MethodChannel.Result? = null
     private var pendingPermissionResult: MethodChannel.Result? = null
+
+    /// [FORK] 发通知与接收点击都走它，所以要在 configureFlutterEngine 里留一份引用。
+    private var methodChannel: MethodChannel? = null
+
+    /// [FORK] 用户点了通知、但 Dart 侧还没准备好接收时，先把对端指纹存这里。
+    private val pendingChatTaps = mutableListOf<String>()
+    private var chatTapReady = false
+
+    /// [FORK] 每个对端最近几条消息，用于合并成一封通知。
+    /// key 是对端指纹，顺序保持插入顺序，方便滚动展示最近几条。
+    private val chatHistory = LinkedHashMap<String, MutableList<String>>()
+
+    /// [FORK] 每个对端本次未读数。点开通知（或其会话被打开）后由 Dart 侧清零。
+    private val chatUnread = mutableMapOf<String, Int>()
 
     /// share_handler drops share intents arriving via onNewIntent while the Dart side
     /// is not subscribed to its media stream yet, which happens when this singleTask
@@ -51,11 +87,30 @@ class MainActivity : FlutterActivity() {
     private var shareIntentReady = false
 
     override fun onNewIntent(intent: Intent) {
+        // [FORK] 点通知进来时 Activity 是 singleTask，不会重建，只能在这里接。
+        handleChatTapIntent(intent)
         if (!shareIntentReady && (intent.action == Intent.ACTION_SEND || intent.action == Intent.ACTION_SEND_MULTIPLE)) {
             pendingShareIntents.add(intent)
             return
         }
         super.onNewIntent(intent)
+    }
+
+    /// [FORK] 把通知里的对端指纹交给 Dart；Dart 还没就绪就先攒着。
+    private fun handleChatTapIntent(intent: Intent?) {
+        val peer = intent?.getStringExtra(EXTRA_CHAT_PEER) ?: return
+        // 同一个 Intent 可能被重复消费（Activity 重建、Dart 侧又来拉一次），
+        // 消费后立刻清掉，免得同一条通知打开两次会话页。
+        intent.removeExtra(EXTRA_CHAT_PEER)
+
+        // 点了通知就是想看这个会话，未读累计和通知本身都到此为止。
+        clearChatNotification(peer)
+
+        if (chatTapReady) {
+            methodChannel?.invokeMethod("onChatNotificationTap", peer)
+        } else {
+            pendingChatTaps.add(peer)
+        }
     }
 
     private fun onShareIntentReady() {
@@ -81,10 +136,13 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        MethodChannel(
+        val channel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             CHANNEL
-        ).setMethodCallHandler { call, result ->
+        )
+        // [FORK] 通知点击要能主动回调 Dart，所以得留着这个 channel。
+        methodChannel = channel
+        channel.setMethodCallHandler { call, result ->
             when (call.method) {
                 "pickDirectory" -> {
                     pendingResult = result
@@ -149,8 +207,200 @@ class MainActivity : FlutterActivity() {
                     }
                 }
 
+                // [FORK] 聊天消息通知
+                "showChatNotification" -> handleShowChatNotification(call, result)
+
+                "clearChatNotification" -> {
+                    val peer = call.argument<String>("peerFingerprint")
+                    if (peer.isNullOrEmpty()) {
+                        result.error("INVALID_ARGUMENT", "Missing peerFingerprint", null)
+                    } else {
+                        clearChatNotification(peer)
+                        result.success(null)
+                    }
+                }
+
+                "getChatNotificationStatus" -> result.success(chatNotificationStatus())
+
+                "openChatNotificationSettings" -> {
+                    openChatNotificationSettings(call.argument<String>("channelName"))
+                    result.success(null)
+                }
+
+                "chatNotificationsReady" -> {
+                    // Dart 侧装好了回调，可以把这段时间攒下的点击补给它可以。
+                    chatTapReady = true
+                    // 冷启动：Activity 是被通知的 PendingIntent 拉起来的，
+                    // 那次 Intent 从没走过 onNewIntent。
+                    handleChatTapIntent(intent)
+                    val queued = pendingChatTaps.toList()
+                    pendingChatTaps.clear()
+                    queued.forEach { methodChannel?.invokeMethod("onChatNotificationTap", it) }
+                    result.success(null)
+                }
+
                 else -> result.notImplemented()
             }
+        }
+    }
+
+    /// [FORK] 发一条聊天消息通知。
+    ///
+    /// 同一个对端共用一封通知（同一个 id）：后续消息追加进列表并累加未读数，
+    /// 否则对方连发几句就会把通知栏刷满，也没法看出是同一个人的消息。
+    @SuppressLint("MissingPermission")
+    private fun handleShowChatNotification(call: MethodCall, result: MethodChannel.Result) {
+        val peer = call.argument<String>("peerFingerprint")
+        if (peer.isNullOrEmpty()) {
+            result.error("INVALID_ARGUMENT", "Missing peerFingerprint", null)
+            return
+        }
+
+        val channelName = call.argument<String>("channelName")?.takeIf { it.isNotBlank() } ?: DEFAULT_CHAT_CHANNEL_NAME
+        val title = call.argument<String>("title")?.takeIf { it.isNotBlank() } ?: "LocalChat"
+        val body = call.argument<String>("body") ?: ""
+
+        ensureChatChannel(channelName)
+
+        val lines = chatHistory.getOrPut(peer) { mutableListOf() }
+        lines.add(body)
+        while (lines.size > MAX_INBOX_LINES) {
+            lines.removeAt(0)
+        }
+        val unread = (chatUnread[peer] ?: 0) + 1
+        chatUnread[peer] = unread
+
+        // 权限被收回 / 整个 App 的通知被关掉时直接放过：notify 在 Android 13+ 会抛
+        // SecurityException，没必要让它炸在 Dart 侧。
+        if (!NotificationManagerCompat.from(this).areNotificationsEnabled()) {
+            result.success(false)
+            return
+        }
+
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(EXTRA_CHAT_PEER, peer)
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            notificationIdOf(peer),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+        val style = NotificationCompat.InboxStyle()
+        lines.forEach { style.addLine(it) }
+        if (unread > lines.size) {
+            style.setSummaryText("+${unread - lines.size}")
+        }
+
+        val notification = NotificationCompat.Builder(this, CHAT_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_stat_chat)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setStyle(style)
+            .setNumber(unread)
+            .setWhen(System.currentTimeMillis())
+            .setShowWhen(true)
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .build()
+
+        try {
+            NotificationManagerCompat.from(this).notify(notificationIdOf(peer), notification)
+            result.success(true)
+        } catch (e: SecurityException) {
+            result.success(false)
+        }
+    }
+
+    /// [FORK] 会话被打开（或消息已读）时撤掉这个对端的通知，并清零本地的未读累计。
+    private fun clearChatNotification(peer: String) {
+        chatUnread.remove(peer)
+        chatHistory.remove(peer)
+        NotificationManagerCompat.from(this).cancel(notificationIdOf(peer))
+    }
+
+    /// 每个对端一个稳定的通知 id。1 被传输前台服务占用，所以从 1000 起。
+    private fun notificationIdOf(peer: String): Int {
+        val slot = (peer.hashCode().toLong() and 0x7fffffff).toInt() % 10000
+        return CHAT_NOTIFICATION_ID_BASE + slot
+    }
+
+    /// 通知渠道只会在第一次创建时被读取，之后改名 / 改重要性都由用户在系统里决定。
+    private fun ensureChatChannel(channelName: String) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            return
+        }
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (manager.getNotificationChannel(CHAT_CHANNEL_ID) != null) {
+            return
+        }
+        val channel = NotificationChannel(CHAT_CHANNEL_ID, channelName, NotificationManager.IMPORTANCE_HIGH).apply {
+            enableLights(true)
+            enableVibration(true)
+        }
+        manager.createNotificationChannel(channel)
+    }
+
+    /// [FORK] 通知现在到底能不能到用户眼前。
+    ///
+    /// 三个条件缺一不可：系统给了权限、App 的通知没被关、渠道重要性不是 NONE。
+    /// vivo 这类 ROM 经常把整个 App 的通知关掉，Dart 侧据此显示提示条。
+    private fun chatNotificationStatus(): Map<String, Any> {
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val enabled = NotificationManagerCompat.from(this).areNotificationsEnabled()
+        val permissionGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        } else {
+            true
+        }
+
+        var channelExists = false
+        var channelImportance = -1000 // IMPORTANCE_UNSPECIFIED
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = manager.getNotificationChannel(CHAT_CHANNEL_ID)
+            channelExists = channel != null
+            if (channel != null) {
+                channelImportance = channel.importance
+            }
+        }
+
+        return mapOf(
+            "enabled" to enabled,
+            "permissionGranted" to permissionGranted,
+            "channelExists" to channelExists,
+            "channelImportance" to channelImportance,
+        )
+    }
+
+    /// [FORK] 跳到本 App 的消息通知渠道设置页，用户在那里能打开被关掉的通知。
+    private fun openChatNotificationSettings(channelName: String?) {
+        // 渠道没建过时渠道设置页打不开，先建一个空的。
+        ensureChatChannel(channelName?.takeIf { it.isNotBlank() } ?: DEFAULT_CHAT_CHANNEL_NAME)
+
+        val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).apply {
+                putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+                putExtra(Settings.EXTRA_CHANNEL_ID, CHAT_CHANNEL_ID)
+            }
+        } else {
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.fromParts("package", packageName, null)
+            }
+        }
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        try {
+            startActivity(intent)
+        } catch (e: Exception) {
+            // 个别 ROM 没有渠道设置页，退回应用详情，用户仍能从那里进通知管理。
+            startActivity(
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                    .apply { data = Uri.fromParts("package", packageName, null) }
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
         }
     }
 

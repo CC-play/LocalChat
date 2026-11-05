@@ -221,7 +221,10 @@
     "dropFoldersIgnored": "Folders can't be dropped here and were skipped.",
     "pasteSkipped": "Some items couldn't be read and were skipped.",
     "retryHint": "Click to resend",
-    "fileMissing": "The original file is gone, can't resend"
+    "fileMissing": "The original file is gone, can't resend",
+    "notificationsOff": "Notifications are off",
+    "notificationsOffHint": "No alerts for new messages in the background.",
+    "notificationsEnable": "Turn on"
   },
   "receiveHistoryPage": {
     "title": "History",

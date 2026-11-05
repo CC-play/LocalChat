@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:localchat_app/config/init.dart';
@@ -5,11 +7,13 @@ import 'package:localchat_app/config/init_error.dart';
 import 'package:localchat_app/config/theme.dart';
 import 'package:localchat_app/gen/strings.g.dart';
 import 'package:localchat_app/model/persistence/color_mode.dart';
+import 'package:localchat_app/pages/conversation_page.dart';
 import 'package:localchat_app/pages/home_page.dart';
 import 'package:localchat_app/provider/local_ip_provider.dart';
 import 'package:localchat_app/provider/network/nearby_devices_provider.dart';
 import 'package:localchat_app/provider/network/server/server_provider.dart';
 import 'package:localchat_app/provider/settings_provider.dart';
+import 'package:localchat_app/util/native/chat_notification.dart';
 import 'package:localchat_app/util/native/platform_check.dart';
 import 'package:localchat_app/util/ui/dynamic_colors.dart';
 import 'package:localchat_app/widget/watcher/life_cycle_watcher.dart';
@@ -41,6 +45,19 @@ Future<void> main(List<String> args) async {
       ),
     ),
   );
+
+  // [FORK] 系统通知：装上「点了通知」的回调，并把冷启动那一刻的点击取回来。
+  //
+  // 必须等首帧之后：回调里要 push 会话页，Navigator 还没建好就推会直接抛异常。
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    unawaited(
+      ChatNotification.init(
+        onTap: (peerFingerprint) => unawaited(
+          Routerino.context.push(() => ConversationPage(peerFingerprint: peerFingerprint)),
+        ),
+      ),
+    );
+  });
 }
 
 class LocalChatApp extends StatelessWidget {

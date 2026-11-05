@@ -56,6 +56,9 @@
 | `app/lib/widget/chat/message_bubble.dart` | 固定气泡色常量 |
 | `app/lib/widget/chat/top_toast.dart` | 顶部 Toast 说明 |
 | `app/lib/widget/chat/file_message_card.dart` | 发出方向前景色 |
+| `app/lib/pages/conversations_page.dart` | `_NotificationsOffBanner`：通知不可用时的提示条 |
+| `app/lib/util/conversation/chat_presence.dart` | 整个文件为 fork 新增（前台判断，决定要不要弹通知） |
+| `app/lib/util/native/chat_notification.dart` | 整个文件为 fork 新增（通知发送 / 状态查询 / 点击回传） |
 | `app/windows/runner/flutter_window.cpp` | `RegisterClipboardChannel` 注册 |
 | `app/windows/runner/CMakeLists.txt` | 新的 runner 源文件 + `windowscodecs` / `shell32` 链接 |
 | `app/android/.../MainActivity.kt` | `getClipboardImage` / `getClipboardFiles` 分支 + `readClipboardImage()` / `readClipboardFiles()` |

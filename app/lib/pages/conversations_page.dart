@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:localchat_app/gen/strings.g.dart';
 import 'package:localchat_app/model/conversation/conversation.dart';
 import 'package:localchat_app/pages/conversation_page.dart';
 import 'package:localchat_app/provider/conversation_provider.dart';
+import 'package:localchat_app/util/native/chat_notification.dart';
 import 'package:refena_flutter/refena_flutter.dart';
 import 'package:routerino/routerino.dart';
 
@@ -42,27 +45,132 @@ class ConversationsPage extends StatelessWidget {
             ),
         ],
       ),
-      body: conversations.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.chat_bubble_outline, size: 48, color: Theme.of(context).colorScheme.outline),
-                  const SizedBox(height: 12),
-                  Text(t.conversation.empty, style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 6),
-                  Text(
-                    t.conversation.emptyHint,
-                    style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.outline),
-                  ),
-                ],
-              ),
-            )
-          : ListView.separated(
-              itemCount: conversations.length,
-              separatorBuilder: (_, _) => const Divider(height: 1, indent: 72),
-              itemBuilder: (context, index) => _ConversationTile(conversation: conversations[index]),
+      body: Column(
+        children: [
+          // [FORK] 通知被关时用户根本察觉不到 —— 对方发了消息，他这边一片安静。
+          // vivo / 小米这类 ROM 默认就把第三方通知关掉了，所以值得占一条横幅。
+          const _NotificationsOffBanner(),
+          Expanded(child: _buildList(context, conversations)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildList(BuildContext context, List<Conversation> conversations) {
+    if (conversations.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.chat_bubble_outline, size: 48, color: Theme.of(context).colorScheme.outline),
+            const SizedBox(height: 12),
+            Text(t.conversation.empty, style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 6),
+            Text(
+              t.conversation.emptyHint,
+              style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.outline),
             ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.separated(
+      itemCount: conversations.length,
+      separatorBuilder: (_, _) => const Divider(height: 1, indent: 72),
+      itemBuilder: (context, index) => _ConversationTile(conversation: conversations[index]),
+    );
+  }
+}
+
+/// [FORK] 通知不可用时的提示条。
+///
+/// 只在真的收不到提醒时出现：没权限、整个 App 的通知被关、或「消息」渠道被关。
+/// 点「去开启」会先尝试系统权限框，已被永久拒绝则直接跳到通知设置页。
+class _NotificationsOffBanner extends StatefulWidget {
+  const _NotificationsOffBanner();
+
+  @override
+  State<_NotificationsOffBanner> createState() => _NotificationsOffBannerState();
+}
+
+class _NotificationsOffBannerState extends State<_NotificationsOffBanner> {
+  ChatNotificationBlocker _blocker = ChatNotificationBlocker.unsupported;
+  bool _dismissed = false;
+  AppLifecycleListener? _lifecycleListener;
+
+  @override
+  void initState() {
+    super.initState();
+    // 从系统设置里改完通知再回来，横幅必须自己消失，不能等重启。
+    _lifecycleListener = AppLifecycleListener(onResume: () => unawaited(_refresh()));
+    // initState 里不能读 provider / 建上下文相关的东西，第一帧之后再查。
+    WidgetsBinding.instance.addPostFrameCallback((_) => unawaited(_refresh()));
+  }
+
+  @override
+  void dispose() {
+    _lifecycleListener?.dispose();
+    super.dispose();
+  }
+
+  Future<void> _refresh() async {
+    final blocker = await ChatNotification.blocker();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _blocker = blocker);
+  }
+
+  Future<void> _enable() async {
+    await ChatNotification.requestAccess();
+    await _refresh();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final blocking = _blocker != ChatNotificationBlocker.none && _blocker != ChatNotificationBlocker.unsupported;
+    if (_dismissed || !blocking) {
+      return const SizedBox.shrink();
+    }
+
+    final theme = Theme.of(context);
+    final foreground = theme.colorScheme.onSurfaceVariant;
+
+    return Container(
+      color: theme.colorScheme.surfaceContainerHighest,
+      padding: const EdgeInsets.fromLTRB(16, 8, 4, 8),
+      child: Row(
+        children: [
+          Icon(Icons.notifications_off_outlined, size: 20, color: foreground),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  t.conversation.notificationsOff,
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: foreground),
+                ),
+                Text(
+                  t.conversation.notificationsOffHint,
+                  style: TextStyle(fontSize: 11, color: foreground.withValues(alpha: 0.75)),
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: () => unawaited(_enable()),
+            child: Text(t.conversation.notificationsEnable),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close, size: 18),
+            tooltip: t.general.hide,
+            onPressed: () => setState(() => _dismissed = true),
+          ),
+        ],
+      ),
     );
   }
 }

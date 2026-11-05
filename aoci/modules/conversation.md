@@ -35,6 +35,9 @@
 | `app/lib/pages/conversations_page.dart` | 列表 + 空态 + 全清 + 长按删除 |
 | `app/lib/pages/conversation_page.dart` | 详情 + 底部输入栏（[附件][输入][发送]）+ 文字选区/右键「复制」菜单 + Ctrl+V 粘贴（文件 / 图片 / 文本） |
 | `app/lib/util/conversation/clipboard_image.dart` | 剪贴板文件与图片读取（原生通道）+ 落缓存目录 + 文件名消毒 |
+| `app/lib/util/conversation/chat_presence.dart` | 只记「App 是否在前台」，决定收到消息要不要弹通知 |
+| `app/lib/util/native/chat_notification.dart` | 通知的 Dart 入口：发送 / 清除 / 查状态 / 跳设置 / 点击回调 |
+| `app/android/.../MainActivity.kt` | 通知渠道 `localchat_messages` 与 `showChatNotification` 等方法 |
 | `app/windows/runner/clipboard_image_win.cpp` | WIC：剪贴板 PNG / JPEG / DIB → PNG 字节（不依赖 Flutter，可单独编译验证） |
 | `app/windows/runner/clipboard_files_win.cpp` | `CF_HDROP` → 路径列表（拖动文件到剪贴板时只有这个格式） |
 | `app/windows/runner/clipboard_ext.cpp` | Windows 侧方法通道 `getClipboardImage` / `getClipboardFiles` |
@@ -172,6 +175,27 @@ Flutter 的 `Clipboard.getData` **只认纯文本**：`ClipboardData` 里只有 
 - 文件/图片先落缓存目录（`getCacheDirectory()`；图片名为 `clipboard-yyyyMMdd-HHmmss.png`，Android 文件保留原名并消毒非法字符），再 `CrossFileConverters.convertFile` + **复用同一张 `showDropConfirmDialog`**，确认后走 `deliverFilesInBackground`（与拖拽、回形针同一条投递路径）。
 - 文件夹不展开（和拖拽一致）：跳过并提示 `pasteSkipped`。
 - 确认卡片会抢焦点，关闭后要 `_focusNode.requestFocus()` 把光标还给输入框。
+
+## 系统通知（收到消息的提醒）
+
+只提醒**文本消息**，且只在 App 不在前台时。收到文件本来就会弹接收确认页，再补一条通知是重复打扰；App 在前台时列表里的未读角标已经说明了新消息。
+
+| 环节 | 位置 |
+|---|---|
+| 触发 | `conversation_recorder.dart` 的 `recordReceivedText` 末尾（`_notifyIncomingText`） |
+| 要不要弹 | `ChatPresence.isForeground`，由 `main.dart` 的 `LifeCycleWatcher` 维护 |
+| 发通知 | `ChatNotification.show` → `MainActivity.kt` 的 `showChatNotification` |
+| 点击进会话 | `PendingIntent` 带 `localchat.chatPeer` → `onNewIntent` / 冷启动握手 → Dart 回调 push `ConversationPage` |
+| 被关掉的提示 | 会话列表顶部 `_NotificationsOffBanner`（`conversations_page.dart`） |
+
+要点：
+
+- 渠道 `localchat_messages` 是 `IMPORTANCE_HIGH`。它和传输进度用的前台服务渠道（`localchat_foreground_service`，LOW、静音、不能横幅）是**两套**，不能合并：一个要尽量安静，一个必须吵起来。
+- 同一个对端共用一封通知（id 由指纹哈希决定），后续消息追加进 `InboxStyle` 并累加未读数；列表最多 6 行，超出显示 `+N`。不这么做的话对方连发几句就会把通知栏刷满。
+- 点通知即视为已读：原生侧清未读累计并 `cancel` 通知；手动进会话页也会 `clear`（`ConversationPage.initState`）。
+- 冷启动那次点击**没有 `onNewIntent` 可走**（Activity 是被 `PendingIntent` 拉起来的）。Dart 首帧后调 `chatNotificationsReady`，原生在这时把攒下的点击回放。
+- 横幅出现条件三选一：`areNotificationsEnabled() == false`（整个 App 被关，vivo 这类 ROM 常见）、渠道 `importance == NONE`、没给 `POST_NOTIFICATIONS`。点「去开启」先试 `Permission.notification.request()`，拿不到就跳系统渠道设置页。
+- 没有引入 `flutter_local_notifications`：项目已经在 `MainActivity` 上有自建 MethodChannel（SAF、剪贴板都走它），而现成的 `flutter_foreground_task` 只提供前台服务通知（静音、不可横幅）。加一个依赖还要动 manifest 的 receiver，不划算。
 
 ## 状态机
 

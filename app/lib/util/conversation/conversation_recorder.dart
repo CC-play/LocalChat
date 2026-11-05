@@ -1,6 +1,8 @@
 import 'package:localchat_app/model/conversation/conversation.dart';
 import 'package:localchat_app/provider/conversation/chat_transfer_provider.dart';
 import 'package:localchat_app/provider/conversation_provider.dart';
+import 'package:localchat_app/util/conversation/chat_presence.dart';
+import 'package:localchat_app/util/native/chat_notification.dart';
 import 'package:localchat_isolates/model/device.dart';
 import 'package:localchat_isolates/model/file_type.dart';
 import 'package:logging/logging.dart';
@@ -61,6 +63,40 @@ Future<void> recordReceivedText({
       ),
     ),
   );
+
+  // [FORK] 写完再提醒：通知失败绝不能影响收消息本身。
+  // 只做文本 —— 收到文件本来就会弹接收确认页，再发一条通知是重复打扰。
+  await _notifyIncomingText(sender: sender, senderAlias: senderAlias, text: text);
+}
+
+/// [FORK] App 不在前台时补一条系统通知。
+///
+/// 前台不弹是有意的：用户就看着 App，列表里的未读角标已经说明了新消息，
+/// 系统通知只会打断他正在做的事。
+Future<void> _notifyIncomingText({
+  required Device sender,
+  required String senderAlias,
+  required String text,
+}) async {
+  final peerFingerprint = peerKeyOf(sender);
+  // 留一行 info：真机上「没收到提醒」时，第一件事就是确认这里到底判成前台还是后台。
+  _logger.info('Incoming text from $peerFingerprint (foreground=${ChatPresence.isForeground})');
+
+  if (ChatPresence.isForeground) {
+    // 用户回到前台了，之前留在通知栏里的消息已经没有意义。
+    await ChatNotification.clear(peerFingerprint);
+    return;
+  }
+
+  try {
+    await ChatNotification.show(
+      peerFingerprint: peerFingerprint,
+      title: senderAlias.isEmpty ? sender.alias : senderAlias,
+      body: text,
+    );
+  } catch (e, st) {
+    _logger.warning('Failed to show incoming message notification', e, st);
+  }
 }
 
 Future<void> recordReceivedFile({

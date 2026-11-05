@@ -13,6 +13,7 @@ import 'package:localchat_app/model/cross_file.dart';
 import 'package:localchat_app/provider/conversation_provider.dart';
 import 'package:localchat_app/util/conversation/clipboard_image.dart';
 import 'package:localchat_app/util/conversation/conversation_sender.dart';
+import 'package:localchat_app/util/native/chat_notification.dart';
 import 'package:localchat_app/util/native/cross_file_converters.dart';
 import 'package:localchat_app/util/native/open_file.dart';
 import 'package:localchat_app/widget/chat/drop_confirm_dialog.dart';
@@ -75,6 +76,9 @@ class _ConversationPageState extends State<ConversationPage> {
         return;
       }
       unawaited(context.ref.redux(conversationProvider).dispatchAsync(MarkConversationReadAction(widget.peerFingerprint)));
+      // [FORK] 用户已经看到这个会话了，通知栏里那条提醒就该消失，
+      // 否则点进来看完还留着一条，会让人以为有新消息没读。
+      unawaited(ChatNotification.clear(widget.peerFingerprint));
     });
   }
 
