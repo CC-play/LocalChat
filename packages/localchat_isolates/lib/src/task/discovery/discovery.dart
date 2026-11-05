@@ -27,6 +27,11 @@ class DiscoveryService {
   Completer<void> _retryCompleter = Completer();
   bool _listening = false;
 
+  /// Completes once the current generation of the discovery is bound and
+  /// announcing; replaced by a fresh one every time the discovery stops, so a
+  /// caller waiting on a previous generation cannot mistake it for the next.
+  Completer<void> _ready = Completer<void>();
+
   /// Whether the current discovery was stopped by [restartListener], as
   /// opposed to stopping itself because the multicast sockets failed.
   bool _restartRequested = false;
@@ -95,6 +100,9 @@ class DiscoveryService {
       }
 
       _discovery = discovery;
+      if (!_ready.isCompleted) {
+        _ready.complete();
+      }
 
       // Tell everyone in the network that I am online.
       unawaited(discovery.announce());
@@ -106,6 +114,9 @@ class DiscoveryService {
       }
 
       _discovery = null;
+      // Everything that was waiting on this generation has to wait for the
+      // next one, which [`_runListener`] is about to bind.
+      _ready = Completer<void>();
 
       if (_restartRequested) {
         // The stream ended because [restartListener] stopped the discovery.
@@ -117,6 +128,44 @@ class DiscoveryService {
         // sockets keep failing right away.
         _logger.warning('Discovery stopped unexpectedly (multicast sockets failed). Restarting discovery.');
         await Future<void>.delayed(const Duration(seconds: 1));
+      }
+    }
+  }
+
+  /// The running discovery, or `null` once [timeout] passed without one.
+  ///
+  /// Discovery operations used to be dropped silently while the sockets were
+  /// still being bound — which is exactly the moment the send tab asks for the
+  /// first scan right after start-up, so the device list came up empty until
+  /// the user pressed refresh. Waiting here makes such a call run as soon as
+  /// the discovery is up instead of doing nothing.
+  Future<RsDiscovery?> _awaitDiscovery({
+    Duration timeout = const Duration(seconds: 5),
+  }) async {
+    final deadline = DateTime.now().add(timeout);
+    while (true) {
+      final discovery = _discovery;
+      if (discovery != null) {
+        return discovery;
+      }
+
+      final remaining = deadline.difference(DateTime.now());
+      if (remaining <= Duration.zero) {
+        return null;
+      }
+
+      final ready = _ready;
+      if (ready.isCompleted) {
+        // This generation came and went while nothing was running; wait a beat
+        // so the loop cannot spin while the next one is being bound.
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        continue;
+      }
+
+      try {
+        await ready.future.timeout(remaining);
+      } on TimeoutException {
+        return null;
       }
     }
   }
@@ -136,7 +185,7 @@ class DiscoveryService {
 
   /// Sends an announcement which triggers a response on every LocalChat member of the network.
   Future<void> sendAnnouncement() async {
-    final discovery = _discovery;
+    final discovery = await _awaitDiscovery();
     if (discovery == null) {
       _logger.info('Discovery is not running, skipping announcement');
       return;
@@ -151,7 +200,7 @@ class DiscoveryService {
   /// Found devices arrive on the [startListener] stream; this method returns
   /// once the whole scan has finished.
   Future<void> scanSubnet({required String networkInterface, required int port, required bool https}) async {
-    final discovery = _discovery;
+    final discovery = await _awaitDiscovery();
     if (discovery == null) {
       _logger.info('Discovery is not running, skipping subnet scan');
       return;
@@ -177,7 +226,7 @@ class DiscoveryService {
     required bool https,
     required Duration grace,
   }) async {
-    final discovery = _discovery;
+    final discovery = await _awaitDiscovery();
     if (discovery == null) {
       _logger.info('Discovery is not running, skipping staged discovery');
       return;
@@ -198,7 +247,7 @@ class DiscoveryService {
   /// The retained confirmations of a stored device, oldest first.
   /// Empty when the fingerprint is unknown or the discovery is not running.
   Future<List<DeviceLog>> deviceLogs(String fingerprint) async {
-    final discovery = _discovery;
+    final discovery = await _awaitDiscovery();
     if (discovery == null) {
       _logger.info('Discovery is not running, skipping device logs');
       return const [];
@@ -212,9 +261,12 @@ class DiscoveryService {
   /// one that registered with this device's HTTP server.
   /// The device comes back on the [startListener] stream.
   Future<void> addDevice(Device device) async {
-    final discovery = _discovery;
     final ip = device.ip;
-    if (discovery == null || ip == null) {
+    if (ip == null) {
+      return;
+    }
+    final discovery = await _awaitDiscovery();
+    if (discovery == null) {
       // A device lost here re-appears on its next register request, which the
       // announcement sent when the discovery (re)starts triggers by itself.
       _logger.info('Discovery is not running, skipping device ${device.alias} ($ip)');

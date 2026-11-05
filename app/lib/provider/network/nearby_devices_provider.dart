@@ -86,9 +86,19 @@ class RegisterDeviceAction extends AsyncReduxAction<NearbyDevicesService, Nearby
   Future<NearbyDevicesState> reduce() async {
     assert(device.ip?.isNotEmpty ?? false, 'IP must not be empty');
 
+    if (state.devices[device.fingerprint] == device) {
+      // Confirmed again with nothing new: the send tab re-announces every few
+      // seconds, and each of those confirmations used to rebuild the device
+      // list for nothing.
+      return state;
+    }
+
     final favoriteDevice = notifier._favoriteService.state.firstWhereOrNull((e) => e.fingerprint == device.fingerprint);
-    if (favoriteDevice != null && !favoriteDevice.customAlias) {
-      // Update existing favorite with new alias
+    if (favoriteDevice != null && !favoriteDevice.customAlias && favoriteDevice.alias != device.alias) {
+      // Update existing favorite with new alias.
+      // Only when it actually changed: this runs for every confirmation, and
+      // the send tab re-announces periodically to keep the list fresh. Writing
+      // the favorites file on each of those would be pure disk churn.
       await external(notifier._favoriteService).dispatchAsync(UpdateFavoriteAction(favoriteDevice.copyWith(alias: device.alias)));
     } else {
       await Future.microtask(() {});

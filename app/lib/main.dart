@@ -7,6 +7,7 @@ import 'package:localchat_app/gen/strings.g.dart';
 import 'package:localchat_app/model/persistence/color_mode.dart';
 import 'package:localchat_app/pages/home_page.dart';
 import 'package:localchat_app/provider/local_ip_provider.dart';
+import 'package:localchat_app/provider/network/nearby_devices_provider.dart';
 import 'package:localchat_app/provider/network/server/server_provider.dart';
 import 'package:localchat_app/provider/settings_provider.dart';
 import 'package:localchat_app/util/native/platform_check.dart';
@@ -59,6 +60,11 @@ class LocalChatApp extends StatelessWidget {
             switch (state) {
               case AppLifecycleState.resumed:
                 ref.redux(localIpProvider).dispatch(InitLocalIpAction());
+                // A device that started while this app was in the background
+                // never got an answer from us and has no reason to announce
+                // again, so it is missing from the nearby list until someone
+                // speaks up. Announce again whenever the app comes back.
+                ref.redux(nearbyDevicesProvider).dispatch(StartMulticastScan());
                 if (checkPlatform([TargetPlatform.iOS, TargetPlatform.android])) {
                   // The OS may have invalidated the sockets of the suspended app without any error ever reaching the accept loop.
                   // ignore: discarded_futures

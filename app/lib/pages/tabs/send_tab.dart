@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:localchat_app/config/theme.dart';
@@ -40,6 +42,16 @@ final pickerOptions = FilePickerOption.getOptionsForPlatform();
 
 class SendTab extends StatelessWidget {
   const SendTab();
+
+  @override
+  Widget build(BuildContext context) {
+    return const _NearbyRefresh(child: _SendTabBody());
+  }
+}
+
+/// The tab itself: the pickers and the list of nearby devices.
+class _SendTabBody extends StatelessWidget {
+  const _SendTabBody();
 
   @override
   Widget build(BuildContext context) {
@@ -270,6 +282,84 @@ class SendTab extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+/// [FORK] Keeps the nearby list fresh while the send tab is on screen.
+///
+/// Multicast is only ever a burst: this device announces three times when it
+/// starts, every other device announces when *it* starts. A peer that started
+/// while nobody was listening (app in background, another tab open, the Wi-Fi
+/// asleep) therefore stayed invisible until the user pressed refresh — the
+/// "the nearby list is often empty" report. Repeating the announcement while
+/// the list is being looked at fixes it in both directions: the peers answer
+/// our announcement and enter our store, and that answer makes us enter theirs.
+///
+/// Only the announcement is repeated, never the subnet scan: that is three UDP
+/// datagrams, while a scan probes 256 hosts per interface.
+class _NearbyRefresh extends StatefulWidget {
+  final Widget child;
+
+  const _NearbyRefresh({required this.child});
+
+  @override
+  State<_NearbyRefresh> createState() => _NearbyRefreshState();
+}
+
+class _NearbyRefreshState extends State<_NearbyRefresh> {
+  static const _interval = Duration(seconds: 8);
+
+  Timer? _timer;
+
+  // Not in initState: reading a provider touches the Refena inherited widget,
+  // which is only allowed once the dependencies are set up.
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_timer != null) {
+      return;
+    }
+
+    _timer = Timer.periodic(_interval, (_) => _announce());
+
+    // Announce right away as well: opening the tab is the moment the user
+    // expects the list to be correct. After the frame, because the first
+    // announcement changes providers, which must not happen during build.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _announce());
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  void _announce() {
+    if (!mounted) {
+      return;
+    }
+
+    // Nothing to gain in the background: peers cannot reach the server either,
+    // and the announcement would just wake the radio. The app announces once
+    // when it is resumed again.
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    if (lifecycle != null && lifecycle != AppLifecycleState.resumed) {
+      return;
+    }
+
+    // A running scan announces by itself; skipping avoids a second burst on
+    // top of the one that scan just sent.
+    final state = context.ref.read(nearbyDevicesProvider);
+    if (state.runningFavoriteScan || state.runningIps.isNotEmpty) {
+      return;
+    }
+
+    context.redux(nearbyDevicesProvider).dispatch(StartMulticastScan());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return widget.child;
   }
 }
 

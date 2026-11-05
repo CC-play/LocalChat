@@ -278,6 +278,50 @@ cargokit 也就为每个 ABI 跑一遍 cargo（**20 分钟还没编完**）。
   `fileIdsOverride`，这条兜底对它无效（聊天自己预置、要能重发）。
 - 待复核：需要真人点一次系统文件选择器（SAF），AI 点不动 → 手动发一个文件，看会话列表有没有新卡片。
 
+### 3.8 2026-11-05「附近设备经常为空」三处成因与修法
+
+真机现象：冷启动后打开发送页，明明对端在线，设备列表却是空的；点一下刷新才出现。
+逐层查下来是三个独立的坑叠在一起：
+
+**① 扫描请求被静默丢弃（最要命的那个）**
+- `DiscoveryService.scanSubnet / discoverStaged / sendAnnouncement` 都是先读 `_discovery`，为 `null` 就
+  打一行 info 然后 `return`。而 `_discovery` 要等 Rust 侧 `startDiscovery` 绑好 UDP socket 才有值 ——
+  发送页偏偏在 `postInit`（还要先 `await startServerFromSettings`）之后立刻就请求第一次扫描。
+  请求落在这一段空窗里就等于什么都没发生，而且**没有任何重试**。
+- 修法：`packages/localchat_isolates/lib/src/task/discovery/discovery.dart` 增加 `_awaitDiscovery()`
+  （`Completer` 按“代”切换 + 5 秒上限），四个入口全部改成“等它就绪再执行”。
+
+**② 接口列表还没取到就开始扫**
+- `StartSmartScan` 直接 `ref.read(localIpProvider).localIps`，而接口是异步拉的（`FetchLocalIpAction`）。
+  取到空列表时这次扫描就退化成“只发通告、不做子网兜底”。
+- 修法：`scan_facade.dart` 里 `initialized == false` 时先 `await` 一次 `FetchLocalIpAction`。
+
+**③ 多播只有“启动那一下”**
+- Rust 侧一次 `announce()` = 3 个 UDP 报文（+0.1s / +0.6s / +2.6s），之后再不发言；对端也只在**它自己**启动时发。
+  于是“对端比我晚启动”或“我回到前台时对端早就启动完了”这两种常见场景下，双方谁都发现不了谁。
+- 修法（两条）：
+  - 发送页挂一个 `_NearbyRefresh`（`pages/tabs/send_tab.dart`）：可见期间每 8 秒重发一次**通告**（不重扫子网），
+    首帧补一次；退到后台不发（省电），`dispose` 即停。
+  - `main.dart` 的 `AppLifecycleState.resumed` 分支补一次通告。
+
+**为什么“重发通告”就够了**：LocalChat 协议里收到通告的一方要主动向发送方发 HTTP `register`。
+所以一次通告同时解决两件事 —— 对端进我的设备库（它注册到我服务器 → `onRegister` → `addDevice`），
+我进对端的设备库（它把 register 打到我的服务器）。不需要双方约好一起发。
+
+**顺带修的两处churn**（重发通告会放大它们）：
+- `RegisterDeviceAction`：设备没变化时直接返回旧 state，不再每 8 秒重建一次设备列表；
+- 同上：收藏别名只有**真的变了**才写盘，以前每次确认都会 `setFavorites` 落一次盘。
+
+**实测（2026-11-05，手机 vivo / Android ↔ Windows，同一 Wi-Fi）**
+- 发送页停留：多播监听器每 ~8 秒收到 3 个报文（`$TEMP/lspeer/watch_mc.py`）；
+- 切回会话页：26 秒内 **0 个报文**，说明定时器随页面 `dispose` 一起停了；
+- 切后台再回前台：立刻 3 个报文；
+- 关键场景：手机停在**空列表**的发送页 → 启动电脑端 → 电脑端日志显示每 8 秒回连 `192.168.101.22:53317`
+  注册成功，手机端**没有点刷新**就自己出现了「狡猾的黑莓」。
+- 踩坑记录：`_NearbyRefresh` 最初把 `_announce()` 放在 `initState`，Refena 的 `context.ref` 会抛
+  `dependOnInheritedWidgetOfExactType was called before initState completed`，页面直接变红屏。
+  改成 `didChangeDependencies` + `addPostFrameCallback` 首帧。
+
 ---
 
 ## 4. 需要知道的平台差异

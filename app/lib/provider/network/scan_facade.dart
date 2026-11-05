@@ -18,7 +18,16 @@ class StartSmartScan extends AsyncGlobalAction {
   Future<void> reduce() async {
     final favorites = ref.read(favoritesProvider);
     final settings = ref.read(settingsProvider);
-    final networkInterfaces = ref.read(localIpProvider).localIps.take(maxInterfaces).toList();
+
+    // The interface list is fetched asynchronously when the app starts. A scan
+    // requested before that finishes degenerates to a bare announcement with no
+    // subnets to fall back on — one more way the list used to come up empty.
+    var network = ref.read(localIpProvider);
+    if (!network.initialized) {
+      network = await ref.redux(localIpProvider).dispatchAsync(FetchLocalIpAction());
+    }
+
+    final networkInterfaces = network.localIps.take(maxInterfaces).toList();
 
     await ref
         .redux(nearbyDevicesProvider)
