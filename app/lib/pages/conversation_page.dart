@@ -13,6 +13,7 @@ import 'package:localchat_app/model/conversation/conversation.dart';
 import 'package:localchat_app/model/cross_file.dart';
 import 'package:localchat_app/provider/conversation_provider.dart';
 import 'package:localchat_app/util/conversation/clipboard_image.dart';
+import 'package:localchat_app/util/conversation/conversation_media_picker.dart';
 import 'package:localchat_app/util/conversation/conversation_sender.dart';
 import 'package:localchat_app/util/native/chat_notification.dart';
 import 'package:localchat_app/util/native/cross_file_converters.dart';
@@ -689,8 +690,16 @@ class _ComposerState extends State<_Composer> {
   bool _hasText = false;
   bool _busy = false;
 
+  /// [FORK] 移动端附件面板是否展开（相册 / 文件）。
+  ///
+  /// 桌面端不加这一层：空输入时右侧按钮就是「选择文件」，直接弹系统选择器。
+  bool _panelOpen = false;
+
   /// 粘贴流程是否正在进行（读剪贴板 → 写临时文件 → 等确认卡片）。
   bool _pasting = false;
+
+  /// 移动端判定：只有移动端才用「加号 + 面板」，桌面端用「文件夹 + 直接选文件」。
+  bool get _isMobile => Platform.isAndroid || Platform.isIOS;
 
   @override
   void initState() {
@@ -724,7 +733,49 @@ class _ComposerState extends State<_Composer> {
   void _handleTextChanged() {
     final hasText = _controller.text.trim().isNotEmpty;
     if (hasText != _hasText) {
-      setState(() => _hasText = hasText);
+      setState(() {
+        _hasText = hasText;
+        // 一开始打字就把附件面板收起来：键盘会盖住它，且此时按钮已经是「发送」。
+        if (hasText) {
+          _panelOpen = false;
+        }
+      });
+    }
+  }
+
+  /// [FORK] 输入条右侧按钮：有文字 = 发送，没文字 = 附件入口。
+  ///
+  /// 桌面端直接弹文件选择器；移动端先展开 [ _AttachmentPanel ]（相册 / 文件），
+  /// 因为移动端「相册」和「文件」是两个不同的系统入口，需要一个中间步骤。
+  void _handleTrailingPressed() {
+    if (_busy) {
+      return;
+    }
+    if (_hasText) {
+      unawaited(_sendText());
+      return;
+    }
+    if (_isMobile) {
+      _togglePanel();
+      return;
+    }
+    unawaited(_pickAndSendFiles());
+  }
+
+  /// 展开 / 收起移动端附件面板。
+  ///
+  /// 展开前先收起键盘：面板要占用屏幕底部这块空间，键盘留着它会没地方显示。
+  void _togglePanel() {
+    final open = !_panelOpen;
+    setState(() => _panelOpen = open);
+    if (open) {
+      _focusNode.unfocus();
+    }
+  }
+
+  void _closePanel() {
+    if (_panelOpen) {
+      setState(() => _panelOpen = false);
     }
   }
 
@@ -950,6 +1001,8 @@ class _ComposerState extends State<_Composer> {
     if (_busy) {
       return;
     }
+    // 从移动端面板进来时先把面板收掉，否则选完文件回来它还摊在输入框下面。
+    _closePanel();
 
     final ref = context.ref;
     final target = resolveConversationTarget(ref, widget.conversation);
@@ -977,6 +1030,36 @@ class _ComposerState extends State<_Composer> {
     unawaited(_deliverFiles(ref, target, files));
   }
 
+  /// 移动端附件面板的「相册」：多选图片/视频后直接投递到当前会话。
+  Future<void> _pickAndSendMedia() async {
+    if (_busy) {
+      return;
+    }
+    _closePanel();
+
+    final ref = context.ref;
+    final target = resolveConversationTarget(ref, widget.conversation);
+    if (target == null) {
+      _showMessage(t.conversation.peerUnreachable);
+      return;
+    }
+
+    setState(() => _busy = true);
+    final List<CrossFile>? files;
+    try {
+      files = await pickConversationMedia(context);
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
+    if (files == null || files.isEmpty) {
+      return;
+    }
+
+    unawaited(_deliverFiles(ref, target, files));
+  }
+
   /// 真正等待文件投递结果，只用来弹失败提示。
   Future<void> _deliverFiles(Ref ref, Device target, List<CrossFile> files) {
     return deliverFilesInBackground(
@@ -995,81 +1078,112 @@ class _ComposerState extends State<_Composer> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return SafeArea(
-      top: false,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
-        decoration: BoxDecoration(
-          // [FORK] 跟随聊天页配色：Local Chat 浅色下与消息区同为中性灰，
-          // 靠顶部那条 outlineVariant 细线和消息列表分开。
-          color: ChatPalette.of(context).composerBackground,
-          border: Border(
-            top: BorderSide(color: theme.colorScheme.outlineVariant, width: 0.5),
+    return PopScope(
+      // 面板展开时返回键先收起面板，而不是直接退出会话（手机上很容易误按）。
+      canPop: !_panelOpen,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _panelOpen) {
+          _closePanel();
+        }
+      },
+      child: SafeArea(
+        top: false,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+          decoration: BoxDecoration(
+            // [FORK] 跟随聊天页配色：Local Chat 浅色下与消息区同为中性灰，
+            // 靠顶部那条 outlineVariant 细线和消息列表分开。
+            color: ChatPalette.of(context).composerBackground,
+            border: Border(
+              top: BorderSide(color: theme.colorScheme.outlineVariant, width: 0.5),
+            ),
           ),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            IconButton(
-              tooltip: t.conversation.attachFile,
-              icon: const Icon(Icons.attach_file),
-              onPressed: _busy ? null : _pickAndSendFiles,
-            ),
-            Expanded(
-              // Ctrl+V 的拦截放在页面级（见 [ConversationPage.build]），
-              // 这样不用先把光标点进输入框也能粘贴。
-              child: TextField(
-                controller: _controller,
-                focusNode: _focusNode,
-                minLines: 1,
-                // [FORK] 多行：Shift+Enter 要能换行并让输入框长高。
-                // action 保持 send（不是 newline），否则桌面端引擎会抢在框架前把
-                // 每个 Enter 都插成换行，连「发送」都轮不到我们。
-                maxLines: 6,
-                keyboardType: TextInputType.multiline,
-                textInputAction: TextInputAction.send,
-                // [FORK] 只认「裸回车」发送，Shift+Enter 换行。
-                // 桌面端引擎把 Enter 统一翻成 action，修饰键信息不在 action 里，
-                // 只能在提交回调里查一次键盘状态。
-                onSubmitted: (_) => _handleEnter(),
-                // 默认实现会在回车后收起键盘 / 丢失焦点，聊天输入框必须留住焦点。
-                onEditingComplete: () {},
-                decoration: InputDecoration(
-                  hintText: t.conversation.messageHint,
-                  isDense: true,
-                  filled: true,
-                  fillColor: theme.colorScheme.surface,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    borderSide: BorderSide.none,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    // Ctrl+V 的拦截放在页面级（见 [ConversationPage.build]），
+                    // 这样不用先把光标点进输入框也能粘贴。
+                    child: TextField(
+                      controller: _controller,
+                      focusNode: _focusNode,
+                      minLines: 1,
+                      // [FORK] 多行：Shift+Enter 要能换行并让输入框长高。
+                      // action 保持 send（不是 newline），否则桌面端引擎会抢在框架前把
+                      // 每个 Enter 都插成换行，连「发送」都轮不到我们。
+                      maxLines: 6,
+                      keyboardType: TextInputType.multiline,
+                      textInputAction: TextInputAction.send,
+                      // [FORK] 只认「裸回车」发送，Shift+Enter 换行。
+                      // 桌面端引擎把 Enter 统一翻成 action，修饰键信息不在 action 里，
+                      // 只能在提交回调里查一次键盘状态。
+                      onSubmitted: (_) => _handleEnter(),
+                      // 默认实现会在回车后收起键盘 / 丢失焦点，聊天输入框必须留住焦点。
+                      onEditingComplete: () {},
+                      // 点回输入框就收起附件面板：用户显然是要打字了。
+                      onTap: _closePanel,
+                      onTapOutside: (_) => _closePanel(),
+                      decoration: InputDecoration(
+                        hintText: t.conversation.messageHint,
+                        isDense: true,
+                        filled: true,
+                        fillColor: theme.colorScheme.surface,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(20),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 4),
+                  _buildSendButton(),
+                ],
               ),
-            ),
-            const SizedBox(width: 4),
-            _buildSendButton(),
-          ],
+              // [FORK] 移动端附件面板：输入框没有文字时点右侧加号展开。
+              if (_isMobile && _panelOpen)
+                _AttachmentPanel(
+                  onAlbum: () => unawaited(_pickAndSendMedia()),
+                  onFile: () => unawaited(_pickAndSendFiles()),
+                ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  /// 发送按钮。Android 上长按 = 换行，见 [_handleSendButtonLongPress]。
+  /// 输入条右侧按钮。空输入 = 附件入口，有文字 = 发送。
+  ///
+  /// 桌面端空态是文件夹图标（直接弹系统文件选择器），移动端空态是加号
+  /// （展开 [_AttachmentPanel]，因为「相册」和「文件」在移动端是两个入口）。
+  /// Android 上长按 = 换行，见 [_handleSendButtonLongPress]。
   Widget _buildSendButton() {
+    final label = _hasText ? t.conversation.send : t.conversation.attachFile;
+
+    final Widget icon;
+    if (_busy) {
+      icon = const SizedBox(
+        width: 16,
+        height: 16,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      );
+    } else if (_hasText) {
+      icon = const Icon(Icons.send);
+    } else {
+      icon = Icon(_isMobile ? Icons.add : Icons.folder_outlined);
+    }
+
     final button = IconButton(
       // Android 上长按已经被换行占用：tooltip 默认也是「长按弹出」，
       // 两个长按识别器会抢同一个手势，所以这里不给它 tooltip（下面用
       // 手动触发的 Tooltip 补回无障碍标签）。
-      tooltip: Platform.isAndroid ? null : t.conversation.send,
-      icon: _busy
-          ? const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : const Icon(Icons.send),
-      onPressed: _hasText && !_busy ? _sendText : null,
+      tooltip: Platform.isAndroid ? null : label,
+      icon: icon,
+      onPressed: _busy ? null : _handleTrailingPressed,
     );
 
     if (!Platform.isAndroid) {
@@ -1078,11 +1192,98 @@ class _ComposerState extends State<_Composer> {
 
     // `triggerMode: manual`：只保留语义标签，绝不自己弹，把长按让给换行。
     return Tooltip(
-      message: t.conversation.send,
+      message: label,
       triggerMode: TooltipTriggerMode.manual,
       child: GestureDetector(
         onLongPress: _handleSendButtonLongPress,
         child: button,
+      ),
+    );
+  }
+}
+
+/// [FORK] 移动端附件面板：贴在输入条下方，两项「相册」「文件」。
+///
+/// 用「面板」而不是弹窗 / 底部弹层：它属于输入条的一部分，展开时不动页面，
+/// 收起只需再点一次加号或点回输入框。
+class _AttachmentPanel extends StatelessWidget {
+  final VoidCallback onAlbum;
+  final VoidCallback onFile;
+
+  const _AttachmentPanel({
+    required this.onAlbum,
+    required this.onFile,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      margin: const EdgeInsets.only(top: 8, bottom: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        // 与输入框同一底色：浅色下是纯白，深色下是深灰，两者都不会抢视线。
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        // 面板底色和输入栏底色常常是同一个 surface，只靠填充色分不开，
+        // 再补一条 outlineVariant 细线（与输入栏顶部那条同规格）。
+        border: Border.all(color: theme.colorScheme.outlineVariant, width: 0.5),
+      ),
+      child: Row(
+        children: [
+          _AttachmentAction(
+            icon: Icons.photo_library_outlined,
+            label: t.conversation.album,
+            onTap: onAlbum,
+          ),
+          _AttachmentAction(
+            icon: Icons.insert_drive_file_outlined,
+            label: t.conversation.files,
+            onTap: onFile,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 附件面板里的单项：图标 + 文字。
+///
+/// 固定 88 宽、左对齐排布：只有两项时也不会被拉开到屏幕两端，
+/// 以后加「文件夹」「剪贴板」直接往后排即可。
+class _AttachmentAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _AttachmentAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return SizedBox(
+      width: 88,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 26, color: scheme.onSurfaceVariant),
+              const SizedBox(height: 8),
+              Text(label, style: theme.textTheme.bodySmall),
+            ],
+          ),
+        ),
       ),
     );
   }

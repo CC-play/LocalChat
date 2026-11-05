@@ -412,6 +412,12 @@ class Translations$conversation$en {
   /// en: 'Send a file'
   String get attachFile => 'Send a file';
 
+  /// en: 'Album'
+  String get album => 'Album';
+
+  /// en: 'Files'
+  String get files => 'Files';
+
   /// en: 'Send'
   String get send => 'Send';
 

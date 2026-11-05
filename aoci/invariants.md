@@ -59,6 +59,7 @@
 | "你"头像**跟随**主题色，与气泡不同色是**有意为之**，不要"顺手统一" | 用户明确要求回退过一次 |
 | 失败气泡不换 `errorContainer` 底色，改用左侧 `Icons.error` | 底色会盖掉白字，文件卡片文字消失 |
 | 聊天页提示用 `TopToast`，不要 `SnackBar` | SnackBar 只能贴底，挡住输入栏 |
+| 输入条只有一个右侧按钮：空输入 = 附件入口（桌面 `folder_outlined` 直接选文件、移动端 `add` 展开相册/文件面板），有文字 = 发送。不要再加回形针等第二个按钮 | 用户明确要求把两个入口合成一个，空态占位不要并排摆两个图标 |
 | 聊天页背景 / 对方气泡 / 输入栏一律取 `ChatPalette.of(context)`（`config/chat_palette.dart`），**不要**改 `ColorScheme.surface` | 改 surface 是全局的，会把设置页、发送页、对话框一起染灰 |
 | Local Chat 主题的种子色只在 `config/theme.dart` 的 `kSeedColor` 改（`#1E90FF`），不要在别处再写死 `Colors.teal` | `localchat` 走 null 分支跟随 `defaultColorScheme`，写死第二处就会出现两套配色 |
 

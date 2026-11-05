@@ -211,6 +211,8 @@
     "filePlaceholder": "[File]",
     "messageHint": "Message\u2026",
     "attachFile": "Send a file",
+    "album": "Album",
+    "files": "Files",
     "send": "Send",
     "messageTooLong": "The message is too long (at most {max} characters).",
     "peerDeclined": "The receiver declined it.",

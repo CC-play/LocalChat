@@ -357,6 +357,10 @@ class Translations$conversation$zh_CN extends Translations$conversation$en {
   @override
   String get attachFile => '发送文件';
   @override
+  String get album => '相册';
+  @override
+  String get files => '文件';
+  @override
   String get send => '发送';
   @override
   String messageTooLong({required Object max}) => '消息太长了（最多 ${max} 个字符）';

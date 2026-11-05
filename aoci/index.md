@@ -68,6 +68,7 @@
 | `app/windows/runner/CMakeLists.txt` | 新的 runner 源文件 + `windowscodecs` / `shell32` 链接 |
 | `app/android/.../MainActivity.kt` | `getClipboardImage` / `getClipboardFiles` 分支 + `readClipboardImage()` / `readClipboardFiles()` |
 | `app/lib/util/conversation/clipboard_image.dart` | 整个文件为 fork 新增（剪贴板文件与图片读取） |
+| `app/lib/util/conversation/conversation_media_picker.dart` | 整个文件为 fork 新增（会话页「相册」入口，wechat_assets_picker 多选） |
 | `app/lib/widget/chat/drop_confirm_dialog.dart` | 整个文件为 fork 新增（拖拽/粘贴共用确认卡片） |
 | `app/lib/model/conversation/conversation.dart` | `copyWith(clearError)`：`errorMessage` 需要能被置空（重发） |
 | `app/lib/util/conversation/conversation_sender.dart` | `sendTextMessage(messageIdOverride)` / `deliverFiles(messageIds)` / `retryChatMessage` / `cancelChatMessage` / `_SendTicket` |
@@ -81,6 +82,7 @@ app/lib/model/conversation/conversation.dart          266 行
 app/lib/util/conversation/conversation_recorder.dart  209 行
 app/lib/util/conversation/conversation_sender.dart    901 行
 app/lib/util/conversation/clipboard_image.dart         199 行（图片 + 文件列表两条通道）
+app/lib/util/conversation/conversation_media_picker.dart  77 行（会话页相册多选）
 app/lib/provider/conversation_provider.dart           229 行
 app/lib/provider/conversation/chat_transfer_provider.dart  77 行（上传进度旁路）
 app/lib/pages/conversations_page.dart                 173 行
