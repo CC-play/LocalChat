@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -30,7 +29,6 @@ import 'package:localchat_app/widget/dialogs/open_file_dialog.dart';
 import 'package:localchat_isolates/isolate.dart';
 import 'package:localchat_isolates/model/device.dart';
 import 'package:localchat_isolates/model/file_status.dart';
-import 'package:localchat_isolates/model/file_type.dart';
 import 'package:localchat_isolates/model/session_status.dart';
 import 'package:localchat_isolates/rust/api/server.dart' show SessionEndReasonV2;
 import 'package:localchat_isolates/util/rust.dart';
@@ -39,7 +37,6 @@ import 'package:logging/logging.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:refena_flutter/refena_flutter.dart';
 import 'package:routerino/routerino.dart';
-import 'package:uuid/uuid.dart';
 import 'package:window_manager/window_manager.dart';
 
 final _logger = Logger('ReceiveController');
@@ -239,31 +236,17 @@ class ReceiveController {
     Routerino.context.push(() => ReceivePage(receiveProvider));
   }
 
-  /// [FORK] 把一条收到的文本消息同时写进「接收历史」和「会话」。
+  /// [FORK] 把一条收到的文本消息写进「会话」。
   ///
-  /// 两处都写是有意的：接收历史是上游的功能，会话是本 fork 的聊天视图，
-  /// 任何一个为空都会让对应页面少一条记录。
+  /// 只写会话，**不再写接收历史**。曾经的写法是两处都写，但两边的记录各有
+  /// 独立的 id、各有独立的删除入口，删除其中一处另一处纹丝不动，用户看到的是
+  /// 「删了还在」。接收历史回归上游语义：只记录收到的**文件**（有落盘路径、
+  /// 可打开、可定位），文本消息的唯一归属是会话。
   Future<void> _recordTextMessage(String message) async {
     final session = server.getStateOrNull()?.session;
     if (session == null) {
       return;
     }
-
-    await server.ref
-        .redux(receiveHistoryProvider)
-        .dispatchAsync(
-          AddHistoryEntryAction(
-            entryId: const Uuid().v4(),
-            fileName: message,
-            fileType: FileType.text,
-            path: null,
-            savedToGallery: false,
-            isMessage: true,
-            fileSize: utf8.encode(message).length,
-            senderAlias: session.senderAlias,
-            timestamp: DateTime.now().toUtc(),
-          ),
-        );
 
     await recordReceivedText(
       ref: server.ref,

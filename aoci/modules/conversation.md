@@ -178,7 +178,7 @@ Flutter 的 `Clipboard.getData` **只认纯文本**：`ClipboardData` 里只有 
 
 ## 接收文本：静默还是先确认
 
-文本消息不落盘（接收端回 204，正文在 `preview` 里随 `prepare-upload` 到达），默认**静默接收**：不弹接收确认页、不抢焦点，直接写会话 + 接收历史。开关在「设置 → 接收 → 自动接收文本消息」（`SettingsState.autoAcceptTextMessages`，默认 `true`，见 `receive_controller.onPrepareUpload`）。
+文本消息不落盘（接收端回 204，正文在 `preview` 里随 `prepare-upload` 到达），默认**静默接收**：不弹接收确认页、不抢焦点，直接写会话。开关在「设置 → 接收 → 自动接收文本消息」（`SettingsState.autoAcceptTextMessages`，默认 `true`，见 `receive_controller.onPrepareUpload`）。
 
 | 开关 | 行为 |
 |---|---|
@@ -191,6 +191,22 @@ Flutter 的 `Clipboard.getData` **只认纯文本**：`ClipboardData` 里只有 
 - 接收页的文本分支原来只有「关闭」一个按钮，而它调的是 `onAccept`（关掉 = 收下）。要真的能拒收，就得给 `receive_page.dart` 的 `_Actions` 补「拒绝」——这是 fork 改上游 UI 的一处，别在同步上游时弄丢。
 - 静默分支必须排在 `showFromTray()` **之前**，否则对方每发一句话都会把桌面端窗口抢到前台。
 - 关掉开关后，Android 后台收到消息只会挂一个待确认的接收页，**不会发通知**（通知只由 `recordReceivedText` 触发）。这是当前实现的后果，不是刻意设计：手动确认模式等于连提醒一起关掉。真要补，得给会话加一个「待确认」状态，再把通知挂在 `pending` 上。
+
+### 文本消息只写会话，不写接收历史
+
+早期版本把收到的文本**同时**写进接收历史和会话，两处各有独立 id、各有独立删除入口。「接收」页 → 历史 → 删除历史记录只清 `ls_receive_history`，会话读的是 `ls_conversations`，于是删完打开聊天页一条没少——用户看到的是「删除没生效」。
+
+现在只有一条归属：
+
+| 存储 | 内容 | 删除入口 |
+|---|---|---|
+| `ls_conversations` | 文本 + 文件（双向） | 会话列表长按 |
+| `ls_receive_history` | **只记文件**（有落盘路径、可打开/定位） | 接收页 → 历史 |
+
+- `_recordTextMessage` 只调 `recordReceivedText`，不再发 `AddHistoryEntryAction`。
+- `ReceiveHistoryService.init()` 顺手清掉老数据里 `isMessage == true` 的条目（一次性，写回一次）。文本本身在会话里还在，不会丢消息。
+- `receive_history_page.dart` 里「点历史条目 → 用 `ReceivePage` 展示正文」的分支随之删除，历史条目只剩「打开文件 / 在文件夹中显示 / 详情 / 删除」。
+- `ReceiveHistoryEntry.isMessage` 字段保留：dart_mappable 的旧数据要能解析，删字段会让老包启动时炸。
 
 ## 系统通知（收到消息的提醒）
 

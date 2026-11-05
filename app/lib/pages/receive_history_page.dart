@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:localchat_app/config/theme.dart';
 import 'package:localchat_app/gen/strings.g.dart';
 import 'package:localchat_app/model/persistence/receive_history_entry.dart';
-import 'package:localchat_app/pages/receive_page.dart';
 import 'package:localchat_app/provider/receive_history_provider.dart';
 import 'package:localchat_app/provider/settings_provider.dart';
 import 'package:localchat_app/util/native/directories.dart';
@@ -15,12 +14,9 @@ import 'package:localchat_app/widget/dialogs/file_info_dialog.dart';
 import 'package:localchat_app/widget/dialogs/history_clear_dialog.dart';
 import 'package:localchat_app/widget/file_thumbnail.dart';
 import 'package:localchat_app/widget/responsive_list_view.dart';
-import 'package:localchat_isolates/model/device.dart';
-import 'package:localchat_isolates/model/session_status.dart';
 import 'package:localchat_isolates/util/file_size_helper.dart';
 import 'package:path/path.dart' as path;
 import 'package:refena_flutter/refena_flutter.dart';
-import 'package:routerino/routerino.dart';
 
 enum _EntryOption {
   open,
@@ -130,39 +126,8 @@ class ReceiveHistoryPage extends StatelessWidget {
                   splashFactory: NoSplash.splashFactory,
                   highlightColor: Colors.transparent,
                   hoverColor: Colors.transparent,
-                  onTap: entry.path != null || entry.isMessage
+                  onTap: entry.path != null
                       ? () async {
-                          if (entry.isMessage) {
-                            final vm = ViewProvider((ref) {
-                              return ReceivePageVm(
-                                status: SessionStatus.waiting,
-                                sender: Device(
-                                  signalingId: null,
-                                  ip: '0.0.0.0',
-                                  version: '1.0.0',
-                                  port: 8080,
-                                  https: false,
-                                  fingerprint: 'fingerprint',
-                                  alias: entry.senderAlias,
-                                  deviceModel: 'deviceModel',
-                                  deviceType: DeviceType.web,
-                                  download: true,
-                                  channels: const [],
-                                ),
-                                showSenderInfo: false,
-                                files: [],
-                                message: entry.fileName,
-                                onAccept: () {},
-                                onDecline: () {},
-                                onClose: () {},
-                              );
-                            });
-
-                            // ignore: unawaited_futures
-                            context.push(() => ReceivePage(vm));
-                            return;
-                          }
-
                           await _openFile(context, entry, context.redux(receiveHistoryProvider));
                         }
                       : null,

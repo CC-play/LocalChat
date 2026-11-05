@@ -172,6 +172,43 @@ void main() {
     expect(service.state.length, 0);
     verify(persistenceService.setReceiveHistory([]));
   });
+
+  // [FORK] 文本消息只归会话，历史里的遗留文本条目在 init 时清掉。
+  test('Should drop legacy text entries on init', () {
+    when(persistenceService.getReceiveHistory()).thenReturn([
+      _createEntry('1'),
+      _createMessageEntry('m1'),
+      _createEntry('2'),
+    ]);
+
+    final state = ReceiveHistoryService(persistenceService).init();
+
+    expect(state, [_createEntry('1'), _createEntry('2')]);
+    verify(persistenceService.setReceiveHistory([_createEntry('1'), _createEntry('2')]));
+  });
+
+  test('Should keep history untouched on init when there is nothing to drop', () {
+    when(persistenceService.getReceiveHistory()).thenReturn([_createEntry('1')]);
+
+    final state = ReceiveHistoryService(persistenceService).init();
+
+    expect(state, [_createEntry('1')]);
+    verifyNever(persistenceService.setReceiveHistory(any));
+  });
+}
+
+ReceiveHistoryEntry _createMessageEntry(String id) {
+  return ReceiveHistoryEntry(
+    id: id,
+    fileName: 'text message',
+    fileType: FileType.text,
+    path: null,
+    savedToGallery: false,
+    isMessage: true,
+    fileSize: 12,
+    senderAlias: 'senderAlias',
+    timestamp: DateTime(2021, 1, 1),
+  );
 }
 
 ReceiveHistoryEntry _createEntry(String id) {

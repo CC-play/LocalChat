@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:localchat_app/model/persistence/receive_history_entry.dart';
 import 'package:localchat_app/provider/persistence_provider.dart';
 import 'package:localchat_isolates/model/file_type.dart';
@@ -17,7 +19,20 @@ class ReceiveHistoryService extends ReduxNotifier<List<ReceiveHistoryEntry>> {
   ReceiveHistoryService(this._persistence);
 
   @override
-  List<ReceiveHistoryEntry> init() => _persistence.getReceiveHistory();
+  List<ReceiveHistoryEntry> init() {
+    final stored = _persistence.getReceiveHistory();
+
+    // [FORK] 清掉历史上遗留的文本消息条目。
+    //
+    // 早期版本把收到的文本同时写进接收历史和会话，两边的副本各有独立 id、
+    // 各有独立的删除入口，删掉一处另一处纹丝不动。现在文本只归会话，
+    // 历史回归上游语义（只记文件），老数据在这里顺手清一次。
+    final migrated = stored.where((entry) => !entry.isMessage).toList();
+    if (migrated.length != stored.length) {
+      unawaited(_persistence.setReceiveHistory(migrated));
+    }
+    return migrated;
+  }
 }
 
 /// Adds a history entry.

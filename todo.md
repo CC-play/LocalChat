@@ -421,6 +421,35 @@ cargokit 也就为每个 ABI 跑一遍 cargo（**20 分钟还没编完**）。
 
 ---
 
+### 3.11 2026-11-05 文本消息不再写进「接收历史」
+
+**现象**：在「接收」页 → 历史里删掉文本记录后，打开聊天页消息一条不少。
+
+**根因**：一句收到的文本被写了两份，各存各的、各删各的。
+
+| | 接收历史 | 会话 |
+|---|---|---|
+| Provider | `receiveHistoryProvider` | `conversationProvider` |
+| 键 | `ls_receive_history` | `ls_conversations` |
+| 删除入口 | 历史页「删除历史记录」→ `RemoveAllHistoryEntriesAction` | 会话列表长按 |
+| 上限 | 全局 30 条 | 每会话 500 / 最多 200 会话 |
+
+`_recordTextMessage` 里两次 `Uuid().v4()` 生成不同 id，连「按 id 联动删除」都没有可用外键。
+
+**修法**：文本只归会话，接收历史回归上游语义（只记文件）。
+
+- `receive_controller._recordTextMessage` 删掉 `AddHistoryEntryAction`，只调 `recordReceivedText`；
+  顺带清掉因此不再需要的 `dart:convert` / `file_type` / `uuid` 三个 import。
+- `ReceiveHistoryService.init()` 过滤 `isMessage == true` 的老条目并写回一次（不碰会话，消息不会丢）。
+- `receive_history_page.dart` 删掉「点条目 → `ReceivePage` 展示正文」的死分支与四个 import，
+  历史条目只剩打开文件 / 在文件夹中显示 / 详情 / 删除。
+- `ReceiveHistoryEntry.isMessage` 字段保留：dart_mappable 要能解析老数据。
+- 单测：`test/unit/provider/receive_history_provider_test.dart` 加两条（过滤遗留文本 / 无需过滤时不写盘）。
+
+**注意**：§3.10 那张表里「历史与会话各一条」的判定标准随本次改动失效，以后验文本只数会话。
+
+---
+
 ## 4. 需要知道的平台差异
 
 ### 4.1 回车键：Android 上无法接管（已实测，别再试了）
