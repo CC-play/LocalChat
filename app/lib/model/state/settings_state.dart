@@ -24,6 +24,9 @@ class SettingsState with SettingsStateMappable {
   final bool saveToHistory;
   final bool quickSave; // automatically accept file requests
   final bool quickSaveFromFavorites; // automatically accept file requests from favorites
+  // [FORK] silently accept text messages (they never write a file to disk, so there is
+  // nothing to pick); when false the receive page asks for confirmation like any transfer
+  final bool autoAcceptTextMessages;
   final String? receivePin; // null = disabled
   final bool autoFinish; // automatically finish sessions
   final bool minimizeToTray; // minimize to tray instead of exiting the app
@@ -56,6 +59,7 @@ class SettingsState with SettingsStateMappable {
     required this.saveToHistory,
     required this.quickSave,
     required this.quickSaveFromFavorites,
+    required this.autoAcceptTextMessages,
     required this.receivePin,
     required this.autoFinish,
     required this.minimizeToTray,

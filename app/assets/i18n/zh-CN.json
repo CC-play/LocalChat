@@ -116,6 +116,7 @@
       "title": "接收",
       "quickSave": "@:general.quickSave",
       "quickSaveFromFavorites": "@:general.quickSaveFromFavorites",
+      "autoAcceptTextMessages": "自动接收文本消息",
       "requirePin": "@:webSharePage.requirePin",
       "autoFinish": "自动完成传输任务",
       "destination": "保存目录",

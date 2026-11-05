@@ -60,6 +60,7 @@ class SettingsService extends PureNotifier<SettingsState> {
     saveToHistory: _persistence.isSaveToHistory(),
     quickSave: _persistence.getQuickSave() == QuickSaveMode.on,
     quickSaveFromFavorites: _persistence.getQuickSave() == QuickSaveMode.paired,
+    autoAcceptTextMessages: _persistence.isAutoAcceptTextMessages(),
     receivePin: _persistence.getReceivePin(),
     autoFinish: _persistence.isAutoFinish(),
     minimizeToTray: _persistence.isMinimizeToTray(),
@@ -209,6 +210,13 @@ class SettingsService extends PureNotifier<SettingsState> {
     await _persistence.setReceivePin(receivePin);
     state = state.copyWith(
       receivePin: receivePin,
+    );
+  }
+
+  Future<void> setAutoAcceptTextMessages(bool autoAcceptTextMessages) async {
+    await _persistence.setAutoAcceptTextMessages(autoAcceptTextMessages);
+    state = state.copyWith(
+      autoAcceptTextMessages: autoAcceptTextMessages,
     );
   }
 

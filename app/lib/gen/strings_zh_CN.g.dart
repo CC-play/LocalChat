@@ -1064,6 +1064,8 @@ class Translations$settingsTab$receive$zh_CN extends Translations$settingsTab$re
   @override
   String get quickSaveFromFavorites => _root.general.quickSaveFromFavorites;
   @override
+  String get autoAcceptTextMessages => '自动接收文本消息';
+  @override
   String get requirePin => _root.webSharePage.requirePin;
   @override
   String get autoFinish => '自动完成传输任务';

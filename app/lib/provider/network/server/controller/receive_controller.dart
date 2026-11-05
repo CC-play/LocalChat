@@ -46,10 +46,12 @@ final _logger = Logger('ReceiveController');
 
 /// [FORK] 文本消息（只含一个 text 文件的请求）是否静默接收、不弹接收确认页。
 ///
+/// 默认值见 [PersistenceService.isAutoAcceptTextMessages]（true），用户可在「设置 → 接收」
+/// 里关掉，关掉后走和普通传输一样的确认页。
+///
 /// 文本消息不落盘：接收端用空文件表回应 204，真正的正文随 `preview` 字段到达。
 /// 既然没有文件需要用户挑选，打断用户去点「接受」只是在拖慢聊天。
 /// 未读提示由会话列表的角标承担。
-const bool autoAcceptTextMessages = true;
 
 /// Handles all server events for receiving files.
 /// The HTTP requests themselves are served by the Rust server which emits
@@ -168,7 +170,7 @@ class ReceiveController {
     // [FORK] 文本消息静默接收：不弹确认页，也不把窗口唤到前台。
     // 这段必须排在 [showFromTray] 之前，否则对方每发一句话都会抢走用户的焦点。
     final message = server.getState().session?.message;
-    if (message != null && autoAcceptTextMessages) {
+    if (message != null && settings.autoAcceptTextMessages) {
       await _recordTextMessage(message);
       // 不返回任何文件，Rust 侧因此回 204，发送端不会进入传输阶段。
       await acceptFileRequest({});
@@ -179,10 +181,8 @@ class ReceiveController {
       await showFromTray();
     }
 
-    if (message != null) {
-      // Message already received
-      await _recordTextMessage(message);
-    }
+    // [FORK] 手动确认模式下**不在这里**记消息：用户点了「接受」才记（见 onAccept），
+    // 否则点「拒绝」也会在会话里留一条，等于设置项白关。
 
     final receiveProvider = ViewProvider((ref) {
       // No select: comparing the selected session runs the dart_mappable deep equality
@@ -196,6 +196,8 @@ class ReceiveController {
         message: message,
         onAccept: () async {
           if (message != null) {
+            // [FORK] 手动确认：接受时才写入会话 / 接收历史。
+            await _recordTextMessage(message);
             // accept nothing
             await ref.notifier(serverProvider).acceptFileRequest({});
             return;

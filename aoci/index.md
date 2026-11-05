@@ -14,12 +14,13 @@
 | 发文件（含离线重试） | `app/lib/util/conversation/conversation_sender.dart`（`deliverFiles`）→ `send_provider.dart`（`startSession`） | [conversation](modules/conversation.md) | 双端收发 |
 | 发送卡住 / 一直转圈 | `app/lib/util/conversation/conversation_sender.dart`（硬超时 + `_watchStalledUploads`） | [conversation](modules/conversation.md#超时与看门狗) | 对端关机后点重发，2 分钟内应失败 |
 | 想中止正在发送的消息 | `message_bubble.dart`（`onCancel`，转圈可点）→ `conversation_sender.dart`（`cancelChatMessage` + `_SendTicket`）→ 兜底 `chatSendWatchdogTimeout` | [conversation](modules/conversation.md#主动取消与界面兜底) | 手动：点重发后点转圈立刻停下 |
-| 收文本消息（静默接收） | `app/lib/provider/network/server/controller/receive_controller.dart:168` | [conversation](modules/conversation.md) | 双端收发 |
+| 收文本消息（静默接收 / 改成先确认） | `app/lib/provider/network/server/controller/receive_controller.dart`（`onPrepareUpload` 的文本分支 + `onAccept`）→ `settings_tab.dart`（「自动接收文本消息」） | [conversation](modules/conversation.md#接收文本静默还是先确认) | 关掉开关后用假对端发一条：应弹接收页，点「拒绝」会话里不留记录 |
 | 收到文件的记录时机 | `receive_controller.dart:377`（`error == null` 分支） | [conversation](modules/conversation.md) | 传一个文件后看会话 |
 | 会话持久化 / 迁移 | `app/lib/provider/persistence_provider.dart`（`ls_conversations`）→ `app/lib/util/shared_preferences/settings_migration.dart`（改名迁移） | — | `flutter test test/unit/util/shared_preferences/` |
 | 侧边栏 / Tab 顺序 | `app/lib/pages/home_page.dart` → `app/lib/pages/home_page_controller.dart` | — | `flutter analyze` |
 | 主题色 / 气泡配色 | `app/lib/config/theme.dart` → `app/lib/widget/chat/message_bubble.dart` | — | 见 [不变量](invariants.md#ui) |
 | 界面文案 | `app/assets/i18n/en.json` + `zh-CN.json` → `fvm dart run slang` | — | `flutter analyze` |
+| 新增/修改一个设置项 | `app/lib/model/state/settings_state.dart`（加字段）→ `provider/settings_provider.dart`（init + setter）→ `provider/persistence_provider.dart`（key + getter/setter）→ `pages/tabs/settings_tab.dart`（`_BooleanEntry` / `_SettingsEntry`）→ 两份 i18n | — | `dart run build_runner build` + `dart run slang` + `flutter analyze` + `flutter test`（`mocks.mocks.dart` 会跟着重生成） |
 | 设备发现 / 扫描 | `app/lib/provider/network/nearby_devices_provider.dart` → `scan_facade.dart` → `packages/core/src/multicast/` | [discovery](modules/discovery.md) | `python %TEMP%\lspeer\watch_mc.py 30`：发送页可见时每 8 s 三个报文 |
 | 「附近设备」列表空 / 对端看不到 | `packages/localchat_isolates/lib/src/task/discovery/discovery.dart`（`_awaitDiscovery`）→ `app/lib/pages/tabs/send_tab.dart`（`_NearbyRefresh`） | [discovery](modules/discovery.md#三个已修的坑2026-11-05) | 同上 |
 | HTTP 协议 / 传输 | `packages/core/src/http/` → `app/lib/provider/network/server/server_provider.dart` | — | `cargo test --features full` |
@@ -47,9 +48,10 @@
 | `app/lib/main.dart` | `HomePage(initialTab:)` 默认 Tab |
 | `app/lib/pages/home_page.dart` | `HomeTab` 枚举、PageView children、纯图标侧边栏 |
 | `app/lib/pages/tabs/send_tab.dart` | `_NearbyRefresh`：发送页可见时每 8 s 重发一次多播通告（见 [discovery](modules/discovery.md)） |
-| `app/lib/provider/network/server/controller/receive_controller.dart` | 文本静默接收、落盘成功后写会话 |
+| `app/lib/provider/network/server/controller/receive_controller.dart` | 文本静默接收（受 `autoAcceptTextMessages` 设置控制）、落盘成功后写会话 |
 | `app/lib/provider/network/send_provider.dart` | Started / Finished / Failed 三处写会话；`sessionIdOverride` 参数 |
-| `app/lib/provider/persistence_provider.dart` | `getConversations` / `setConversations` |
+| `app/lib/model/state/settings_state.dart` | `autoAcceptTextMessages`：文本消息是否静默接收（默认开，设置页可关） |
+| `app/lib/provider/persistence_provider.dart` | `getConversations` / `setConversations`；`isAutoAcceptTextMessages`（默认 true） |
 | `app/lib/util/shared_preferences/settings_migration.dart` | fork 新增的整个文件：`%APPDATA%\LocalSend` → `LocalChat` 的改名迁移（有单测） |
 | `app/lib/util/conversation/conversation_recorder.dart` | 文件头注释即 fork 说明 |
 | `app/lib/pages/conversation_page.dart` | 顶部说明 |

@@ -386,6 +386,26 @@ cargokit 也就为每个 ABI 跑一遍 cargo（**20 分钟还没编完**）。
 
 ---
 
+### 3.10 2026-11-05 「自动接收文本消息」改成设置项
+
+原来 `receive_controller.dart` 里写死 `const bool autoAcceptTextMessages = true`，现在可关。
+
+**实现**
+- `SettingsState.autoAcceptTextMessages` + `ls_auto_accept_text_messages`（`getBool(..) ?? true`）：
+  存储里没有这个键就按 `true` 处理，**老用户升级后行为不变**，只有主动关过才落盘。
+- 设置页位置：「设置 → 接收 → 自动接收文本消息」，紧跟在「快速保存」两项之后。
+- 关掉后走和普通传输一样的接收页：显示正文 + 接受 / 拒绝。
+
+**顺手改掉的语义问题**
+- 原来在 `onPrepareUpload` 里、**弹页之前**就把消息写进会话和接收历史，导致点「拒绝」也会留下一条。
+  现在记录挂在 `onAccept` 里，拒绝就什么都不写 —— 否则这个开关等于白关。
+
+**已知缺口**
+- 关掉开关后，后台（Android）收到消息只会挂一个待确认的接收页，**不会发通知**
+  （通知只由 `recordReceivedText` 触发）。要补得先给会话加「待确认」状态。
+
+---
+
 ## 4. 需要知道的平台差异
 
 ### 4.1 回车键：Android 上无法接管（已实测，别再试了）
@@ -452,14 +472,15 @@ Dart 侧收不到。要支持得给 `TextField` 传 `contextMenuBuilder`，在�
 | 模拟器（debug + swiftshader） | 冷启动约 40 秒，冷启动期的 `adb input` 会撞上 ANR（`Input dispatching timed out (Application does not have a focused window)`） | 环境问题（软件渲染 + debug），真机无此现象；等首页出现后再操作 |
 | `LocalIpService.FetchLocalIpAction` | 启动后会连续触发几次 | 上游行为，未动 |
 | `util/native/directories.dart` | `getCacheDirectory()` 走 `path_provider` | Android 正常 |
-| `receive_controller.dart` | `autoAcceptTextMessages = true`，App 被系统冻结时收不到 | 系统限制，暂不处理；实测冻结在切后台后 10 秒内发生（`isFrozen=true`），前台/刚切走时正常 |
+| `receive_controller.dart` | `autoAcceptTextMessages`（设置项，默认开），App 被系统冻结时收不到 | 系统限制，暂不处理；实测冻结在切后台后 10 秒内发生（`isFrozen=true`），前台/刚切走时正常 |
 
 ---
 
 ## 5. 待定的设计决策
 
 - [x] 回车语义：维持「软键盘回车 = 发送」，换行改由**长按发送按钮**提供（见 §4.1.1），不为它牺牲多行输入
-- [ ] 「自动接收文本消息」要不要做成设置项（当前硬编码 `autoAcceptTextMessages = true`）
+- [x] 「自动接收文本消息」要不要做成设置项（当前硬编码 `autoAcceptTextMessages = true`）
+      → 已做成设置项（§3.10），默认仍为开
 - [x] 收到文本时要不要发系统通知（后台场景），与现有「传输中」前台服务的关系
       → 已实现（§3.9）：自建 `localchat_messages`（HIGH）渠道，不共用传输那条 LOW 前台服务通知
 - [ ] 后台保活：实测切后台 10 秒内进程 `isFrozen=true`，之后完全收不到消息。

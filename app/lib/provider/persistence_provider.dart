@@ -99,6 +99,7 @@ const _saveToGallery = 'ls_save_to_gallery';
 const _saveToHistory = 'ls_save_to_history';
 const _quickSave = 'ls_quick_save'; // a QuickSaveMode; was a bool until storage version 2 ('ls_quick_save_from_favorites' is merged into this key)
 const _receivePin = 'ls_receive_pin';
+const _autoAcceptTextMessages = 'ls_auto_accept_text_messages'; // [FORK] bool, defaults to true
 const _autoFinish = 'ls_auto_finish';
 const _minimizeToTray = 'ls_minimize_to_tray';
 const _https = 'ls_https';
@@ -519,6 +520,16 @@ class PersistenceService {
     } else {
       await _prefs.setString(_receivePin, pin);
     }
+  }
+
+  /// [FORK] Defaults to `true`: text messages are chat, not file transfers,
+  /// so the stored value is only written once the user turns it off.
+  bool isAutoAcceptTextMessages() {
+    return _prefs.getBool(_autoAcceptTextMessages) ?? true;
+  }
+
+  Future<void> setAutoAcceptTextMessages(bool autoAcceptTextMessages) async {
+    await _prefs.setBool(_autoAcceptTextMessages, autoAcceptTextMessages);
   }
 
   bool isAutoFinish() {

@@ -176,6 +176,21 @@ Flutter 的 `Clipboard.getData` **只认纯文本**：`ClipboardData` 里只有 
 - 文件夹不展开（和拖拽一致）：跳过并提示 `pasteSkipped`。
 - 确认卡片会抢焦点，关闭后要 `_focusNode.requestFocus()` 把光标还给输入框。
 
+## 接收文本：静默还是先确认
+
+文本消息不落盘（接收端回 204，正文在 `preview` 里随 `prepare-upload` 到达），默认**静默接收**：不弹接收确认页、不抢焦点，直接写会话 + 接收历史。开关在「设置 → 接收 → 自动接收文本消息」（`SettingsState.autoAcceptTextMessages`，默认 `true`，见 `receive_controller.onPrepareUpload`）。
+
+| 开关 | 行为 |
+|---|---|
+| 开（默认） | `_recordTextMessage` → 回空文件表（204），发送端不进传输阶段 |
+| 关 | 走普通接收页：用户点「接受」才 `_recordTextMessage` + 回 204；点「拒绝」什么都不写 |
+
+要点：
+
+- **手动确认模式下不要在 `onPrepareUpload` 里就记消息**：那样点「拒绝」也会在会话里留一条，等于开关白关。记录挂在 `onAccept` 里。
+- 静默分支必须排在 `showFromTray()` **之前**，否则对方每发一句话都会把桌面端窗口抢到前台。
+- 关掉开关后，Android 后台收到消息只会挂一个待确认的接收页，**不会发通知**（通知只由 `recordReceivedText` 触发）。这是当前实现的后果，不是刻意设计：手动确认模式等于连提醒一起关掉。真要补，得给会话加一个「待确认」状态，再把通知挂在 `pending` 上。
+
 ## 系统通知（收到消息的提醒）
 
 只提醒**文本消息**，且只在 App 不在前台时。收到文件本来就会弹接收确认页，再补一条通知是重复打扰；App 在前台时列表里的未读角标已经说明了新消息。

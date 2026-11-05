@@ -179,6 +179,13 @@ class SettingsTab extends StatelessWidget {
                   },
                 ),
                 _BooleanEntry(
+                  label: t.settingsTab.receive.autoAcceptTextMessages,
+                  value: vm.settings.autoAcceptTextMessages,
+                  onChanged: (b) async {
+                    await ref.notifier(settingsProvider).setAutoAcceptTextMessages(b);
+                  },
+                ),
+                _BooleanEntry(
                   label: t.settingsTab.receive.requirePin,
                   value: vm.settings.receivePin != null,
                   onChanged: (b) async {

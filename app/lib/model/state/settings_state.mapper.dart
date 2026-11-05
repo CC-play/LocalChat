@@ -95,6 +95,12 @@ class SettingsStateMapper extends ClassMapperBase<SettingsState> {
     'quickSaveFromFavorites',
     _$quickSaveFromFavorites,
   );
+  static bool _$autoAcceptTextMessages(SettingsState v) =>
+      v.autoAcceptTextMessages;
+  static const Field<SettingsState, bool> _f$autoAcceptTextMessages = Field(
+    'autoAcceptTextMessages',
+    _$autoAcceptTextMessages,
+  );
   static String? _$receivePin(SettingsState v) => v.receivePin;
   static const Field<SettingsState, String> _f$receivePin = Field(
     'receivePin',
@@ -187,6 +193,7 @@ class SettingsStateMapper extends ClassMapperBase<SettingsState> {
     #saveToHistory: _f$saveToHistory,
     #quickSave: _f$quickSave,
     #quickSaveFromFavorites: _f$quickSaveFromFavorites,
+    #autoAcceptTextMessages: _f$autoAcceptTextMessages,
     #receivePin: _f$receivePin,
     #autoFinish: _f$autoFinish,
     #minimizeToTray: _f$minimizeToTray,
@@ -221,6 +228,7 @@ class SettingsStateMapper extends ClassMapperBase<SettingsState> {
       saveToHistory: data.dec(_f$saveToHistory),
       quickSave: data.dec(_f$quickSave),
       quickSaveFromFavorites: data.dec(_f$quickSaveFromFavorites),
+      autoAcceptTextMessages: data.dec(_f$autoAcceptTextMessages),
       receivePin: data.dec(_f$receivePin),
       autoFinish: data.dec(_f$autoFinish),
       minimizeToTray: data.dec(_f$minimizeToTray),
@@ -321,6 +329,7 @@ abstract class SettingsStateCopyWith<$R, $In extends SettingsState, $Out>
     bool? saveToHistory,
     bool? quickSave,
     bool? quickSaveFromFavorites,
+    bool? autoAcceptTextMessages,
     String? receivePin,
     bool? autoFinish,
     bool? minimizeToTray,
@@ -383,6 +392,7 @@ class _SettingsStateCopyWithImpl<$R, $Out>
     bool? saveToHistory,
     bool? quickSave,
     bool? quickSaveFromFavorites,
+    bool? autoAcceptTextMessages,
     Object? receivePin = $none,
     bool? autoFinish,
     bool? minimizeToTray,
@@ -416,6 +426,8 @@ class _SettingsStateCopyWithImpl<$R, $Out>
       if (quickSave != null) #quickSave: quickSave,
       if (quickSaveFromFavorites != null)
         #quickSaveFromFavorites: quickSaveFromFavorites,
+      if (autoAcceptTextMessages != null)
+        #autoAcceptTextMessages: autoAcceptTextMessages,
       if (receivePin != $none) #receivePin: receivePin,
       if (autoFinish != null) #autoFinish: autoFinish,
       if (minimizeToTray != null) #minimizeToTray: minimizeToTray,
@@ -455,6 +467,10 @@ class _SettingsStateCopyWithImpl<$R, $Out>
     quickSaveFromFavorites: data.get(
       #quickSaveFromFavorites,
       or: $value.quickSaveFromFavorites,
+    ),
+    autoAcceptTextMessages: data.get(
+      #autoAcceptTextMessages,
+      or: $value.autoAcceptTextMessages,
     ),
     receivePin: data.get(#receivePin, or: $value.receivePin),
     autoFinish: data.get(#autoFinish, or: $value.autoFinish),

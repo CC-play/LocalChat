@@ -116,6 +116,7 @@
       "title": "Receive",
       "quickSave": "@:general.quickSave",
       "quickSaveFromFavorites": "@:general.quickSaveFromFavorites",
+      "autoAcceptTextMessages": "Auto-accept text messages",
       "requirePin": "@:webSharePage.requirePin",
       "autoFinish": "Auto Finish",
       "destination": "Save to folder",

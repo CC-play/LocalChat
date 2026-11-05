@@ -522,6 +522,26 @@ class MockPersistenceService extends _i1.Mock
           as _i5.Future<void>);
 
   @override
+  bool isAutoAcceptTextMessages() =>
+      (super.noSuchMethod(
+            Invocation.method(#isAutoAcceptTextMessages, []),
+            returnValue: false,
+            returnValueForMissingStub: false,
+          )
+          as bool);
+
+  @override
+  _i5.Future<void> setAutoAcceptTextMessages(bool? autoAcceptTextMessages) =>
+      (super.noSuchMethod(
+            Invocation.method(#setAutoAcceptTextMessages, [
+              autoAcceptTextMessages,
+            ]),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
+
+  @override
   bool isAutoFinish() =>
       (super.noSuchMethod(
             Invocation.method(#isAutoFinish, []),
