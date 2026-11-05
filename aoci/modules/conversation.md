@@ -208,6 +208,18 @@ Flutter 的 `Clipboard.getData` **只认纯文本**：`ClipboardData` 里只有 
 - `receive_history_page.dart` 里「点历史条目 → 用 `ReceivePage` 展示正文」的分支随之删除，历史条目只剩「打开文件 / 在文件夹中显示 / 详情 / 删除」。
 - `ReceiveHistoryEntry.isMessage` 字段保留：dart_mappable 的旧数据要能解析，删字段会让老包启动时炸。
 
+### 文件：两边都留，但删除联动
+
+文件不像文本那样可以只留一处：接收历史要提供「打开文件 / 在文件夹中显示 / 大小与来源」，会话要提供「谁在什么时候发的」。所以两份都留，靠 **id 相同 + 删除联动** 保持一致。
+
+- 接收文件的 `ReceiveHistoryEntry.id` 与 `ChatMessage.id` 同取协议里的 `fileId`（`AddHistoryEntryAction(entryId: fileId)` / `recordReceivedFile(messageId: fileId)`），精确匹配，不需要「别名 + 文件名 + 时间」那种近似。
+- 删单条历史（`RemoveHistoryEntryAction`）→ `ReceiveHistoryService.deleteLinkedChatMessages([id])` → `DeleteChatMessagesAction`。
+- 清空历史（`RemoveAllHistoryEntriesAction`）→ 把当前 30 条历史里所有 id 一起传下去。**历史之外更早的消息不动**：历史只留 30 条，没有条目就没有联动依据。
+- 会话被删空（只剩这张卡）时整条会话移除，避免列表里留一个空白项；未读数按剩余接收消息数收敛，不让角标指向一条不存在的消息。
+- 磁盘文件不受影响：删除的只是两个视图里的记录，和上游「删除历史记录」的语义一致（弹窗文案已写明）。
+- 反向（删会话 → 清历史）**没有做**：接收历史是日志，删聊天不该顺手销毁文件清单。
+
+
 ## 系统通知（收到消息的提醒）
 
 只提醒**文本消息**，且只在 App 不在前台时。收到文件本来就会弹接收确认页，再补一条通知是重复打扰；App 在前台时列表里的未读角标已经说明了新消息。

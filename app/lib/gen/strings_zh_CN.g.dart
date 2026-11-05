@@ -1488,7 +1488,7 @@ class Translations$dialogs$historyClearDialog$zh_CN extends Translations$dialogs
   @override
   String get title => '清空历史记录';
   @override
-  String get content => '确定要清空全部历史记录吗？';
+  String get content => '确定要清空全部历史记录吗？聊天里对应的文件卡片也会一并删除，已保存到磁盘的文件不受影响。';
 }
 
 // Path: dialogs.localNetworkUnauthorized

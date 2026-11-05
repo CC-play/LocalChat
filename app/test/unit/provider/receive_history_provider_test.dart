@@ -1,5 +1,8 @@
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:localchat_app/model/conversation/conversation.dart';
 import 'package:localchat_app/model/persistence/receive_history_entry.dart';
+import 'package:localchat_app/provider/conversation_provider.dart';
+import 'package:localchat_app/provider/persistence_provider.dart';
 import 'package:localchat_app/provider/receive_history_provider.dart';
 import 'package:localchat_isolates/model/file_type.dart';
 import 'package:mockito/mockito.dart';
@@ -195,6 +198,80 @@ void main() {
     expect(state, [_createEntry('1')]);
     verifyNever(persistenceService.setReceiveHistory(any));
   });
+
+  // [FORK] 历史条目与会话里的文件卡片共用协议里的 fileId，删除要联动。
+  test('Should delete the linked chat message when removing a history entry', () async {
+    when(persistenceService.getReceiveHistory()).thenReturn([
+      _createEntry('f1'),
+      _createEntry('f2'),
+    ]);
+    when(persistenceService.getConversations()).thenReturn([
+      Conversation(
+        peerFingerprint: 'fp',
+        peerAlias: 'Peer',
+        lastActivity: DateTime(2026, 1, 1),
+        unreadCount: 2,
+        messages: [_fileMessage('f1'), _fileMessage('f2')],
+      ),
+    ]);
+
+    final container = RefenaContainer(
+      overrides: [persistenceProvider.overrideWithValue(persistenceService)],
+    );
+    addTearDown(container.disposeContainer);
+
+    expect(container.read(receiveHistoryProvider).length, 2);
+    expect(container.read(conversationProvider).single.messages.length, 2);
+
+    await container.redux(receiveHistoryProvider).dispatchAsync(RemoveHistoryEntryAction('f1'));
+
+    expect(container.read(receiveHistoryProvider).map((e) => e.id), ['f2']);
+    expect(
+      container.read(conversationProvider).single.messages.map((m) => m.id),
+      ['f2'],
+      reason: '聊天里的同一张卡片应该一起消失',
+    );
+  });
+
+  test('Should delete every linked chat message when clearing the history', () async {
+    when(persistenceService.getReceiveHistory()).thenReturn([
+      _createEntry('f1'),
+      _createEntry('f2'),
+    ]);
+    when(persistenceService.getConversations()).thenReturn([
+      Conversation(
+        peerFingerprint: 'fp',
+        peerAlias: 'Peer',
+        lastActivity: DateTime(2026, 1, 1),
+        unreadCount: 2,
+        messages: [_fileMessage('f1'), _fileMessage('f2')],
+      ),
+    ]);
+
+    final container = RefenaContainer(
+      overrides: [persistenceProvider.overrideWithValue(persistenceService)],
+    );
+    addTearDown(container.disposeContainer);
+
+    await container.redux(receiveHistoryProvider).dispatchAsync(RemoveAllHistoryEntriesAction());
+
+    expect(container.read(receiveHistoryProvider), isEmpty);
+    expect(container.read(conversationProvider), isEmpty, reason: '两个文件都被删空，会话也不该留壳');
+  });
+}
+
+ChatMessage _fileMessage(String id) {
+  return ChatMessage(
+    id: id,
+    direction: ChatMessageDirection.received,
+    kind: ChatMessageKind.file,
+    timestamp: DateTime(2021, 1, 1),
+    status: ChatMessageStatus.received,
+    fileName: '$id.png',
+    filePath: '/tmp/$id.png',
+    fileSize: 123,
+    fileType: FileType.image,
+  );
 }
 
 ReceiveHistoryEntry _createMessageEntry(String id) {

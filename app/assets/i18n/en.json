@@ -508,7 +508,7 @@
     },
     "historyClearDialog": {
       "title": "Clear history",
-      "content": "Do you really want to delete the entire history?"
+      "content": "Do you really want to delete the entire history? The matching file cards in your chats will be removed too. Files already saved on disk are not affected."
     },
     "localNetworkUnauthorized": {
       "title": "@:dialogs.noPermission.title",

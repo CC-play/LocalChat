@@ -1,6 +1,7 @@
 import 'package:localchat_app/model/conversation/conversation.dart';
 import 'package:localchat_app/provider/conversation_provider.dart';
 import 'package:localchat_isolates/model/file_type.dart';
+import 'package:mockito/mockito.dart';
 import 'package:refena_flutter/refena_flutter.dart';
 import 'package:test/test.dart';
 
@@ -158,7 +159,10 @@ void main() {
         AppendChatMessageAction(
           peerFingerprint: 'fp-a',
           peerAlias: 'Alice',
-          message: textMessage(id: 'm$i', timestamp: DateTime(2026, 1, 1).add(Duration(seconds: i))),
+          message: textMessage(
+            id: 'm$i',
+            timestamp: DateTime(2026, 1, 1).add(Duration(seconds: i)),
+          ),
         ),
       );
     }
@@ -229,6 +233,68 @@ void main() {
 
     await service.dispatchAsync(ClearConversationsAction());
     expect(service.state, isEmpty);
+  });
+
+  group('DeleteChatMessagesAction（接收历史联动删除）', () {
+    test('只删指定消息，其余保留', () async {
+      final service = ReduxNotifier.test(redux: createService());
+
+      await service.dispatchAsync(
+        AppendChatMessageAction(
+          peerFingerprint: 'fp-a',
+          peerAlias: 'Alice',
+          message: textMessage(id: 'm1', timestamp: DateTime(2026, 1, 1, 10)),
+        ),
+      );
+      await service.dispatchAsync(
+        AppendChatMessageAction(
+          peerFingerprint: 'fp-a',
+          peerAlias: 'Alice',
+          message: textMessage(id: 'm2', timestamp: DateTime(2026, 1, 1, 11)),
+        ),
+      );
+
+      await service.dispatchAsync(DeleteChatMessagesAction({'m1'}));
+
+      expect(service.state.single.messages.map((m) => m.id), ['m2']);
+      expect(service.state.single.lastActivity, DateTime(2026, 1, 1, 11));
+      expect(service.state.single.unreadCount, 1, reason: '未读角标要跟着剩余接收消息收敛');
+    });
+
+    test('删空消息后整条会话一并移除', () async {
+      final service = ReduxNotifier.test(redux: createService());
+
+      await service.dispatchAsync(
+        AppendChatMessageAction(
+          peerFingerprint: 'fp-a',
+          peerAlias: 'Alice',
+          message: textMessage(id: 'm1'),
+        ),
+      );
+
+      await service.dispatchAsync(DeleteChatMessagesAction({'m1'}));
+
+      expect(service.state, isEmpty, reason: '不该留下一个空白会话');
+    });
+
+    test('没有匹配的 id 时不写盘', () async {
+      final service = ReduxNotifier.test(redux: createService());
+
+      await service.dispatchAsync(
+        AppendChatMessageAction(
+          peerFingerprint: 'fp-a',
+          peerAlias: 'Alice',
+          message: textMessage(id: 'm1'),
+        ),
+      );
+      clearInteractions(persistenceService);
+
+      await service.dispatchAsync(DeleteChatMessagesAction({'unknown'}));
+      await service.dispatchAsync(DeleteChatMessagesAction(const {}));
+
+      expect(service.state.single.messages.length, 1);
+      verifyNever(persistenceService.setConversations(any));
+    });
   });
 
   test('JSON 往返不丢字段', () {

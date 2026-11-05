@@ -49,7 +49,8 @@
 | `app/lib/pages/home_page.dart` | `HomeTab` 枚举、PageView children、纯图标侧边栏 |
 | `app/lib/pages/tabs/send_tab.dart` | `_NearbyRefresh`：发送页可见时每 8 s 重发一次多播通告（见 [discovery](modules/discovery.md)） |
 | `app/lib/provider/network/server/controller/receive_controller.dart` | 文本静默接收（受 `autoAcceptTextMessages` 设置控制）、落盘成功后写会话；文本**只**写会话，不进接收历史 |
-| `app/lib/provider/receive_history_provider.dart` | `init()` 清掉老数据里 `isMessage == true` 的文本条目（文本改为只归会话，见 [conversation](modules/conversation.md)） |
+| `app/lib/provider/receive_history_provider.dart` | `init()` 清掉老数据里 `isMessage == true` 的文本条目（文本改为只归会话，见 [conversation](modules/conversation.md)）；删条目的动作联动删掉会话里同 id 的文件卡片 |
+| `app/lib/provider/conversation_provider.dart` | `DeleteChatMessagesAction`：按消息 id 批量删除（供接收历史联动），删空的会话一并移除 |
 | `app/lib/provider/network/send_provider.dart` | Started / Finished / Failed 三处写会话；`sessionIdOverride` 参数 |
 | `app/lib/pages/receive_page.dart` | 文本消息的「接受 / 拒绝」两个按钮（上游只有「关闭」，等价于接受） |
 | `app/lib/model/state/settings_state.dart` | `autoAcceptTextMessages`：文本消息是否静默接收（默认开，设置页可关） |

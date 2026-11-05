@@ -450,6 +450,26 @@ cargokit 也就为每个 ABI 跑一遍 cargo（**20 分钟还没编完**）。
 
 ---
 
+### 3.12 2026-11-05 删接收历史时联动删掉聊天里的文件卡片
+
+**现象**：传了个文件，在「接收」页 → 历史里删掉，聊天里的文件卡片还在。
+
+**为什么文件和文本不一样**：文件不能像文本那样只留一处 —— 历史要提供「打开 / 在文件夹中显示 / 大小与来源」，会话要提供「谁在什么时候发的」。所以两份都留，但**两边本来就有同一个 id**（`entryId: fileId` / `messageId: fileId`），可以精确联动，不会误删。
+
+**改法**
+- 新增 `DeleteChatMessagesAction(Set<String> messageIds)`：按 id 批量删；会话被删空则整条移除；未读数按剩余接收消息数收敛，不让角标指向已删消息。
+- `ReceiveHistoryService` 加一个可空的 `Ref`（provider 工厂传入，单测传 null 即跳过联动），
+  提供 `deleteLinkedChatMessages(ids)`，在 `RemoveHistoryEntryAction` / `RemoveAllHistoryEntriesAction` 里调用。
+  联动失败只记 warning，不回滚主操作。
+- 清空历史只联动**当前历史里存在**的 id（最多 30 条），更早的消息没有条目可依据，不动。
+- 弹窗文案补一句：聊天里对应的文件卡片会一起删，磁盘上的文件不受影响。
+- 单测：`DeleteChatMessagesAction` 三条（部分删 / 删空移除会话 / 无匹配不写盘）+
+  两条联动（容器级，删单条 / 清空）。
+
+**没做的**：反向联动（删会话 → 清历史条目）。接收历史是日志，删聊天不该顺手销毁文件清单。
+
+---
+
 ## 4. 需要知道的平台差异
 
 ### 4.1 回车键：Android 上无法接管（已实测，别再试了）

@@ -58,9 +58,7 @@ class AppendChatMessageAction extends AsyncReduxAction<ConversationService, List
     }
 
     final messages = [...?existing?.messages, message]..sort((a, b) => a.timestamp.compareTo(b.timestamp));
-    final trimmed = messages.length > maxMessagesPerConversation
-        ? messages.sublist(messages.length - maxMessagesPerConversation)
-        : messages;
+    final trimmed = messages.length > maxMessagesPerConversation ? messages.sublist(messages.length - maxMessagesPerConversation) : messages;
 
     final updated = Conversation(
       peerFingerprint: peerFingerprint,
@@ -204,6 +202,57 @@ class DeleteConversationAction extends AsyncReduxAction<ConversationService, Lis
   Future<List<Conversation>> reduce() async {
     final next = state.where((e) => e.peerFingerprint != peerFingerprint).toList();
     if (next.length == state.length) {
+      return state;
+    }
+    await notifier._persistence.setConversations(next);
+    return next;
+  }
+}
+
+/// [FORK] 按消息 id 删除：用于「接收历史」删条目时联动清掉聊天里的同一张卡片。
+///
+/// 接收文件的 `ReceiveHistoryEntry.entryId` 与 `ChatMessage.id` 同取协议里的
+/// `fileId`，所以这里是精确匹配，不需要「别名 + 文件名 + 时间」那种近似匹配。
+/// 会话被删空时整条会话一并移除，避免会话列表里留下一个空白项。
+class DeleteChatMessagesAction extends AsyncReduxAction<ConversationService, List<Conversation>> {
+  final Set<String> messageIds;
+
+  DeleteChatMessagesAction(this.messageIds);
+
+  @override
+  Future<List<Conversation>> reduce() async {
+    if (messageIds.isEmpty || state.isEmpty) {
+      return state;
+    }
+
+    var changed = false;
+    final next = <Conversation>[];
+
+    for (final conversation in state) {
+      final remaining = conversation.messages.where((m) => !messageIds.contains(m.id)).toList();
+      if (remaining.length == conversation.messages.length) {
+        next.add(conversation);
+        continue;
+      }
+
+      changed = true;
+      if (remaining.isEmpty) {
+        // 整个会话只剩这张被删的卡片 —— 会话本身也没有意义了。
+        continue;
+      }
+
+      final receivedLeft = remaining.where((m) => m.direction == ChatMessageDirection.received).length;
+      next.add(
+        conversation.copyWith(
+          messages: remaining,
+          lastActivity: remaining.last.timestamp,
+          // 未读角标不能指向一条已经删掉的消息，按剩余接收消息数收敛。
+          unreadCount: conversation.unreadCount > receivedLeft ? receivedLeft : conversation.unreadCount,
+        ),
+      );
+    }
+
+    if (!changed) {
       return state;
     }
     await notifier._persistence.setConversations(next);

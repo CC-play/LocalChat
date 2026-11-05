@@ -1,22 +1,31 @@
 import 'dart:async';
 
 import 'package:localchat_app/model/persistence/receive_history_entry.dart';
+import 'package:localchat_app/provider/conversation_provider.dart';
 import 'package:localchat_app/provider/persistence_provider.dart';
 import 'package:localchat_isolates/model/file_type.dart';
+import 'package:logging/logging.dart';
 import 'package:refena_flutter/refena_flutter.dart';
 
 const _maxHistoryEntries = 30;
 
+final _logger = Logger('ReceiveHistory');
+
 /// This provider stores the history of received files.
 /// It automatically saves the history to the device's storage.
 final receiveHistoryProvider = ReduxProvider<ReceiveHistoryService, List<ReceiveHistoryEntry>>((ref) {
-  return ReceiveHistoryService(ref.read(persistenceProvider));
+  return ReceiveHistoryService(ref.read(persistenceProvider), ref);
 });
 
 class ReceiveHistoryService extends ReduxNotifier<List<ReceiveHistoryEntry>> {
   final PersistenceService _persistence;
 
-  ReceiveHistoryService(this._persistence);
+  /// [FORK] 联动删除会话消息需要向另一个 provider 派发动作。
+  ///
+  /// 单测里直接构造 service 时没有容器，传 null 即跳过联动。
+  final Ref? _ref;
+
+  ReceiveHistoryService(this._persistence, [this._ref]);
 
   @override
   List<ReceiveHistoryEntry> init() {
@@ -32,6 +41,23 @@ class ReceiveHistoryService extends ReduxNotifier<List<ReceiveHistoryEntry>> {
       unawaited(_persistence.setReceiveHistory(migrated));
     }
     return migrated;
+  }
+
+  /// [FORK] 删除历史条目时，把会话里 id 相同的消息一起删掉。
+  ///
+  /// 接收文件的 `entryId` 与 `ChatMessage.id` 同取协议里的 `fileId`，精确匹配。
+  /// 失败只记日志：清历史是主操作，联动是附带效果，不能因为联动失败而回滚。
+  Future<void> deleteLinkedChatMessages(Iterable<String> entryIds) async {
+    final ref = _ref;
+    final ids = entryIds.toSet();
+    if (ref == null || ids.isEmpty) {
+      return;
+    }
+    try {
+      await ref.redux(conversationProvider).dispatchAsync(DeleteChatMessagesAction(ids));
+    } catch (e, st) {
+      _logger.warning('Failed to delete linked chat messages', e, st);
+    }
   }
 }
 
@@ -98,6 +124,8 @@ class RemoveHistoryEntryAction extends AsyncReduxAction<ReceiveHistoryService, L
     }
     final updated = [...state]..removeAt(index);
     await notifier._persistence.setReceiveHistory(updated);
+    // [FORK] 聊天里的文件卡片是同一份数据的另一个视图，删历史就别让它留在会话里。
+    await notifier.deleteLinkedChatMessages([entryId]);
     return updated;
   }
 }
@@ -106,7 +134,10 @@ class RemoveHistoryEntryAction extends AsyncReduxAction<ReceiveHistoryService, L
 class RemoveAllHistoryEntriesAction extends AsyncReduxAction<ReceiveHistoryService, List<ReceiveHistoryEntry>> {
   @override
   Future<List<ReceiveHistoryEntry>> reduce() async {
+    final removedIds = state.map((entry) => entry.id).toList();
     await notifier._persistence.setReceiveHistory([]);
+    // [FORK] 只联动「本来就在历史里」的那些，历史之外的更早消息不动。
+    await notifier.deleteLinkedChatMessages(removedIds);
     return [];
   }
 }

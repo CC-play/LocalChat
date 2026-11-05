@@ -1759,8 +1759,9 @@ class Translations$dialogs$historyClearDialog$en {
   /// en: 'Clear history'
   String get title => 'Clear history';
 
-  /// en: 'Do you really want to delete the entire history?'
-  String get content => 'Do you really want to delete the entire history?';
+  /// en: 'Do you really want to delete the entire history? The matching file cards in your chats will be removed too. Files already saved on disk are not affected.'
+  String get content =>
+      'Do you really want to delete the entire history? The matching file cards in your chats will be removed too. Files already saved on disk are not affected.';
 }
 
 // Path: dialogs.localNetworkUnauthorized
