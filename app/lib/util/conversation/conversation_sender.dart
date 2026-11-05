@@ -136,18 +136,23 @@ Device? resolveConversationTarget(Ref ref, Conversation conversation) {
   }
 
   final port = conversation.peerPort ?? defaultPort;
+  // [FORK] 必须用 https：LocalSend v2 的 53317 是 TLS 端口，对端只接受 TLS 握手。
+  // 这里曾经写死 `https: false`，结果是「从发送 Tab 发得出去（设备来自扫描，带 https），
+  // 从会话页发永远失败」——明文 HTTP 打到 TLS 端口，服务端握手失败后直接断连，
+  // 手机侧只看到一连串 TIME_WAIT，最终报「对方不可达」。
+  // 会话记录里没有协议字段，而关了 https 的对端属于少数配置，先按默认值来。
   return Device(
     signalingId: null,
     ip: ip,
     version: protocolVersion,
     port: port,
-    https: false,
+    https: true,
     fingerprint: conversation.peerFingerprint,
     alias: conversation.peerAlias,
     deviceModel: null,
     deviceType: DeviceType.desktop,
     download: false,
-    channels: [HttpChannel(host: ip, port: port, https: false)],
+    channels: [HttpChannel(host: ip, port: port, https: true)],
   );
 }
 
