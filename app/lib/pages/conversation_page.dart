@@ -1077,6 +1077,12 @@ class _ComposerState extends State<_Composer> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // [FORK] 输入框无边框：主题里给 enabled/focusedBorder 都设了 secondaryContainer
+    // 描边，只覆盖 border 还不够（那两个字段会继续生效），三处一起置空。
+    final inputBorder = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(20),
+      borderSide: BorderSide.none,
+    );
 
     return PopScope(
       // 面板展开时返回键先收起面板，而不是直接退出会话（手机上很容易误按）。
@@ -1132,10 +1138,9 @@ class _ComposerState extends State<_Composer> {
                         filled: true,
                         fillColor: theme.colorScheme.surface,
                         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(20),
-                          borderSide: BorderSide.none,
-                        ),
+                        border: inputBorder,
+                        enabledBorder: inputBorder,
+                        focusedBorder: inputBorder,
                       ),
                     ),
                   ),
@@ -1224,11 +1229,10 @@ class _AttachmentPanel extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
         // 与输入框同一底色：浅色下是纯白，深色下是深灰，两者都不会抢视线。
+        // 不描边：输入栏底色（surfaceContainerLow）比 surface 深一档，
+        // 圆角块本身就分得出来，多一条细线反而显脏。
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        // 面板底色和输入栏底色常常是同一个 surface，只靠填充色分不开，
-        // 再补一条 outlineVariant 细线（与输入栏顶部那条同规格）。
-        border: Border.all(color: theme.colorScheme.outlineVariant, width: 0.5),
       ),
       child: Row(
         children: [

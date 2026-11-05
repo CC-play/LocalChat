@@ -61,6 +61,8 @@
 | 聊天页提示用 `TopToast`，不要 `SnackBar` | SnackBar 只能贴底，挡住输入栏 |
 | 输入条只有一个右侧按钮：空输入 = 附件入口（桌面 `folder_outlined` 直接选文件、移动端 `add` 展开相册/文件面板），有文字 = 发送。不要再加回形针等第二个按钮 | 用户明确要求把两个入口合成一个，空态占位不要并排摆两个图标 |
 | 聊天页背景 / 对方气泡 / 输入栏一律取 `ChatPalette.of(context)`（`config/chat_palette.dart`），**不要**改 `ColorScheme.surface` | 改 surface 是全局的，会把设置页、发送页、对话框一起染灰 |
+| 输入框与附件面板**不描边**。输入框必须同时覆盖 `border` / `enabledBorder` / `focusedBorder` 为 `BorderSide.none` | 主题 `inputDecorationTheme` 给后两者设了 `secondaryContainer` 描边，只改 `border` 仍会画出边框 |
+| 输入栏顶部 `outlineVariant` 0.5px 细线是**唯一**的区分手段（`localchat` 浅色下输入栏与消息区同色），不要顺手删 | 删掉后消息列表直接贴住输入区，没有视觉断点 |
 | Local Chat 主题的种子色只在 `config/theme.dart` 的 `kSeedColor` 改（`#1E90FF`），不要在别处再写死 `Colors.teal` | `localchat` 走 null 分支跟随 `defaultColorScheme`，写死第二处就会出现两套配色 |
 
 ## 为什么不做符号索引
