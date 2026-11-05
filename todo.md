@@ -257,6 +257,27 @@ cargokit 也就为每个 ABI 跑一遍 cargo（**20 分钟还没编完**）。
 
 真机验证时直接两台设备连同一 Wi-Fi 即可，不需要这段桥接。
 
+### 3.7 2026-11-05 真机补测：重复气泡 + 发送 Tab 写会话
+
+**重复气泡（已修，真机验证通过）**
+- 现象：手机上每发出一条文本，会话里出现**两个**一模一样的气泡（id 不同、间隔一百多毫秒），接收端只收到一份。
+- 根因：`sendTextMessage` 先用 `messageId` 写气泡，但 `_attemptTextSend` 调 `startSession` 时**没传 `fileIdsOverride`**，
+  `startSession` 为 `FileDto` 另生成一个 uuid；上传事件按那个 id 又写一条。失败的消息（没进入上传、
+  没有 Started 事件）反而只有一个气泡——这条规律正好对上历史数据。
+- 修法：`fileIdsOverride: [messageId]`（一行）。
+- 验证：手机 → 本机 Python 假对端（`$TEMP/lspeer/recv.py`，接受上传），发 `dupfix-1125`：
+  接收端日志 1 次 prepare + 1 次 upload，手机端只有 1 条气泡，持久化里只有 1 条消息，
+  其 id `fc479498-…` 与接收端日志的 `fileId` 完全一致。
+
+**发送 Tab 不写会话（已修，需人工点一次文件选择器复核）**
+- 现象：从普通「发送」Tab 发文件，会话列表里没有任何痕迹。
+- 根因：会话只在 `HttpUploadFileStartedEvent` 里写，而「连不上 / 被拒绝 / 对端没勾选」根本不产生 upload 事件。
+- 修法：`send_provider.startSession` 在**握手之前**预置「发送中」气泡（`_preRecordSessionMessages`），
+  登记 id 到 `_preRecordedMessages`；握手每个终态分支 + `_finish` + `closeSession` 调
+  `_settlePreRecorded` 收尾（跳 `FileStatus.finished`，不会把成功的改坏）。聊天页传了
+  `fileIdsOverride`，这条兜底对它无效（聊天自己预置、要能重发）。
+- 待复核：需要真人点一次系统文件选择器（SAF），AI 点不动 → 手动发一个文件，看会话列表有没有新卡片。
+
 ---
 
 ## 4. 需要知道的平台差异

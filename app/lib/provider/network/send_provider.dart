@@ -61,6 +61,14 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
   /// Session ID -> Cancel token
   final _prepareUploadCancelTokens = <String, rust_cancel.RsCancellationToken>{};
 
+  /// [FORK] 本 provider 预置的「发送中」气泡。Session ID -> message ids。
+  ///
+  /// 只有**不传 [startSession.fileIdsOverride]** 的调用方（发送 Tab / 收藏 / 地址 /
+  /// 多设备）才登记，聊天页自己预置气泡（它需要精确 alias 与重发能力）。
+  /// 收尾必须按这份名单来：`upload` 事件只覆盖「真的开始传」的文件，
+  /// 连不上、被拒绝、对端一个都没勾选时不会有任何事件，气泡会永远转圈。
+  final _preRecordedMessages = <String, List<String>>{};
+
   @override
   Map<String, SendSessionState> init() {
     return {};
@@ -82,6 +90,70 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
         session.copyWith(files: {}).toString().replaceFirst('files: {}', 'files: <${session.files.length} files>'),
       );
     }).toString();
+  }
+
+  /// [FORK] 在握手之前先把「发送中」气泡写进会话。
+  ///
+  /// 普通「发送」入口原来只在 `HttpUploadFileStartedEvent` 里写会话，也就是
+  /// 「真的开始传」才有记录：连不上、被拒绝、对端一个都没勾选时，会话里什么都看不到。
+  Future<void> _preRecordSessionMessages({
+    required String sessionId,
+    required Device target,
+    required List<({String id, CrossFile file})> files,
+    String? text,
+  }) async {
+    final ids = <String>[];
+    for (final (:id, :file) in files) {
+      ids.add(id);
+      await recordSentFileStart(
+        ref: ref,
+        target: target,
+        messageId: id,
+        fileName: file.name,
+        filePath: file.path,
+        fileSize: file.size,
+        fileType: file.fileType,
+        // 单文件文本消息的正文（其余情况为 null，会按文件气泡呈现）。
+        text: text,
+      );
+    }
+    _preRecordedMessages[sessionId] = ids;
+  }
+
+  /// [FORK] 给预置气泡收尾：没有 upload 事件的文件统一标成发送失败。
+  ///
+  /// 幂等：登记过的会话只处理一次；已被 upload 事件写成终态（成功或失败）的文件跳过。
+  Future<void> _settlePreRecorded({required String sessionId, String? errorMessage}) async {
+    final ids = _preRecordedMessages.remove(sessionId);
+    if (ids == null) {
+      return;
+    }
+    final session = state[sessionId];
+    if (session == null) {
+      return;
+    }
+    final transferNotifier = ref.read(fileTransferProvider);
+    for (final id in ids) {
+      final file = session.files[id];
+      if (file == null) {
+        continue;
+      }
+      if (transferNotifier.getStatus(sessionId: sessionId, fileId: id) == FileStatus.finished) {
+        continue;
+      }
+      await markSentFile(
+        ref: ref,
+        target: session.target,
+        messageId: id,
+        fileName: file.file.fileName,
+        filePath: file.path,
+        fileSize: file.file.size,
+        fileType: file.file.fileType,
+        text: file.file.fileType == FileType.text ? file.file.preview : null,
+        success: false,
+        errorMessage: errorMessage,
+      );
+    }
   }
 
   /// Starts a session.
@@ -117,6 +189,12 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
         ),
     ];
 
+    // 单文件文本消息的正文。LocalSend 协议没有独立的「消息」类型，
+    // 文本是靠 FileDto.preview 携带的。
+    final embeddedText = files.length == 1 && files.first.fileType == FileType.text && files.first.bytes != null
+        ? utf8.decode(files.first.bytes!)
+        : null;
+
     state = state.updateSession(
       sessionId: sessionId,
       state: (_) => SendSessionState(
@@ -135,9 +213,7 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
                 fileType: file.fileType,
                 hash: null,
                 // calculated below
-                preview: files.length == 1 && files.first.fileType == FileType.text && files.first.bytes != null
-                    ? utf8.decode(files.first.bytes!) // send simple message by embedding it into the preview
-                    : null,
+                preview: embeddedText,
                 metadata: file.lastModified != null || file.lastAccessed != null
                     ? FileMetadata(
                         lastModified: file.lastModified,
@@ -175,6 +251,18 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
       Routerino.context.push(
         () => SendPage(showAppBar: false, closeSessionOnClose: true, sessionId: sessionId),
         transition: RouterinoTransition.fade(),
+      );
+    }
+
+    // [FORK] 会话视图：连不上、被拒绝、对端没勾选这些结局不会产生任何 upload 事件，
+    // 所以气泡必须在握手之前就写下来，否则「从发送 Tab 发过」这件事在会话里完全消失。
+    // 聊天页自己预置（需要精确 alias / 重发），只接管没传 fileIdsOverride 的调用方。
+    if (fileIdsOverride == null) {
+      await _preRecordSessionMessages(
+        sessionId: sessionId,
+        target: target,
+        files: selectedFiles,
+        text: embeddedText,
       );
     }
 
@@ -327,6 +415,8 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
                     status: SessionStatus.canceledBySender,
                   ),
                 );
+                // [FORK] 会话视图：握手阶段就结束的，气泡立刻收尾。
+                await _settlePreRecorded(sessionId: sessionId, errorMessage: state[sessionId]?.errorMessage);
                 return;
               }
               break;
@@ -337,6 +427,7 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
                   status: SessionStatus.declined,
                 ),
               );
+              await _settlePreRecorded(sessionId: sessionId, errorMessage: state[sessionId]?.errorMessage);
               return;
             case 409:
               state = state.updateSession(
@@ -345,6 +436,7 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
                   status: SessionStatus.recipientBusy,
                 ),
               );
+              await _settlePreRecorded(sessionId: sessionId, errorMessage: state[sessionId]?.errorMessage);
               return;
             case 429:
               state = state.updateSession(
@@ -353,6 +445,7 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
                   status: SessionStatus.tooManyAttempts,
                 ),
               );
+              await _settlePreRecorded(sessionId: sessionId, errorMessage: state[sessionId]?.errorMessage);
               return;
             default:
               state = state.updateSession(
@@ -362,6 +455,7 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
                   errorMessage: e.humanErrorMessage,
                 ),
               );
+              await _settlePreRecorded(sessionId: sessionId, errorMessage: state[sessionId]?.errorMessage);
               return;
           }
         } catch (e) {
@@ -372,6 +466,7 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
               errorMessage: e.humanErrorMessage,
             ),
           );
+          await _settlePreRecorded(sessionId: sessionId, errorMessage: state[sessionId]?.errorMessage);
           return;
         }
       } while (invalidPin);
@@ -380,6 +475,7 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
     }
 
     if (response == null) {
+      await _settlePreRecorded(sessionId: sessionId, errorMessage: state[sessionId]?.errorMessage);
       return;
     }
 
@@ -406,6 +502,7 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
             errorMessage: e.humanErrorMessage,
           ),
         );
+        await _settlePreRecorded(sessionId: sessionId, errorMessage: state[sessionId]?.errorMessage);
         return;
       }
     }
@@ -540,6 +637,10 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
     if (sessionState == null) {
       return;
     }
+
+    // [FORK] 会话视图：给还没有结局的预置气泡收尾。
+    // 典型场景是「对端一个文件都没勾选」——那些文件不会进入上传，永远不会有事件。
+    unawaited(_settlePreRecorded(sessionId: sessionId, errorMessage: sessionState.errorMessage));
 
     // The transfer is over, the process no longer needs to be kept alive for it.
     TransferNotification.stop(sessionId);
@@ -859,8 +960,13 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
   void closeSession(String sessionId) {
     final sessionState = state[sessionId];
     if (sessionState == null) {
+      // 会话在计算校验和阶段被取消时状态已经没了，这里顺手把预置名单清掉。
+      _preRecordedMessages.remove(sessionId);
       return;
     }
+    // [FORK] 会话被关掉（用户从发送页返回、或握手阶段就失败）时，
+    // 把预置的「发送中」气泡标成失败，别让它一直转圈。
+    unawaited(_settlePreRecorded(sessionId: sessionId, errorMessage: sessionState.errorMessage));
     TransferNotification.stop(sessionId);
     _hashCancelTokens.remove(sessionId)?.cancel();
     _prepareUploadCancelTokens.remove(sessionId)?.cancel();
@@ -883,6 +989,7 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
       cancelToken.cancel();
     }
     _prepareUploadCancelTokens.clear();
+    _preRecordedMessages.clear();
     state = {};
     ref.notifier(fileTransferProvider).removeAllSessions();
   }

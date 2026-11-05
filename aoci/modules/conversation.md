@@ -51,9 +51,11 @@
 2. `peerFingerprint` 非空（`peerKeyOf` 优先设备指纹，退化 `alias:<别名>`）；
 3. 该 `message.id` 尚未存在于该会话（重复即只更新，不新增）。
 
-五个实际触发点：收到文本（自动接收）、收到文件且落盘成功（`error == null && desiredName != null`）、自己发文本（先写"发送中"）、自己发文件（`deliverFiles` **在投递前**就写好"发送中"，不依赖 Started 事件）、Started 丢失时 `markSentFile` 兜底补插。
+五个实际触发点：收到文本（自动接收）、收到文件且落盘成功（`error == null && desiredName != null`）、自己发文本（先写"发送中"）、自己发文件（`deliverFiles` **在投递前**就写好"发送中"，不依赖 Started 事件）、`markSentFile` 兜底补插。
 
-**推论**：发送失败也会留卡片（末条 `failed`，列表显示红点）；接收被拒/接收失败不留卡片；从普通「发送」Tab 传文件也会刷新卡片（钩子在全局上传事件里，不区分入口）。
+**普通「发送」Tab 也走同一套（2026-11-05 补）**：`send_provider.startSession` 在握手之前就调 `recordSentFileStart` 预置气泡（`_preRecordSessionMessages`），并把这些 id 记在 `_preRecordedMessages[sessionId]` 里。之前只在 `HttpUploadFileStartedEvent` 里写，结果是**连不上 / 被拒绝 / 对端一个文件都没勾选时，会话里什么都没有**——「我明明发过」这件事直接消失。收尾由 `_settlePreRecorded` 负责：握手阶段的每个终态分支、`_finish`、`closeSession` 都会调它，把还没结局的预置气泡标成失败（`FileStatus.finished` 的跳过，避免把已成功的改坏）。聊天页传了 `fileIdsOverride`，所以这条兜底完全绕开它（聊天自己那套要能重发、要精确 alias）。
+
+**推论**：发送失败也会留卡片（末条 `failed`，列表显示红点）；接收被拒/接收失败不留卡片；从普通「发送」Tab 传文件也会刷新卡片（钩子在 `startSession` 里，不区分入口）。
 
 ## 离线重试（2 分钟窗口）
 
@@ -180,6 +182,8 @@ ChatMessageStatus:  pending ──成功──> sent
 ```
 
 去重靠 `message.id`：接收方向复用 `fileId`（重传天然幂等），发送方向复用源 `file.id` / 新 UUID。
+
+**发文本必须把消息 id 交给 `startSession`（`fileIdsOverride: [messageId]`）**。少这一条时，`startSession` 会为 `FileDto` 另生成一个 uuid，上传事件按那个 id 又写一条「发送中」气泡 → **同一条消息两个气泡**（间隔一百多毫秒，接收端只收到一份）。2026-11-05 真机复现并修复：修复后手机 → Py Receiver 发一条 `dupfix-1125`，会话里只有 1 条 `sent`，其 id 与接收端日志里的 `fileId` 完全一致。历史数据里成对出现的旧气泡是修复前留下的，不会被自动清理。
 
 ## 上限与排序
 

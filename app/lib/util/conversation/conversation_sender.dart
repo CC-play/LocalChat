@@ -221,6 +221,7 @@ Future<SendFailure?> sendTextMessage({
       ref: ref,
       target: target,
       file: file,
+      messageId: messageId,
       sessionId: sessionId,
       ticket: ticket,
     ).timeout(textSendRetryWindow + _timeoutGrace);
@@ -266,6 +267,7 @@ Future<SendFailure?> _sendTextWithRetry({
   required Ref ref,
   required Device target,
   required CrossFile file,
+  required String messageId,
   required String sessionId,
   required _SendTicket ticket,
 }) async {
@@ -282,6 +284,7 @@ Future<SendFailure?> _sendTextWithRetry({
       ref: ref,
       target: target,
       file: file,
+      messageId: messageId,
       sessionId: sessionId,
     );
 
@@ -313,6 +316,7 @@ Future<SendFailure?> _attemptTextSend({
   required Ref ref,
   required Device target,
   required CrossFile file,
+  required String messageId,
   required String sessionId,
 }) async {
   try {
@@ -322,6 +326,10 @@ Future<SendFailure?> _attemptTextSend({
       background: true,
       // 传入固定 id，才能在结束后读回这次会话的结局。
       sessionIdOverride: sessionId,
+      // 固定文件 id = 消息 id。少了这一条，`startSession` 会另外生成一个 uuid，
+      // 上传事件按那个 id 又写一条「发送中」气泡，于是同一条消息出现两个气泡
+      // （接收端只收到一份）。
+      fileIdsOverride: [messageId],
     );
 
     // 成功时 startSession 会把会话收掉（收到 204 后 fileMap 为空）。
