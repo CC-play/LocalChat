@@ -290,17 +290,36 @@ class _Actions extends StatelessWidget {
     final colorMode = context.watch(settingsProvider.select((state) => state.colorMode));
 
     if (vm.message != null) {
+      // [FORK] 文本消息要能拒绝。上游这里只有「关闭」一个按钮，而它调的正是 onAccept ——
+      // 等于是「关掉 = 收下」。关掉「自动接收文本消息」后要真的能拒收，就必须补一个。
       return Center(
-        child: TextButton.icon(
-          style: TextButton.styleFrom(
-            foregroundColor: Theme.of(context).colorScheme.onSurface,
-          ),
-          onPressed: () {
-            vm.onAccept();
-            context.global.dispatch(NavigateAction.popUntil<WebSharePage>());
-          },
-          icon: const Icon(Icons.close),
-          label: Text(t.general.close),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            TextButton.icon(
+              style: TextButton.styleFrom(
+                foregroundColor: Theme.of(context).colorScheme.error,
+              ),
+              onPressed: () {
+                vm.onDecline();
+                context.global.dispatch(NavigateAction.popUntil<WebSharePage>());
+              },
+              icon: const Icon(Icons.close),
+              label: Text(t.general.decline),
+            ),
+            const SizedBox(width: 12),
+            TextButton.icon(
+              style: TextButton.styleFrom(
+                foregroundColor: Theme.of(context).colorScheme.onSurface,
+              ),
+              onPressed: () {
+                vm.onAccept();
+                context.global.dispatch(NavigateAction.popUntil<WebSharePage>());
+              },
+              icon: const Icon(Icons.check),
+              label: Text(t.general.accept),
+            ),
+          ],
         ),
       );
     }
