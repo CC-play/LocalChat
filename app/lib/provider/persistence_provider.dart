@@ -17,6 +17,7 @@ import 'package:localchat_app/util/native/autostart_helper.dart';
 import 'package:localchat_app/util/native/context_menu_helper.dart';
 import 'package:localchat_app/util/native/platform_check.dart';
 import 'package:localchat_app/util/security_helper.dart';
+import 'package:localchat_app/util/shared_preferences/settings_migration.dart';
 import 'package:localchat_app/util/shared_preferences/shared_preferences_file.dart';
 import 'package:localchat_app/util/shared_preferences/shared_preferences_portable.dart';
 import 'package:localchat_app/util/ui/animations_status.dart';
@@ -33,41 +34,23 @@ part 'persistence_provider_migrations.dart';
 
 final _logger = Logger('PersistenceService');
 
-String get _windowsFile {
-  final appData = Platform.environment['APPDATA'];
-  return '$appData\\LocalChat\\settings.json';
-}
+String get _windowsFile => settingsPath(Platform.environment['APPDATA'] ?? '');
 
-/// [FORK] 改名前（LocalSend 时期）的设置文件位置。
-///
-/// 只用于把老数据搬到新目录；`LocalChat` 目录一旦存在就不再读取这里。
-String get _windowsPreRenameFile {
-  final appData = Platform.environment['APPDATA'];
-  return '$appData\\LocalSend\\settings.json';
-}
+String get _windowsLegacyFile => legacySettingsPath(Platform.environment['APPDATA'] ?? '');
 
-String get _windowsLegacyFile {
-  final appData = Platform.environment['APPDATA'];
-  return '$appData\\org.localsend\\localsend_app\\shared_preferences.json';
-}
-
-/// [FORK] 把改名前的设置文件搬到新目录。
+/// [FORK] 把改名前的设置文件搬到新目录（实现在 `settings_migration.dart`，那里有测试）。
 ///
 /// 改名同时改了数据目录，不迁移的话老用户（本仓库的分叉历史）会表现为
 /// 「首次启动」：会话、收藏、窗口位置、密钥全丢。搬动而非复制，避免两份配置互相打架。
 void _migratePreRenameSettings() {
+  final appData = Platform.environment['APPDATA'];
+  if (appData == null) {
+    return;
+  }
   try {
-    final oldFile = File(_windowsPreRenameFile);
-    if (!oldFile.existsSync()) {
-      return;
+    if (migratePreRenameSettings(appDataDir: appData)) {
+      _logger.info('Migrated settings from the pre-rename location.');
     }
-    final newFile = File(_windowsFile);
-    if (newFile.existsSync()) {
-      return;
-    }
-    newFile.parent.createSync(recursive: true);
-    oldFile.renameSync(newFile.path);
-    _logger.info('Migrated settings from the pre-rename location.');
   } catch (e, st) {
     _logger.warning('Failed to migrate pre-rename settings.', e, st);
   }

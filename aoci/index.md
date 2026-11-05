@@ -16,7 +16,7 @@
 | 想中止正在发送的消息 | `message_bubble.dart`（`onCancel`，转圈可点）→ `conversation_sender.dart`（`cancelChatMessage` + `_SendTicket`）→ 兜底 `chatSendWatchdogTimeout` | [conversation](modules/conversation.md#主动取消与界面兜底) | 手动：点重发后点转圈立刻停下 |
 | 收文本消息（静默接收） | `app/lib/provider/network/server/controller/receive_controller.dart:168` | [conversation](modules/conversation.md) | 双端收发 |
 | 收到文件的记录时机 | `receive_controller.dart:377`（`error == null` 分支） | [conversation](modules/conversation.md) | 传一个文件后看会话 |
-| 会话持久化 / 迁移 | `app/lib/provider/persistence_provider.dart:60`（`ls_conversations`） | — | `flutter test` |
+| 会话持久化 / 迁移 | `app/lib/provider/persistence_provider.dart`（`ls_conversations`）→ `app/lib/util/shared_preferences/settings_migration.dart`（改名迁移） | — | `flutter test test/unit/util/shared_preferences/` |
 | 侧边栏 / Tab 顺序 | `app/lib/pages/home_page.dart` → `app/lib/pages/home_page_controller.dart` | — | `flutter analyze` |
 | 主题色 / 气泡配色 | `app/lib/config/theme.dart` → `app/lib/widget/chat/message_bubble.dart` | — | 见 [不变量](invariants.md#ui) |
 | 界面文案 | `app/assets/i18n/en.json` + `zh-CN.json` → `fvm dart run slang` | — | `flutter analyze` |
@@ -48,6 +48,7 @@
 | `app/lib/provider/network/server/controller/receive_controller.dart` | 文本静默接收、落盘成功后写会话 |
 | `app/lib/provider/network/send_provider.dart` | Started / Finished / Failed 三处写会话；`sessionIdOverride` 参数 |
 | `app/lib/provider/persistence_provider.dart` | `getConversations` / `setConversations` |
+| `app/lib/util/shared_preferences/settings_migration.dart` | fork 新增的整个文件：`%APPDATA%\LocalSend` → `LocalChat` 的改名迁移（有单测） |
 | `app/lib/util/conversation/conversation_recorder.dart` | 文件头注释即 fork 说明 |
 | `app/lib/pages/conversation_page.dart` | 顶部说明 |
 | `app/lib/widget/chat/message_bubble.dart` | 固定气泡色常量 |
