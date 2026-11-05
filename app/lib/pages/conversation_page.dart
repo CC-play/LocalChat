@@ -7,6 +7,7 @@ import 'package:file_selector/file_selector.dart' show XFile;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show SelectedContent;
 import 'package:flutter/services.dart';
+import 'package:localchat_app/config/chat_palette.dart';
 import 'package:localchat_app/gen/strings.g.dart';
 import 'package:localchat_app/model/conversation/conversation.dart';
 import 'package:localchat_app/model/cross_file.dart';
@@ -394,6 +395,8 @@ class _ConversationPageState extends State<ConversationPage> {
 
     final messages = conversation.messages;
     final initial = conversation.initial;
+    // [FORK] 聊天页配色（Local Chat + 浅色为中性灰底 + 纯白对方气泡）
+    final palette = ChatPalette.of(context);
 
     final content = DropTarget(
       // [FORK] 会话窗口自己接住拖拽。主页那层 DropTarget 会同时收到事件
@@ -405,7 +408,13 @@ class _ConversationPageState extends State<ConversationPage> {
       child: Stack(
         children: [
           Scaffold(
-            appBar: AppBar(title: Text(conversation.displayName)),
+            backgroundColor: palette.background,
+            appBar: AppBar(
+              backgroundColor: palette.appBarBackground,
+              // 关掉 M3 的滚动染色，否则内容滚到标题栏下方时头部会浮出主题色。
+              surfaceTintColor: Colors.transparent,
+              title: Text(conversation.displayName),
+            ),
             body: Column(
               children: [
                 Expanded(
@@ -991,7 +1000,9 @@ class _ComposerState extends State<_Composer> {
       child: Container(
         padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
         decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerLow,
+          // [FORK] 跟随聊天页配色：Local Chat 浅色下与消息区同为中性灰，
+          // 靠顶部那条 outlineVariant 细线和消息列表分开。
+          color: ChatPalette.of(context).composerBackground,
           border: Border(
             top: BorderSide(color: theme.colorScheme.outlineVariant, width: 0.5),
           ),

@@ -55,8 +55,10 @@
 | `app/lib/provider/persistence_provider.dart` | `getConversations` / `setConversations`；`isAutoAcceptTextMessages`（默认 true） |
 | `app/lib/util/shared_preferences/settings_migration.dart` | fork 新增的整个文件：`%APPDATA%\LocalSend` → `LocalChat` 的改名迁移（有单测） |
 | `app/lib/util/conversation/conversation_recorder.dart` | 文件头注释即 fork 说明 |
-| `app/lib/pages/conversation_page.dart` | 顶部说明 |
-| `app/lib/widget/chat/message_bubble.dart` | 固定气泡色常量 |
+| `app/lib/pages/conversation_page.dart` | 顶部说明；聊天页背景 / 输入栏取 `ChatPalette` |
+| `app/lib/config/theme.dart` | `kSeedColor`（Local Chat 种子色 `#1E90FF`，上游是 `Colors.teal`）、`extensions: [chatPaletteFor(...)]`：把聊天配色挂进 ThemeData |
+| `app/lib/config/chat_palette.dart` | 整个文件为 fork 新增（聊天页配色 `ChatPalette`，Local Chat + 浅色 → `#EBEBEB` 底 / `#FFFFFF` 对方气泡） |
+| `app/lib/widget/chat/message_bubble.dart` | 固定气泡色常量；对方气泡取 `ChatPalette.incomingBubble` |
 | `app/lib/widget/chat/top_toast.dart` | 顶部 Toast 说明 |
 | `app/lib/widget/chat/file_message_card.dart` | 发出方向前景色 |
 | `app/lib/pages/conversations_page.dart` | `_NotificationsOffBanner`：通知不可用时的提示条 |
@@ -82,8 +84,9 @@ app/lib/util/conversation/clipboard_image.dart         199 行（图片 + 文件
 app/lib/provider/conversation_provider.dart           229 行
 app/lib/provider/conversation/chat_transfer_provider.dart  77 行（上传进度旁路）
 app/lib/pages/conversations_page.dart                 173 行
-app/lib/pages/conversation_page.dart                 1023 行
-app/lib/widget/chat/message_bubble.dart               337 行
+app/lib/config/chat_palette.dart                      107 行（聊天页配色 ThemeExtension）
+app/lib/pages/conversation_page.dart                 1089 行
+app/lib/widget/chat/message_bubble.dart               339 行
 app/lib/widget/chat/file_message_card.dart             76 行
 app/lib/widget/chat/top_toast.dart                    168 行
 app/lib/widget/chat/drop_confirm_dialog.dart          128 行
@@ -93,6 +96,7 @@ app/windows/runner/clipboard_ext.cpp                   67 行
 app/test/unit/provider/conversation_provider_test.dart 368 行（16 用例）
 app/test/unit/provider/chat_transfer_test.dart         127 行（11 用例）
 app/test/unit/util/clipboard_image_test.dart           75 行（9 用例）
+app/test/unit/config/chat_palette_test.dart            41 行（3 用例，锁死 #EBEBEB / #FFFFFF 只在 Local Chat 浅色生效）
 ```
 
 合计约 1,786 行新代码 + 上游文件内约 250 行钩子；相对 `v1.18.2` 全量为 28 文件、+2,763 / −101（含生成物）。

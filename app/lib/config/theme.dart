@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:localchat_app/config/chat_palette.dart';
 import 'package:localchat_app/gen/strings.g.dart';
 import 'package:localchat_app/model/persistence/color_mode.dart';
 import 'package:localchat_app/provider/device_info_provider.dart';
@@ -52,6 +53,10 @@ ThemeData getTheme(ColorMode colorMode, Color customColor, Brightness brightness
   return ThemeData(
     colorScheme: colorScheme,
     useMaterial3: true,
+    // [FORK] 聊天页专用配色（Local Chat + 浅色 → 中性灰底 + 纯白对方气泡）
+    extensions: <ThemeExtension<dynamic>>[
+      chatPaletteFor(colorMode, brightness, colorScheme),
+    ],
     // same density on all platforms so desktop matches mobile (defaults to compact on desktop)
     visualDensity: VisualDensity.standard,
     navigationBarTheme: colorScheme.brightness == Brightness.dark
@@ -140,9 +145,15 @@ extension InputDecorationThemeExt on InputDecorationThemeData {
   BorderRadius get borderRadius => _borderRadius;
 }
 
+/// [FORK] Local Chat 主题的种子色（上游是 Material Teal `#009688`）。
+///
+/// 同时也是「动态取色不可用」时 `system` 模式的兜底配色，所以只在这里改一次，
+/// [ColorMode.localchat] 走 null 分支自动跟随。
+const kSeedColor = Color(0xFF1E90FF);
+
 ColorScheme _determineColorScheme(ColorMode mode, Color customColor, Brightness brightness, DynamicColors? dynamicColors) {
   final defaultColorScheme = ColorScheme.fromSeed(
-    seedColor: Colors.teal,
+    seedColor: kSeedColor,
     brightness: brightness,
   );
 

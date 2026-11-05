@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:localchat_app/config/chat_palette.dart';
 import 'package:localchat_app/gen/strings.g.dart';
 import 'package:localchat_app/model/conversation/conversation.dart';
 import 'package:localchat_app/provider/conversation/chat_transfer_provider.dart';
@@ -54,7 +55,8 @@ class MessageBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isOutgoing = message.isOutgoing;
-    final bubbleColor = isOutgoing ? kOutgoingBubbleColor : theme.colorScheme.surfaceContainer;
+    // [FORK] 对方气泡走聊天页配色（Local Chat 浅色 = 纯白），其余主题退化为 surfaceContainer。
+    final bubbleColor = isOutgoing ? kOutgoingBubbleColor : ChatPalette.of(context).incomingBubble;
     final onBubbleColor = isOutgoing ? kOnOutgoingBubbleColor : theme.colorScheme.onSurface;
     final failed = message.status == ChatMessageStatus.failed;
 

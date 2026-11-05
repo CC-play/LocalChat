@@ -59,6 +59,8 @@
 | "你"头像**跟随**主题色，与气泡不同色是**有意为之**，不要"顺手统一" | 用户明确要求回退过一次 |
 | 失败气泡不换 `errorContainer` 底色，改用左侧 `Icons.error` | 底色会盖掉白字，文件卡片文字消失 |
 | 聊天页提示用 `TopToast`，不要 `SnackBar` | SnackBar 只能贴底，挡住输入栏 |
+| 聊天页背景 / 对方气泡 / 输入栏一律取 `ChatPalette.of(context)`（`config/chat_palette.dart`），**不要**改 `ColorScheme.surface` | 改 surface 是全局的，会把设置页、发送页、对话框一起染灰 |
+| Local Chat 主题的种子色只在 `config/theme.dart` 的 `kSeedColor` 改（`#1E90FF`），不要在别处再写死 `Colors.teal` | `localchat` 走 null 分支跟随 `defaultColorScheme`，写死第二处就会出现两套配色 |
 
 ## 为什么不做符号索引
 
