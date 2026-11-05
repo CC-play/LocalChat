@@ -352,6 +352,18 @@ cargokit 也就为每个 ABI 跑一遍 cargo（**20 分钟还没编完**）。
 | App 在前台收到文本 | 不弹通知（前台判断见下条坑 2） |
 | `pm revoke POST_NOTIFICATIONS` 后重启 | 会话列表顶部出现提示条；点「去开启」跳到 vivo 的「允许通知」页；打开开关返回，横幅自动消失 |
 
+**终版复测（2026-11-05 15:25，包 `org.localsend.localsend_app.debug` v1.18.2）**
+
+| 场景 | 结果 |
+|---|---|
+| 会话页在前台，假对端发 `FG-CHECK-1526-不弹通知` | 消息入会话（列表显示 + 未读角标 1），`dumpsys notification` 里本包 0 条 → 前台确实不弹 |
+| 按 HOME 后约 1 秒发 `BG-FAST-1532-应立即弹` | 通知栏出现「Fake Peer / BG-FAST-1532-应立即弹」，点开进入 Fake Peer 会话，通知同时清零 |
+| 按 HOME 后 10 秒再发 | TLS 握手超时，`dumpsys activity processes` 显示 `isFrozen=true` → 系统已冻结，收不到 |
+
+结论：前台/后台两条分支都符合预期；后台**只有刚切走的那几秒**能收到，
+之后被 Android 冻结（本机约 10 秒内）就彻底收不到 —— 这是 4.9 表格里那条
+「App 被系统冻结时收不到」的实测数据，要靠前台服务或用户加白名单解决，不是本函数的 bug。
+
 **踩到的坑**
 1. **vivo 不弹横幅**：`AppSettings` 里 `isShowHeadsUp=false`（vivo 默认关掉第三方 App 的悬浮通知）。
    即使渠道是 `IMPORTANCE_HIGH`，通知也只进通知栏 + 响铃，不会从顶部弹出。这是系统设置，
@@ -360,6 +372,17 @@ cargokit 也就为每个 ABI 跑一遍 cargo（**20 分钟还没编完**）。
    出现过一次「后台收到消息但没提醒」。改为直接读 `WidgetsBinding.instance.lifecycleState` 后一致。
 3. 锁屏状态下 `adb install` 会直接失败（`INSTALL_FAILED_ABORTED: User rejected permissions`），
    要先解锁手机；不是包的问题。
+4. **手机上有两个包，别测错**：`org.localsend.localsend_app` 是 2024 年的旧版上游 App（3 个 Tab、
+   没有会话页），调试包是 `org.localsend.localsend_app.debug`（4 个 Tab）。`build.gradle` 里
+   debug 带 `applicationIdSuffix ".debug"`，所以 `adb install` 装的是后者。用
+   `am start -n org.localsend.localsend_app/.MainActivity` 会拉起旧版，而且它一旦在前台就
+   抢着绑 53317，调试包直接 bind 失败、`send2.py info` 报 connection refused —— 测到的东西全是假的。
+   正确做法：`am force-stop org.localsend.localsend_app` 再启 `.debug` 包，
+   并核对 `dumpsys window | grep mCurrentFocus` 里的包名。
+5. 调试包刚启动那几秒 53317 可能还没绑上（Rust 侧异步起服），`send2.py info` 会先 refused，
+   等 5~10 秒重试即可，不是崩溃。
+6. `run-as` 拿不到持久化：`run-as: package not debuggable`。这台机器上别指望直接 cat
+   shared_prefs，验证入库还是看会话列表截图。
 
 ---
 
@@ -429,7 +452,7 @@ Dart 侧收不到。要支持得给 `TextField` 传 `contextMenuBuilder`，在�
 | 模拟器（debug + swiftshader） | 冷启动约 40 秒，冷启动期的 `adb input` 会撞上 ANR（`Input dispatching timed out (Application does not have a focused window)`） | 环境问题（软件渲染 + debug），真机无此现象；等首页出现后再操作 |
 | `LocalIpService.FetchLocalIpAction` | 启动后会连续触发几次 | 上游行为，未动 |
 | `util/native/directories.dart` | `getCacheDirectory()` 走 `path_provider` | Android 正常 |
-| `receive_controller.dart` | `autoAcceptTextMessages = true`，App 被系统冻结时收不到 | 系统限制，暂不处理 |
+| `receive_controller.dart` | `autoAcceptTextMessages = true`，App 被系统冻结时收不到 | 系统限制，暂不处理；实测冻结在切后台后 10 秒内发生（`isFrozen=true`），前台/刚切走时正常 |
 
 ---
 
