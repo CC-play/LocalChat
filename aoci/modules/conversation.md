@@ -45,6 +45,8 @@
 | `app/lib/widget/chat/message_bubble.dart` | 文本气泡、头像、固定发出色 |
 | `app/lib/widget/chat/file_message_card.dart` | 文件气泡 |
 | `app/lib/widget/chat/top_toast.dart` | 顶部 Toast（替代 SnackBar） |
+| `app/lib/util/conversation/peer_label.dart` | 重名消歧：指纹短码 / 名字分布统计 / 纯文本标题，见「重名消歧」 |
+| `app/lib/widget/chat/peer_title.dart` | 会话标题组件（名字 + 同名时的指纹短码），列表与聊天页共用 |
 
 ## 卡片生成条件
 
@@ -59,6 +61,30 @@
 **普通「发送」Tab 也走同一套（2026-11-05 补）**：`send_provider.startSession` 在握手之前就调 `recordSentFileStart` 预置气泡（`_preRecordSessionMessages`），并把这些 id 记在 `_preRecordedMessages[sessionId]` 里。之前只在 `HttpUploadFileStartedEvent` 里写，结果是**连不上 / 被拒绝 / 对端一个文件都没勾选时，会话里什么都没有**——「我明明发过」这件事直接消失。收尾由 `_settlePreRecorded` 负责：握手阶段的每个终态分支、`_finish`、`closeSession` 都会调它，把还没结局的预置气泡标成失败（`FileStatus.finished` 的跳过，避免把已成功的改坏）。聊天页传了 `fileIdsOverride`，所以这条兜底完全绕开它（聊天自己那套要能重发、要精确 alias）。
 
 **推论**：发送失败也会留卡片（末条 `failed`，列表显示红点）；接收被拒/接收失败不留卡片；从普通「发送」Tab 传文件也会刷新卡片（钩子在 `startSession` 里，不区分入口）。
+
+## 重名消歧：标题后的指纹短码
+
+会话主键是证书指纹，而 `peerAlias` 只是对端自报的字符串。两台设备可以合法同名
+（都叫 `vivo`），也允许 A 把自己改成 B 的名字 —— 这时列表会出现两行一模一样的标题，
+点进去标题栏也一样，光看界面分不清是谁。
+
+规则：**只在同名时**在名字后面追加指纹末 4 位，形如 `B · 3F7A`；不同名时一个字都不加，
+日常观感与原来完全一致。
+
+| 关注点 | 做法 |
+|---|---|
+| 短码来源 | `peerShortCode(peerFingerprint)`，取 64 位十六进制指纹末 4 位并转大写（与设备详情页的完整指纹尾巴对得上） |
+| 是否同名 | `peerNameCounts()` 先在整张列表上统计一次名字分布，`peerNameCollides()` 查表；**不用对象引用判断**（会话是不可变对象，每追加一条消息都会重建） |
+| 渲染 | `widget/chat/peer_title.dart` 的 `PeerTitleText`，列表与聊天页标题栏共用；短码字号取生效样式的 0.78 倍 + `outline` 弱色，读起来像注释 |
+| 纯文本场景 | `peerLabel(conversation, ambiguous: true)`，用于删除会话的确认文案，避免「确定删除 B？」而不知道是哪个 B |
+
+**为什么不用 IP**（考虑过并否掉）：`Conversation.peerIp` 记的是最后一次见到的地址，
+DHCP 换租、对方切 Wi-Fi 后就过期，旧 IP 还可能被分给另一台设备 —— 标签会主动误导；
+IPv6 链路本地地址形如 `fe80::3524:1f%3`，列表一行放不下；而且 `displayName` 被
+删除确认文案复用，往里拼 IP 会污染整个界面。指纹不会变，是唯一稳定依据。
+
+**没覆盖的地方**（如实记录）：通知标题仍只用 alias（`ChatNotification` 拿不到全量列表），
+两台同名设备同时发消息时，两条通知标题一样 —— 但通知 tag 是指纹，不会互相顶掉。
 
 ## 离线重试（2 分钟窗口）
 

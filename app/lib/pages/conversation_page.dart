@@ -16,6 +16,7 @@ import 'package:localchat_app/provider/receive_history_provider.dart';
 import 'package:localchat_app/util/conversation/clipboard_image.dart';
 import 'package:localchat_app/util/conversation/conversation_media_picker.dart';
 import 'package:localchat_app/util/conversation/conversation_sender.dart';
+import 'package:localchat_app/util/conversation/peer_label.dart';
 import 'package:localchat_app/util/native/chat_notification.dart';
 import 'package:localchat_app/util/native/cross_file_converters.dart';
 import 'package:localchat_app/util/native/open_file.dart';
@@ -24,6 +25,7 @@ import 'package:localchat_app/util/native/platform_check.dart';
 import 'package:localchat_app/widget/chat/delete_record_dialog.dart';
 import 'package:localchat_app/widget/chat/drop_confirm_dialog.dart';
 import 'package:localchat_app/widget/chat/message_bubble.dart';
+import 'package:localchat_app/widget/chat/peer_title.dart';
 import 'package:localchat_app/widget/chat/top_toast.dart';
 import 'package:localchat_isolates/model/device.dart';
 import 'package:localchat_isolates/model/file_type.dart';
@@ -555,7 +557,12 @@ class _ConversationPageState extends State<ConversationPage> {
               backgroundColor: palette.appBarBackground,
               // 关掉 M3 的滚动染色，否则内容滚到标题栏下方时头部会浮出主题色。
               surfaceTintColor: Colors.transparent,
-              title: Text(conversation.displayName),
+              title: PeerTitleText(
+                conversation: conversation,
+                // [FORK] 与列表页同一套判定：只有重名时才补指纹短码，
+                // 进门之后也能确认自己进的是哪一台。
+                ambiguous: peerNameCollides(conversation, peerNameCounts(conversations)),
+              ),
             ),
             body: Column(
               children: [

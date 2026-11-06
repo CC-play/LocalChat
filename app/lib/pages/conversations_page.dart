@@ -5,7 +5,9 @@ import 'package:localchat_app/gen/strings.g.dart';
 import 'package:localchat_app/model/conversation/conversation.dart';
 import 'package:localchat_app/pages/conversation_page.dart';
 import 'package:localchat_app/provider/conversation_provider.dart';
+import 'package:localchat_app/util/conversation/peer_label.dart';
 import 'package:localchat_app/util/native/chat_notification.dart';
+import 'package:localchat_app/widget/chat/peer_title.dart';
 import 'package:refena_flutter/refena_flutter.dart';
 import 'package:routerino/routerino.dart';
 
@@ -75,10 +77,20 @@ class ConversationsPage extends StatelessWidget {
       );
     }
 
+    // [FORK] 名字分布只算一次，itemBuilder 里按需查表（避免每条都重算一遍）。
+    final nameCounts = peerNameCounts(conversations);
+
     return ListView.separated(
       itemCount: conversations.length,
       separatorBuilder: (_, _) => const Divider(height: 1, indent: 72),
-      itemBuilder: (context, index) => _ConversationTile(conversation: conversations[index]),
+      itemBuilder: (context, index) {
+        final conversation = conversations[index];
+        return _ConversationTile(
+          conversation: conversation,
+          // 同名才加指纹短码，否则标题保持原样。
+          ambiguous: peerNameCollides(conversation, nameCounts),
+        );
+      },
     );
   }
 }
@@ -178,7 +190,13 @@ class _NotificationsOffBannerState extends State<_NotificationsOffBanner> {
 class _ConversationTile extends StatelessWidget {
   final Conversation conversation;
 
-  const _ConversationTile({required this.conversation});
+  /// [FORK] 是否与列表里其它会话同名 —— 同名时标题后追加指纹短码。
+  final bool ambiguous;
+
+  const _ConversationTile({
+    required this.conversation,
+    this.ambiguous = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -197,10 +215,10 @@ class _ConversationTile extends StatelessWidget {
       title: Row(
         children: [
           Expanded(
-            child: Text(
-              conversation.displayName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            // [FORK] 重名时标题变成「名字 · 3F7A」，否则与原来一模一样。
+            child: PeerTitleText(
+              conversation: conversation,
+              ambiguous: ambiguous,
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
           ),
@@ -267,7 +285,7 @@ class _ConversationTile extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(t.conversation.deleteTitle),
-        content: Text(t.conversation.deleteMessage(name: conversation.displayName)),
+        content: Text(t.conversation.deleteMessage(name: peerLabel(conversation, ambiguous: ambiguous))),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: Text(t.general.cancel)),
           TextButton(onPressed: () => Navigator.pop(context, true), child: Text(t.general.delete)),

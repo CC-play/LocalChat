@@ -8,6 +8,7 @@
 | 我要改… | 必读文件（按顺序） | 模块卡 | 改完验证 |
 |---|---|---|---|
 | 会话列表的卡片样式/排序/角标 | `app/lib/pages/conversations_page.dart` → `app/lib/provider/conversation_provider.dart` | [conversation](modules/conversation.md) | `flutter test test/unit/provider/conversation_provider_test.dart` |
+| 两台设备同名了 / 想区分同名会话 | `app/lib/util/conversation/peer_label.dart`（`peerShortCode` / `peerNameCounts`）→ `app/lib/widget/chat/peer_title.dart`（`PeerTitleText`） | [conversation](modules/conversation.md#重名消歧标题后的指纹短码) | `flutter test test/unit/util/peer_label_test.dart`；手动：把 A 的别名改成 B 的名字，两个会话标题都应出现 `· XXXX` |
 | 会话页气泡/输入栏 | `app/lib/pages/conversation_page.dart` → `app/lib/widget/chat/message_bubble.dart` | [conversation](modules/conversation.md) | `flutter analyze` |
 | 会话栏什么时候出现卡片 | `app/lib/util/conversation/conversation_recorder.dart` → `conversation_provider.dart:48` | [conversation](modules/conversation.md#卡片生成条件) | 手动：双端互发一次文本 |
 | 发文本消息 | `app/lib/util/conversation/conversation_sender.dart:106`（`sendTextMessage`）→ `app/lib/provider/network/send_provider.dart:681` | [conversation](modules/conversation.md) | 双端收发 |
@@ -66,7 +67,9 @@
 | `app/lib/widget/chat/message_bubble.dart` | 固定气泡色常量；对方气泡取 `ChatPalette.incomingBubble` |
 | `app/lib/widget/chat/top_toast.dart` | 顶部 Toast 说明 |
 | `app/lib/widget/chat/file_message_card.dart` | 发出方向前景色 |
-| `app/lib/pages/conversations_page.dart` | `_NotificationsOffBanner`：通知不可用时的提示条 |
+| `app/lib/pages/conversations_page.dart` | `_NotificationsOffBanner`：通知不可用时的提示条；标题改用 `PeerTitleText`，仅在重名时带指纹短码 |
+| `app/lib/util/conversation/peer_label.dart` | 整个文件为 fork 新增（重名消歧：指纹短码与名字分布统计） |
+| `app/lib/widget/chat/peer_title.dart` | 整个文件为 fork 新增（会话标题组件，列表与聊天页共用） |
 | `app/lib/util/conversation/chat_presence.dart` | 整个文件为 fork 新增（前台判断，决定要不要弹通知） |
 | `app/lib/util/native/chat_notification.dart` | 整个文件为 fork 新增（通知发送 / 状态查询 / 点击回传） |
 | `app/windows/runner/flutter_window.cpp` | `RegisterClipboardChannel` 注册 |
