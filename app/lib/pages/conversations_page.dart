@@ -207,10 +207,30 @@ class _ConversationTile extends StatelessWidget {
     return ListTile(
       onTap: () => context.push(() => ConversationPage(peerFingerprint: conversation.peerFingerprint)),
       onLongPress: () => _confirmDelete(context),
-      leading: CircleAvatar(
-        backgroundColor: theme.colorScheme.secondaryContainer,
-        foregroundColor: theme.colorScheme.onSecondaryContainer,
-        child: Text(conversation.initial),
+      // [FORK] 未读数挂在头像右上角：44 的方框比头像大一圈，徽标锚 right/top，
+      // 正好压住圆形的右上弧外侧，不与标题行抢位置。
+      leading: SizedBox(
+        width: 44,
+        height: 44,
+        child: Stack(
+          // 徽标要探出头像方框一点，默认的 hardEdge 会把它切掉。
+          clipBehavior: Clip.none,
+          children: [
+            Center(
+              child: CircleAvatar(
+                backgroundColor: theme.colorScheme.secondaryContainer,
+                foregroundColor: theme.colorScheme.onSecondaryContainer,
+                child: Text(conversation.initial),
+              ),
+            ),
+            if (unread > 0)
+              Positioned(
+                top: -3,
+                right: -3,
+                child: _UnreadBadge(count: unread),
+              ),
+          ],
+        ),
       ),
       title: Row(
         children: [
@@ -228,30 +248,11 @@ class _ConversationTile extends StatelessWidget {
           ),
         ],
       ),
-      subtitle: Row(
-        children: [
-          Expanded(
-            child: Text(
-              last == null ? '' : _previewOf(last),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 12, color: theme.colorScheme.outline),
-            ),
-          ),
-          if (unread > 0)
-            Container(
-              margin: const EdgeInsets.only(left: 6),
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.error,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                unread > 99 ? '99+' : '$unread',
-                style: TextStyle(fontSize: 10, color: theme.colorScheme.onError),
-              ),
-            ),
-        ],
+      subtitle: Text(
+        last == null ? '' : _previewOf(last),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(fontSize: 12, color: theme.colorScheme.outline),
       ),
       trailing: last != null && last.status == ChatMessageStatus.failed
           ? Icon(Icons.error_outline, size: 16, color: theme.colorScheme.error)
@@ -295,5 +296,43 @@ class _ConversationTile extends StatelessWidget {
     if (confirmed == true && context.mounted) {
       await context.ref.redux(conversationProvider).dispatchAsync(DeleteConversationAction(conversation.peerFingerprint));
     }
+  }
+}
+
+/// [FORK] 会话列表头像右上角的未读数徽标。
+///
+/// 描边用 `surface` 而不是透明：徽标压在头像上，没有这一圈边会和头像
+/// 糊成一片。`minWidth` 让个位数也是圆的，`99+` 才自然向右长出来。
+class _UnreadBadge extends StatelessWidget {
+  /// 比主题的 `error` 更鲜艳、更偏橙：主题红在浅色背景上发闷，
+  /// 而徽标要在头像旁一眼跳出。字色固定纯白，不跟随主题。
+  static const _badgeColor = Color(0xFFFF3100);
+
+  final int count;
+
+  const _UnreadBadge({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      constraints: const BoxConstraints(minWidth: 17),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+      decoration: BoxDecoration(
+        color: _badgeColor,
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(color: theme.colorScheme.surface, width: 1.5),
+      ),
+      child: Text(
+        count > 99 ? '99+' : '$count',
+        textAlign: TextAlign.center,
+        style: const TextStyle(
+          fontSize: 10,
+          height: 1.3,
+          fontWeight: FontWeight.w600,
+          color: Colors.white,
+        ),
+      ),
+    );
   }
 }
