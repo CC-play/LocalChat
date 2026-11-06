@@ -86,6 +86,27 @@ IPv6 链路本地地址形如 `fe80::3524:1f%3`，列表一行放不下；而且
 **没覆盖的地方**（如实记录）：通知标题仍只用 alias（`ChatNotification` 拿不到全量列表），
 两台同名设备同时发消息时，两条通知标题一样 —— 但通知 tag 是指纹，不会互相顶掉。
 
+## 从发送页发起会话（草稿会话）
+
+发送页每张设备卡片右侧有两颗按钮：左边**发起会话**（气泡图标），右边**设备详情**（`i` 图标）。
+点气泡直接进入与这台设备的聊天，不必先发一个文件把会话「撞」出来。
+
+难点是：本地还没有这台设备的会话记录，而 `ConversationPage` 的数据全部来自
+`conversationProvider`。做法是**用设备信息拼一个不落库的草稿会话**，而不是往 provider 里塞空会话。
+
+| 关注点 | 做法 |
+|---|---|
+| 入口 | `pages/tabs/send_tab.dart` 的 `_startConversation()`；`widget/list_tile/device_list_tile.dart` 的 `onChatTap` |
+| 没有指纹就不给按钮 | 会话主键是指纹，拿不到时上游会退化成 `alias:<名字>` 伪键，对方一改名就分裂，不如不开放 |
+| 草稿 | `conversation_page.dart` 的 `_draftConversation()`：`stored ?? draft`，标题 / 头像 / 发送目标都能用 |
+| 落库时机 | 第一条消息发出时 `AppendChatMessageAction` 发现不存在就新建，页面随即改用真会话，用户无感 |
+| 不塞空会话的理由 | 否则点一下「发起会话」又退出，列表里就多一条预览为空、时间是刚刚的僵尸记录 |
+| 判重名 | 草稿不在列表里，`peerNameCounts` 要把它自己算进去，否则「和已有会话同名的设备」开新会话时分不清是谁 |
+| 拖拽 / 粘贴 | `_handleDrop` 与 `_currentTarget` 改用 `_effectiveConversation()`，草稿状态下也能直接投递文件 |
+
+**边界**：`ConversationPage.device` 只在「发起会话」这条路径上传；从会话列表进来时它是 null，
+找不到会话仍然显示「该会话已被删除」——即原有的删除后残留页面行为没有变。
+
 ## 离线重试（2 分钟窗口）
 
 LocalChat **没有**可调的「发送超时」：对端 App 没开时 prepare-upload 会被系统 TCP 栈秒级拒绝（值不可配置）。所以「给对方时间拿起手机」只能靠重试。

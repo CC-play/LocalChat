@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:localchat_app/config/theme.dart';
 import 'package:localchat_app/gen/strings.g.dart';
 import 'package:localchat_app/model/send_mode.dart';
+import 'package:localchat_app/pages/conversation_page.dart';
 import 'package:localchat_app/pages/device_details_page.dart';
 import 'package:localchat_app/pages/selected_files_page.dart';
 import 'package:localchat_app/pages/tabs/send_tab_vm.dart';
@@ -38,6 +39,20 @@ import 'package:refena_flutter/refena_flutter.dart';
 import 'package:routerino/routerino.dart';
 
 const _horizontalPadding = 15.0;
+
+/// [FORK] 设备卡片上的「发起会话」回调。
+///
+/// 没有指纹就不给按钮：会话以证书指纹为主键，拿不到指纹时上游会退化成
+/// `alias:<名字>` 伪键，对方一改名会话就分裂，不如干脆不开放这条路。
+VoidCallback? _startConversation(BuildContext context, Device device) {
+  if (device.fingerprint.isEmpty) {
+    return null;
+  }
+  return () async => await context.push(
+        () => ConversationPage(peerFingerprint: device.fingerprint, device: device),
+      );
+}
+
 final pickerOptions = FilePickerOption.getOptionsForPlatform();
 
 class SendTab extends StatelessWidget {
@@ -237,6 +252,7 @@ class _SendTabBody extends StatelessWidget {
                           isFavorite: favoriteEntry != null,
                           nameOverride: favoriteEntry?.alias,
                           onDetailsTap: () async => await context.push(() => DeviceDetailsPage(device: device)),
+                          onChatTap: _startConversation(context, device),
                           onTap: () async => await vm.onTapDevice(context, device),
                         ),
                 ),
@@ -645,6 +661,7 @@ class _MultiSendDeviceListTile extends StatelessWidget {
       isFavorite: isFavorite,
       nameOverride: nameOverride,
       onDetailsTap: () async => await context.push(() => DeviceDetailsPage(device: device)),
+      onChatTap: _startConversation(context, device),
       onTap: () async => await vm.onTapDeviceMultiSend(context, device),
     );
   }

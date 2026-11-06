@@ -46,9 +46,19 @@ enum _ChatMenuAction { copy, revealInFolder, delete }
 class ConversationPage extends StatefulWidget {
   final String peerFingerprint;
 
+  /// [FORK] 新会话的起始设备。
+  ///
+  /// 从发送页的「发起会话」进来时，本地还没有这台设备的会话记录，靠它渲染一个
+  /// **未落库的草稿会话**：标题、头像、发送目标全都能用，但不会在会话列表里留下
+  /// 一条空记录。第一条消息发出时 `AppendChatMessageAction` 会顺手把会话建出来。
+  ///
+  /// 从会话列表进来时保持为 null，行为与之前完全一致。
+  final Device? device;
+
   const ConversationPage({
     super.key,
     required this.peerFingerprint,
+    this.device,
   });
 
   @override
@@ -237,13 +247,43 @@ class _ConversationPageState extends State<ConversationPage> {
 
   /// 当前会话对应的可发送设备；找不到返回 null。
   Device? _currentTarget() {
-    final conversation = context.ref
-        .read(conversationProvider)
-        .firstWhereOrNull((c) => c.peerFingerprint == widget.peerFingerprint);
+    final conversation = _effectiveConversation();
     if (conversation == null) {
       return null;
     }
     return resolveConversationTarget(context.ref, conversation);
+  }
+
+  /// 当前生效的会话：库里已有就用它，还没有就用草稿。
+  ///
+  /// 草稿只在「从发送页发起会话」这条路径上存在，见 [_draftConversation]。
+  Conversation? _effectiveConversation() {
+    return context.ref
+            .read(conversationProvider)
+            .firstWhereOrNull((c) => c.peerFingerprint == widget.peerFingerprint) ??
+        _draftConversation();
+  }
+
+  /// [FORK] 用 [ConversationPage.device] 拼一个不落库的草稿会话。
+  ///
+  /// 只有「发起会话」这条路径会走到：用户从发送页点进一台还没聊过的设备。
+  /// 这里刻意不往 [conversationProvider] 里塞空会话——否则点一下「发起会话」
+  /// 又退出来，会话列表里就会多一条空记录（预览为空、时间还是刚刚）。
+  /// 真正建会话发生在第一条消息落地时。
+  Conversation? _draftConversation() {
+    final device = widget.device;
+    if (device == null || device.fingerprint.isEmpty) {
+      return null;
+    }
+    return Conversation(
+      peerFingerprint: device.fingerprint,
+      peerAlias: device.alias,
+      peerIp: device.ip,
+      peerPort: device.port > 0 ? device.port : null,
+      lastActivity: DateTime.now(),
+      unreadCount: 0,
+      messages: const [],
+    );
   }
 
   void _handleSelectionChanged(SelectedContent? content) {    final text = content?.plainText;
@@ -554,7 +594,8 @@ class _ConversationPageState extends State<ConversationPage> {
       return;
     }
 
-    final conversation = context.ref.read(conversationProvider).firstWhereOrNull((c) => c.peerFingerprint == widget.peerFingerprint);
+    // 拖拽同样支持「刚发起会话」：库里还没有记录时用草稿会话解析目标。
+    final conversation = _effectiveConversation();
     if (conversation == null) {
       return;
     }
@@ -594,7 +635,8 @@ class _ConversationPageState extends State<ConversationPage> {
   @override
   Widget build(BuildContext context) {
     final conversations = context.watch(conversationProvider);
-    final conversation = conversations.firstWhereOrNull((e) => e.peerFingerprint == widget.peerFingerprint);
+    final stored = conversations.firstWhereOrNull((e) => e.peerFingerprint == widget.peerFingerprint);
+    final conversation = stored ?? _draftConversation();
 
     if (conversation == null) {
       return Scaffold(
@@ -605,6 +647,9 @@ class _ConversationPageState extends State<ConversationPage> {
 
     final messages = conversation.messages;
     final initial = conversation.initial;
+    // [FORK] 草稿会话还不在列表里，判重名时要把它自己算进去，
+    // 否则「和已有会话同名的设备」开新会话时标题分不清是谁。
+    final nameCounts = peerNameCounts(stored == null ? [...conversations, conversation] : conversations);
     // [FORK] 消息不满一屏时从顶部排起，多于一屏时停在最新一条。见 [_handleScrollAnchors]。
     _handleScrollAnchors(messages.length, MediaQuery.viewInsetsOf(context).bottom);
     // [FORK] 聊天页配色（Local Chat + 浅色为中性灰底 + 纯白对方气泡）
@@ -629,7 +674,7 @@ class _ConversationPageState extends State<ConversationPage> {
                 conversation: conversation,
                 // [FORK] 与列表页同一套判定：只有重名时才补指纹短码，
                 // 进门之后也能确认自己进的是哪一台。
-                ambiguous: peerNameCollides(conversation, peerNameCounts(conversations)),
+                ambiguous: peerNameCollides(conversation, nameCounts),
               ),
             ),
             body: Column(

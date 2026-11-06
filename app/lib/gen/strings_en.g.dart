@@ -412,6 +412,9 @@ class Translations$conversation$en {
   /// en: '[File]'
   String get filePlaceholder => '[File]';
 
+  /// en: 'Start chat'
+  String get startConversation => 'Start chat';
+
   /// en: 'Message…'
   String get messageHint => 'Message…';
 

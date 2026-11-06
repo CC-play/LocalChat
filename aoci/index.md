@@ -51,7 +51,8 @@
 |---|---|
 | `app/lib/main.dart` | `HomePage(initialTab:)` 默认 Tab |
 | `app/lib/pages/home_page.dart` | `HomeTab` 枚举、PageView children、纯图标侧边栏 |
-| `app/lib/pages/tabs/send_tab.dart` | `_NearbyRefresh`：发送页可见时每 8 s 重发一次多播通告（见 [discovery](modules/discovery.md)） |
+| `app/lib/pages/tabs/send_tab.dart` | `_NearbyRefresh`：发送页可见时每 8 s 重发一次多播通告（见 [discovery](modules/discovery.md)）；`_startConversation`：设备卡片上的「发起会话」（见 [conversation](modules/conversation.md)） |
+| `app/lib/widget/list_tile/device_list_tile.dart` | `onChatTap`：卡片右侧「发起会话」按钮，与「设备详情」并排（没有指纹时不给） |
 | `app/lib/provider/network/server/controller/receive_controller.dart` | 文本静默接收（受 `autoAcceptTextMessages` 设置控制）、落盘成功后写会话；文本**只**写会话，不进接收历史 |
 | `app/lib/provider/receive_history_provider.dart` | `init()` 清掉老数据里 `isMessage == true` 的文本条目（文本改为只归会话，见 [conversation](modules/conversation.md)）；删条目的动作联动删掉会话里同 id 的文件卡片 |
 | `app/lib/provider/conversation_provider.dart` | `DeleteChatMessagesAction`：按消息 id 批量删除（供接收历史联动），删空的会话一并移除 |
@@ -61,7 +62,7 @@
 | `app/lib/provider/persistence_provider.dart` | `getConversations` / `setConversations`；`isAutoAcceptTextMessages`（默认 true） |
 | `app/lib/util/shared_preferences/settings_migration.dart` | fork 新增的整个文件：`%APPDATA%\LocalSend` → `LocalChat` 的改名迁移（有单测） |
 | `app/lib/util/conversation/conversation_recorder.dart` | 文件头注释即 fork 说明 |
-| `app/lib/pages/conversation_page.dart` | 顶部说明；聊天页背景 / 输入栏取 `ChatPalette`；气泡菜单（复制 / 打开文件所在位置 / 删除该条记录）与移动端长按入口 |
+| `app/lib/pages/conversation_page.dart` | 顶部说明；聊天页背景 / 输入栏取 `ChatPalette`；气泡菜单（复制 / 打开文件所在位置 / 删除该条记录）与移动端长按入口；`device` 参数 + `_draftConversation()`：从发送页发起会话时的草稿会话 |
 | `app/lib/widget/chat/delete_record_dialog.dart` | 整个文件为 fork 新增（删单条记录前的确认卡片，按文本 / 收到文件 / 发出文件分文案） |
 | `app/lib/config/theme.dart` | `kSeedColor`（Local Chat 种子色 `#1E90FF`，上游是 `Colors.teal`）、`extensions: [chatPaletteFor(...)]`：把聊天配色挂进 ThemeData |
 | `app/lib/config/chat_palette.dart` | 整个文件为 fork 新增（聊天页配色 `ChatPalette`，Local Chat + 浅色 → `#EBEBEB` 底 / `#FFFFFF` 对方气泡） |

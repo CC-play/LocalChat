@@ -357,6 +357,8 @@ class Translations$conversation$zh_CN extends Translations$conversation$en {
   @override
   String get filePlaceholder => '[文件]';
   @override
+  String get startConversation => '发起会话';
+  @override
   String get messageHint => '输入消息…';
   @override
   String get attachFile => '发送文件';
