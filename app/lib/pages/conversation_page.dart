@@ -83,6 +83,69 @@ class _ConversationPageState extends State<ConversationPage> {
   /// [FORK] 正在重发的消息 id。重发期间点同一颗感叹号不再响应。
   final _retrying = <String>{};
 
+  /// 消息列表的滚动控制器。列表是正向的（第 0 条在最上面），
+  /// 「停在最新一条」由 [_handleScrollAnchors] 维护。
+  final _scrollController = ScrollController();
+
+  /// 上一次构建看到的消息条数；`null` 表示还没构建过（首帧）。
+  int? _messageCount;
+
+  /// 上一次构建时的软键盘高度，用来发现「键盘刚弹出」。
+  double _keyboardInset = 0;
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  /// [FORK] 正向列表的「停在最新一条」维护。
+  ///
+  /// 列表原来是 `reverse: true`：它天然贴着底部，代价是消息不满一屏时整块
+  /// 内容会沉到输入框上方（新建会话的头几条就浮在屏幕底部，上面一大片空白）。
+  /// 改成正向列表后，不满一屏自然从顶部排起，代价是要自己维护位置：
+  ///
+  /// - 首帧：历史多时直接跳到底，否则用户会从最早一条开始看；
+  /// - 来了新消息：只有原本就在底部才跟随，正在翻历史时被打断很讨厌；
+  /// - 键盘弹出：视口变矮、`maxScrollExtent` 变大，得再贴一次底，
+  ///   不然最新一条会被输入条挡住。
+  void _handleScrollAnchors(int count, double keyboardInset) {
+    final first = _messageCount == null;
+    final grew = !first && count > _messageCount!;
+    final keyboardOpened = keyboardInset > _keyboardInset;
+    _messageCount = count;
+    _keyboardInset = keyboardInset;
+
+    if (first || keyboardOpened || (grew && _isNearBottom)) {
+      _stickToBottomSoon();
+    }
+  }
+
+  /// 是否还停在最后一条附近。没挂上列表（首帧、空会话）时按「在底部」算。
+  bool get _isNearBottom {
+    if (!_scrollController.hasClients) {
+      return true;
+    }
+    final position = _scrollController.position;
+    // 48 的宽容度：气泡有高度，差几个像素不该算作「离开底部」。
+    return position.pixels >= position.maxScrollExtent - 48;
+  }
+
+  void _stickToBottomSoon() {
+    WidgetsBinding.instance.addPostFrameCallback((_) => _stickToBottom());
+  }
+
+  void _stickToBottom() {
+    if (!mounted || !_scrollController.hasClients) {
+      return;
+    }
+    final position = _scrollController.position;
+    if (position.maxScrollExtent <= 0) {
+      return;
+    }
+    position.jumpTo(position.maxScrollExtent);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -512,6 +575,8 @@ class _ConversationPageState extends State<ConversationPage> {
       return;
     }
 
+    // 拖进来的文件同样是「我刚发的」，投递前先把视角拉回最新一条。
+    _stickToBottomSoon();
     unawaited(
       deliverFilesInBackground(
         ref: context.ref,
@@ -540,6 +605,8 @@ class _ConversationPageState extends State<ConversationPage> {
 
     final messages = conversation.messages;
     final initial = conversation.initial;
+    // [FORK] 消息不满一屏时从顶部排起，多于一屏时停在最新一条。见 [_handleScrollAnchors]。
+    _handleScrollAnchors(messages.length, MediaQuery.viewInsetsOf(context).bottom);
     // [FORK] 聊天页配色（Local Chat + 浅色为中性灰底 + 纯白对方气泡）
     final palette = ChatPalette.of(context);
 
@@ -572,14 +639,14 @@ class _ConversationPageState extends State<ConversationPage> {
                       ? Center(child: Text(t.conversation.noMessages))
                       : _wrapWithSelection(
                           ListView.builder(
-                            reverse: true,
+                            controller: _scrollController,
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             itemCount: messages.length,
                             itemBuilder: (context, index) {
-                              // reverse: true 时 index 0 是最新一条。
-                              final i = messages.length - 1 - index;
-                              final msg = messages[i];
-                              final showDate = i == 0 || _needsDateSeparator(messages[i - 1].timestamp, msg.timestamp);
+                              // 正向列表：index 0 是最旧一条，最新一条在底部。
+                              final msg = messages[index];
+                              final showDate =
+                                  index == 0 || _needsDateSeparator(messages[index - 1].timestamp, msg.timestamp);
 
                               return Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -614,6 +681,7 @@ class _ConversationPageState extends State<ConversationPage> {
                 _Composer(
                   key: _composerKey,
                   conversation: conversation,
+                  onSent: _stickToBottomSoon,
                 ),
               ],
             ),
@@ -842,9 +910,15 @@ class _PasteShortcuts extends StatelessWidget {
 class _Composer extends StatefulWidget {
   final Conversation conversation;
 
+  /// [FORK] 发送动作已经发起：页面借此把消息列表拉回最新一条。
+  ///
+  /// 光靠「消息数变多」不够：用户翻着历史发消息时，那一路是有条件的跟随。
+  final VoidCallback? onSent;
+
   const _Composer({
     super.key,
     required this.conversation,
+    this.onSent,
   });
 
   @override
@@ -1012,6 +1086,7 @@ class _ComposerState extends State<_Composer> {
 
     // 发送可能一直重试到上限（默认 2 分钟）才有结论，不能阻塞输入框：
     // 气泡的「发送中 / 失败」状态由 conversation_recorder 负责更新。
+    widget.onSent?.call();
     unawaited(_deliver(context.ref, text, target));
   }
 
@@ -1194,6 +1269,7 @@ class _ComposerState extends State<_Composer> {
 
     // 投递可能要重试到 2 分钟，同样不能阻塞输入框：
     // 「发送中」气泡已经由 deliverFiles 落下，用户随时能看到进度。
+    widget.onSent?.call();
     unawaited(_deliverFiles(ref, target, files));
   }
 
@@ -1224,6 +1300,7 @@ class _ComposerState extends State<_Composer> {
       return;
     }
 
+    widget.onSent?.call();
     unawaited(_deliverFiles(ref, target, files));
   }
 
