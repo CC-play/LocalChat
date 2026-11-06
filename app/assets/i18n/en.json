@@ -225,6 +225,8 @@
     "pasteSkipped": "Some items couldn't be read and were skipped.",
     "retryHint": "Click to resend",
     "deleteBubble": "Delete message",
+    "revealInFolder": "Open file location",
+    "revealInFolderFailed": "The folder no longer exists. The file may have been moved or deleted.",
     "deleteRecordTitle": "Delete this record?",
     "deleteRecordTextContent": "It is only removed from the chat history on this device. The other side is not affected. This cannot be undone.",
     "deleteRecordFileContent": "This card in the chat and the matching entry in the receive history will be deleted. Files already saved on disk are not affected.",

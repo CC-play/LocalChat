@@ -454,6 +454,12 @@ class Translations$conversation$en {
   /// en: 'Delete message'
   String get deleteBubble => 'Delete message';
 
+  /// en: 'Open file location'
+  String get revealInFolder => 'Open file location';
+
+  /// en: 'The folder no longer exists. The file may have been moved or deleted.'
+  String get revealInFolderFailed => 'The folder no longer exists. The file may have been moved or deleted.';
+
   /// en: 'Delete this record?'
   String get deleteRecordTitle => 'Delete this record?';
 

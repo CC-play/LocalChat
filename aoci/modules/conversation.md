@@ -141,13 +141,15 @@ LocalChat **没有**可调的「发送超时」：对端 App 没开时 prepare-u
 - 确定态与不确定态共用同一个 `_bar()`，固定 96×3，切换时不跳布局。
 - 秒数由 `_SendProgressFooter` 自己的 1s ticker 驱动（只重建这一行小字），同一 ticker 还负责 `chatSendWatchdogTimeout` 的兜底（见「主动取消与界面兜底」）。
 
-## 气泡菜单：复制 / 删除该条记录
+## 气泡菜单：复制 / 打开文件所在位置 / 删除该条记录
 
 菜单由页面统一弹（`_showMessageMenu`），桌面右键、移动端长按、桌面拖选三条入口共用一份。
+显示顺序即 `_ChatMenuAction` 的声明顺序：复制 → 打开文件所在位置 → 删除该条记录
+（破坏性项排最后，与那行红字的位置一致）。
 
 | 入口 | 平台 | 菜单项 |
 |---|---|---|
-| 气泡右键（`MessageBubble.onSecondaryTap`） | 桌面 | 复制 + 删除该条记录 |
+| 气泡右键（`MessageBubble.onSecondaryTap`） | 桌面 | 复制 + 打开文件所在位置（仅文件消息）+ 删除该条记录 |
 | 气泡长按（`MessageBubble.onLongPress`） | 移动端 | 复制 + 删除该条记录 |
 | 拖选 / 双击选词后自动弹（`Listener.onPointerUp` → `_autoShowMenu`） | 桌面 | 只有复制（选区不属于某一条消息） |
 
@@ -155,6 +157,24 @@ LocalChat **没有**可调的「发送超时」：对端 App 没开时 prepare-u
 会在手势竞技场里赢走长按，而它的工具条又被 `contextMenuBuilder` 置空，导致手机上
 选中文字**没有任何复制入口**——占着长按却不可用。所以移动端不套 `SelectionArea`，
 把长按让给菜单，「复制」变成菜单项反而可用。
+
+### 打开文件所在位置
+
+只在桌面端、且消息是**文件**（`kind == file`）并带本地路径（`filePath != null`）时出现，
+判断集中在 `_showMessageMenu` 里的 `canRevealInFolder`。移动端不给：手机上没有文件夹
+可浏览，收到的路径还可能是 `content://`（相册 / 下载管理器），`openFolder` 在 Android
+上走的是另一个分支，语义不是「定位到文件」。
+
+`_revealInFolder(message)` 走 `openFolder(folderPath: parent, fileName: basename)`，
+与接收历史页的「在文件夹中显示」是同一套实现（`util/native/open_folder.dart`）：
+Windows 资源管理器 `/select` 选中该文件，macOS 访达、Linux 文件管理器同理。
+
+两个细节：
+
+- **文件名取磁盘上的**（`p.basename(filePath)`），不用 `message.fileName`：
+  落盘时同名文件会被改名成 `xxx (1).txt`，用消息里记的名字会选不中。
+- **目录不存在时提示一句**（`t.conversation.revealInFolderFailed`，`TopToast`）：
+  资源管理器对不存在的路径既不报错也不开窗口，用户只会觉得「点了没反应」。
 
 ### 删除该条记录
 

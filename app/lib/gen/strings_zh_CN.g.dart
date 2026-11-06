@@ -385,6 +385,10 @@ class Translations$conversation$zh_CN extends Translations$conversation$en {
   @override
   String get deleteBubble => '删除该条记录';
   @override
+  String get revealInFolder => '打开文件所在位置';
+  @override
+  String get revealInFolderFailed => '所在文件夹已不存在，文件可能已被移动或删除';
+  @override
   String get deleteRecordTitle => '删除该条记录？';
   @override
   String get deleteRecordTextContent => '只会从本机聊天记录里移除，对方那里不受影响。此操作不可撤销。';

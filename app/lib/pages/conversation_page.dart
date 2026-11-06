@@ -19,18 +19,25 @@ import 'package:localchat_app/util/conversation/conversation_sender.dart';
 import 'package:localchat_app/util/native/chat_notification.dart';
 import 'package:localchat_app/util/native/cross_file_converters.dart';
 import 'package:localchat_app/util/native/open_file.dart';
+import 'package:localchat_app/util/native/open_folder.dart';
+import 'package:localchat_app/util/native/platform_check.dart';
 import 'package:localchat_app/widget/chat/delete_record_dialog.dart';
 import 'package:localchat_app/widget/chat/drop_confirm_dialog.dart';
 import 'package:localchat_app/widget/chat/message_bubble.dart';
 import 'package:localchat_app/widget/chat/top_toast.dart';
 import 'package:localchat_isolates/model/device.dart';
 import 'package:localchat_isolates/model/file_type.dart';
+import 'package:path/path.dart' as p;
 import 'package:refena_flutter/refena_flutter.dart';
 
 /// 气泡右键 / 长按 / 选中后弹出的菜单项。
 ///
-/// [FORK] 「删除该条记录」是本 fork 加的；「复制」沿用上游的选区带出逻辑。
-enum _ChatMenuAction { copy, delete }
+/// [FORK] 「删除该条记录」「打开文件所在位置」是本 fork 加的；
+/// 「复制」沿用上游的选区带出逻辑。
+///
+/// 声明顺序即菜单里的显示顺序：复制 → 打开文件所在位置 → 删除该条记录。
+/// 破坏性动作放最后，和菜单里那行红字的位置一致。
+enum _ChatMenuAction { copy, revealInFolder, delete }
 
 /// 单个对端设备的会话窗口。
 class ConversationPage extends StatefulWidget {
@@ -222,7 +229,8 @@ class _ConversationPageState extends State<ConversationPage> {
 
   /// 右键气泡：有选区就用选区，否则复制这一条气泡的正文。
   ///
-  /// [FORK] 菜单里除「复制」外还有「删除该条记录」，所以这里把整条 message 传下去。
+  /// [FORK] 菜单里除「复制」外还有「打开文件所在位置」（桌面端、文件消息）
+  /// 和「删除该条记录」，所以这里把整条 message 传下去。
   void _handleBubbleMenu(Offset position, ChatMessage message) {
     final body = message.kind == ChatMessageKind.text ? (message.text ?? '') : (message.fileName ?? '');
     final selected = _selectedText;
@@ -272,6 +280,32 @@ class _ConversationPageState extends State<ConversationPage> {
     }
   }
 
+  /// [FORK] 在系统文件管理器里定位这条文件消息对应的文件（Windows
+  /// 资源管理器里是「打开文件所在的位置」）。
+  ///
+  /// 只给桌面端用，移动端的入口本来就不会出现（见 `canRevealInFolder`）。
+  Future<void> _revealInFolder(ChatMessage message) async {
+    final path = message.filePath;
+    if (path == null || path.isEmpty) {
+      return;
+    }
+
+    final file = File(path);
+    final parent = file.parent;
+    // 目录整个没了就定位不到：资源管理器对不存在的路径既不报错也不开窗口，
+    // 用户只会觉得「点了没反应」，所以这里主动说明一句。
+    if (!await parent.exists()) {
+      if (mounted) {
+        TopToast.show(context, t.conversation.revealInFolderFailed);
+      }
+      return;
+    }
+
+    // 用磁盘上的真实文件名，而不是 message.fileName —— 落盘时同名文件会被
+    // 改名成 `xxx (1).txt`，用消息里记的名字会选不中那个文件。
+    await openFolder(folderPath: parent.path, fileName: p.basename(path));
+  }
+
   Future<void> _showMessageMenu({
     required Offset position,
     ChatMessage? message,
@@ -284,6 +318,15 @@ class _ConversationPageState extends State<ConversationPage> {
 
     _menuOpen = true;
     final theme = Theme.of(context);
+    // [FORK] 「打开文件所在位置」的出现条件集中在菜单打开时算一次。
+    //
+    // 桌面端才给：手机上既没有文件夹可浏览，收到的文件路径还可能是
+    // `content://`（相册 / 下载管理器给的 URI），`openFolder` 在 Android 上
+    // 走的是完全不同的分支，语义不是「定位到文件」。
+    final canRevealInFolder = message != null &&
+        message.kind == ChatMessageKind.file &&
+        (message.filePath?.isNotEmpty ?? false) &&
+        checkPlatformIsDesktop();
     _ChatMenuAction? action;
     try {
       action = await showMenu<_ChatMenuAction>(
@@ -314,6 +357,21 @@ class _ConversationPageState extends State<ConversationPage> {
                   const Icon(Icons.copy, size: 16),
                   const SizedBox(width: 10),
                   Text(t.general.copy),
+                ],
+              ),
+            ),
+          // [FORK] 只在桌面端、且这条消息确实有本地路径时出现。
+          // 位置按用户要求放在「复制」下面、「删除该条记录」上面。
+          if (canRevealInFolder)
+            PopupMenuItem(
+              value: _ChatMenuAction.revealInFolder,
+              height: 40,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.folder_open, size: 16),
+                  const SizedBox(width: 10),
+                  Text(t.conversation.revealInFolder),
                 ],
               ),
             ),
@@ -351,6 +409,10 @@ class _ConversationPageState extends State<ConversationPage> {
       case _ChatMenuAction.copy:
         if (text != null) {
           await Clipboard.setData(ClipboardData(text: text));
+        }
+      case _ChatMenuAction.revealInFolder:
+        if (message != null) {
+          await _revealInFolder(message);
         }
       case _ChatMenuAction.delete:
         if (message != null) {
