@@ -19,6 +19,7 @@ import 'package:localchat_app/util/conversation/conversation_sender.dart';
 import 'package:localchat_app/util/native/chat_notification.dart';
 import 'package:localchat_app/util/native/cross_file_converters.dart';
 import 'package:localchat_app/util/native/open_file.dart';
+import 'package:localchat_app/widget/chat/delete_record_dialog.dart';
 import 'package:localchat_app/widget/chat/drop_confirm_dialog.dart';
 import 'package:localchat_app/widget/chat/message_bubble.dart';
 import 'package:localchat_app/widget/chat/top_toast.dart';
@@ -353,7 +354,13 @@ class _ConversationPageState extends State<ConversationPage> {
         }
       case _ChatMenuAction.delete:
         if (message != null) {
-          await _deleteMessage(message);
+          final confirmed = await showDeleteRecordDialog(context, message);
+          if (!mounted) {
+            return;
+          }
+          if (confirmed) {
+            await _deleteMessage(message);
+          }
         }
       case null:
         break;

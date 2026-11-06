@@ -385,6 +385,16 @@ class Translations$conversation$zh_CN extends Translations$conversation$en {
   @override
   String get deleteBubble => '删除该条记录';
   @override
+  String get deleteRecordTitle => '删除该条记录？';
+  @override
+  String get deleteRecordTextContent => '只会从本机聊天记录里移除，对方那里不受影响。此操作不可撤销。';
+  @override
+  String get deleteRecordFileContent => '聊天里的这张卡片、以及接收历史里对应的条目都会被删除。已保存到磁盘的文件不受影响。';
+  @override
+  String get deleteRecordSentFileContent => '聊天里的这张卡片会被删除。对方已经收到的文件不受影响。';
+  @override
+  String get deleteRecordPendingHint => '这条消息还在发送中，删除会先取消传输。';
+  @override
   String get fileMissing => '原文件已经不在了，无法重发';
   @override
   String get notificationsOff => '通知已关闭';

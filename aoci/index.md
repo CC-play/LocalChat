@@ -14,7 +14,7 @@
 | 发文件（含离线重试） | `app/lib/util/conversation/conversation_sender.dart`（`deliverFiles`）→ `send_provider.dart`（`startSession`） | [conversation](modules/conversation.md) | 双端收发 |
 | 发送卡住 / 一直转圈 | `app/lib/util/conversation/conversation_sender.dart`（硬超时 + `_watchStalledUploads`） | [conversation](modules/conversation.md#超时与看门狗) | 对端关机后点重发，2 分钟内应失败 |
 | 想中止正在发送的消息 | `message_bubble.dart`（`onCancel`，转圈可点）→ `conversation_sender.dart`（`cancelChatMessage` + `_SendTicket`）→ 兜底 `chatSendWatchdogTimeout` | [conversation](modules/conversation.md#主动取消与界面兜底) | 手动：点重发后点转圈立刻停下 |
-| 想删掉某一条消息 | `conversation_page.dart`（`_showMessageMenu` / `_deleteMessage`）→ `message_bubble.dart`（`onSecondaryTap` 右键 / `onLongPress` 长按）→ `conversation_provider.dart`（`DeleteChatMessagesAction`） | [conversation](modules/conversation.md#删除该条记录) | 手动：长按（或右键）任一气泡 → 「删除该条记录」；收到的文件还要看历史里同 id 条目是否一起消失 |
+| 想删掉某一条消息 | `conversation_page.dart`（`_showMessageMenu` / `_deleteMessage`）→ `widget/chat/delete_record_dialog.dart`（确认框）→ `message_bubble.dart`（`onSecondaryTap` 右键 / `onLongPress` 长按）→ `conversation_provider.dart`（`DeleteChatMessagesAction`） | [conversation](modules/conversation.md#删除该条记录) | 手动：长按（或右键）任一气泡 → 「删除该条记录」→ 确认框点「取消」应什么都不删；确认后收到的文件还要看历史里同 id 条目是否一起消失 |
 | 收文本消息（静默接收 / 改成先确认） | `app/lib/provider/network/server/controller/receive_controller.dart`（`onPrepareUpload` 的文本分支 + `onAccept`）→ `settings_tab.dart`（「自动接收文本消息」） | [conversation](modules/conversation.md#接收文本静默还是先确认) | 关掉开关后用假对端发一条：应弹接收页，点「拒绝」会话里不留记录 |
 | 收到文件的记录时机 | `receive_controller.dart:377`（`error == null` 分支） | [conversation](modules/conversation.md) | 传一个文件后看会话 |
 | 会话持久化 / 迁移 | `app/lib/provider/persistence_provider.dart`（`ls_conversations`）→ `app/lib/util/shared_preferences/settings_migration.dart`（改名迁移） | — | `flutter test test/unit/util/shared_preferences/` |
@@ -59,6 +59,7 @@
 | `app/lib/util/shared_preferences/settings_migration.dart` | fork 新增的整个文件：`%APPDATA%\LocalSend` → `LocalChat` 的改名迁移（有单测） |
 | `app/lib/util/conversation/conversation_recorder.dart` | 文件头注释即 fork 说明 |
 | `app/lib/pages/conversation_page.dart` | 顶部说明；聊天页背景 / 输入栏取 `ChatPalette`；气泡菜单（复制 / 删除该条记录）与移动端长按入口 |
+| `app/lib/widget/chat/delete_record_dialog.dart` | 整个文件为 fork 新增（删单条记录前的确认卡片，按文本 / 收到文件 / 发出文件分文案） |
 | `app/lib/config/theme.dart` | `kSeedColor`（Local Chat 种子色 `#1E90FF`，上游是 `Colors.teal`）、`extensions: [chatPaletteFor(...)]`：把聊天配色挂进 ThemeData |
 | `app/lib/config/chat_palette.dart` | 整个文件为 fork 新增（聊天页配色 `ChatPalette`，Local Chat + 浅色 → `#EBEBEB` 底 / `#FFFFFF` 对方气泡） |
 | `app/lib/widget/chat/message_bubble.dart` | 固定气泡色常量；对方气泡取 `ChatPalette.incomingBubble` |

@@ -454,6 +454,23 @@ class Translations$conversation$en {
   /// en: 'Delete message'
   String get deleteBubble => 'Delete message';
 
+  /// en: 'Delete this record?'
+  String get deleteRecordTitle => 'Delete this record?';
+
+  /// en: 'It is only removed from the chat history on this device. The other side is not affected. This cannot be undone.'
+  String get deleteRecordTextContent =>
+      'It is only removed from the chat history on this device. The other side is not affected. This cannot be undone.';
+
+  /// en: 'This card in the chat and the matching entry in the receive history will be deleted. Files already saved on disk are not affected.'
+  String get deleteRecordFileContent =>
+      'This card in the chat and the matching entry in the receive history will be deleted. Files already saved on disk are not affected.';
+
+  /// en: 'This card will be deleted from the chat. The file the other side already received is not affected.'
+  String get deleteRecordSentFileContent => 'This card will be deleted from the chat. The file the other side already received is not affected.';
+
+  /// en: 'This message is still being sent. Deleting it will cancel the transfer first.'
+  String get deleteRecordPendingHint => 'This message is still being sent. Deleting it will cancel the transfer first.';
+
   /// en: 'The original file is gone, can't resend'
   String get fileMissing => 'The original file is gone, can\'t resend';
 
