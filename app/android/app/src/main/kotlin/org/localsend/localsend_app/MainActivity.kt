@@ -17,6 +17,7 @@ import android.os.Environment
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import android.provider.Settings
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import io.flutter.embedding.android.FlutterActivity
@@ -30,6 +31,7 @@ import java.util.TimeZone
 
 
 private const val CHANNEL = "org.localsend.localsend_app/localsend"
+private const val TAG = "LocalChatMain"
 private const val REQUEST_CODE_PICK_DIRECTORY = 1
 private const val REQUEST_CODE_PICK_DIRECTORY_PATH = 2
 private const val REQUEST_CODE_PICK_FILE = 3
@@ -709,21 +711,24 @@ class MainActivity : FlutterActivity() {
             }
 
             REQUEST_CODE_PICK_FILE -> {
+                // ClipData.Item.uri 是平台类型，个别选择器（部分 ROM 的「最近」页）会给空 uri，
+                // 这里先滤掉，否则后面取授权时传 null 会直接 NPE。
                 val uriList: List<Uri> = when {
                     data.clipData != null -> {
-                        val clipData = data.clipData
-                        val uris = mutableListOf<Uri>()
-                        for (i in 0 until clipData!!.itemCount) {
-                            uris.add(clipData.getItemAt(i).uri)
+                        val clipData = data.clipData!!
+                        (0 until clipData.itemCount).mapNotNull { index ->
+                            clipData.getItemAt(index).uri
                         }
-                        uris
                     }
 
                     data.data != null -> listOf(data.data!!)
-                    else -> {
-                        pendingResult?.error("Error", "Failed to access file", null)
-                        return
-                    }
+                    else -> emptyList()
+                }
+
+                if (uriList.isEmpty()) {
+                    pendingResult?.error("Error", "Failed to access file", null)
+                    pendingResult = null
+                    return
                 }
 
                 val takeFlags: Int =
@@ -731,11 +736,25 @@ class MainActivity : FlutterActivity() {
 
                 val resultList = mutableListOf<FileInfo>()
                 for (uri in uriList) {
-                    contentResolver.takePersistableUriPermission(uri, takeFlags)
+                    // 持久授权有两个坑，都不该让整次选择失败：
+                    // 1. 选择器没给 FLAG_GRANT_PERSISTABLE_URI_PERMISSION 时（部分第三方文件管理器）
+                    //    会抛 SecurityException；
+                    // 2. 系统对每个 App 的持久授权数量有上限（通常 128 条），多选攒够就会超。
+                    // 拿不到只是进程重启后读不到该文件，本次会话仍然能正常发送。
+                    try {
+                        contentResolver.takePersistableUriPermission(uri, takeFlags)
+                    } catch (e: SecurityException) {
+                        Log.w(TAG, "takePersistableUriPermission failed for $uri: $e")
+                    } catch (e: IllegalArgumentException) {
+                        Log.w(TAG, "takePersistableUriPermission failed for $uri: $e")
+                    }
+
                     val documentFile = FastDocumentFile.fromDocumentUri(this, uri)
                     if (documentFile == null) {
-                        pendingResult?.error("Error", "Failed to access file", null)
-                        return
+                        // 单文件查不到（已被删除 / provider 拒绝查询）就跳过，
+                        // 别因为多选里的一个坏项把其余文件一起丢掉。
+                        Log.w(TAG, "Cannot read $uri, skipped")
+                        continue
                     }
                     resultList.add(
                         FileInfo(
@@ -747,7 +766,11 @@ class MainActivity : FlutterActivity() {
                     )
                 }
 
-                pendingResult?.success(resultList.map { it.toMap() })
+                if (resultList.isEmpty()) {
+                    pendingResult?.error("Error", "Failed to access file", null)
+                } else {
+                    pendingResult?.success(resultList.map { it.toMap() })
+                }
                 pendingResult = null
             }
         }
