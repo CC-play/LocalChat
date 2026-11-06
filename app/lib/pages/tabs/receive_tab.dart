@@ -9,12 +9,15 @@ import 'package:localchat_app/provider/animation_provider.dart';
 import 'package:localchat_app/provider/local_ip_provider.dart';
 import 'package:localchat_app/provider/network/server/server_provider.dart';
 import 'package:localchat_app/provider/settings_provider.dart';
+import 'package:localchat_app/util/ui/snackbar.dart';
 import 'package:localchat_app/widget/animations/initial_fade_transition.dart';
 import 'package:localchat_app/widget/column_list_view.dart';
 import 'package:localchat_app/widget/custom_icon_button.dart';
+import 'package:localchat_app/widget/dialogs/device_name_dialog.dart';
 import 'package:localchat_app/widget/local_chat_logo.dart';
 import 'package:localchat_app/widget/responsive_list_view.dart';
 import 'package:localchat_app/widget/rotating_widget.dart';
+import 'package:localchat_isolates/isolate.dart';
 import 'package:localchat_isolates/util/sleep.dart';
 import 'package:refena_flutter/addons.dart';
 import 'package:refena_flutter/refena_flutter.dart';
@@ -47,6 +50,50 @@ class _ReceiveTabState extends State<ReceiveTab> {
         _showAdvanced = true;
         _showHistoryButton = false;
       });
+    }
+  }
+
+  /// [FORK] 改设备名称。改的是设置里那个值，改完立刻重启接收服务 ——
+  /// 页面上显示的是**服务启动时**的别名（`serverState.alias`），不重启的话
+  /// 名字改了页面却纹丝不动；多播通告里的名字也要等发现重启才会重新读取。
+  Future<void> _editAlias(
+    BuildContext context, {
+    required ServerState? serverState,
+    required String fallbackAlias,
+  }) async {
+    final currentName = serverState?.alias ?? fallbackAlias;
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (_) => DeviceNameDialog(
+        initialName: currentName,
+        transferActive: serverState?.session != null,
+      ),
+    );
+    if (newName == null || newName == currentName || !context.mounted) {
+      return;
+    }
+
+    await context.ref.notifier(settingsProvider).setAlias(newName);
+    if (serverState == null || !context.mounted) {
+      // 服务没在跑，名字会在下次启动时生效。
+      return;
+    }
+
+    try {
+      await context.ref.notifier(serverProvider).restartServerFromSettings();
+    } catch (e) {
+      if (context.mounted) {
+        context.showSnackBar(e.toString());
+      }
+      return;
+    }
+
+    if (!context.mounted) {
+      return;
+    }
+    // 广播里的别名取自同步状态，只有重开发现才会重新读一遍。
+    if (context.ref.read(parentIsolateProvider).discovery != null) {
+      context.ref.redux(parentIsolateProvider).dispatch(IsolateDiscoveryRestartAction());
     }
   }
 
@@ -85,9 +132,30 @@ class _ReceiveTabState extends State<ReceiveTab> {
                             },
                           ),
                         ),
-                        FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(serverState?.alias ?? alias, style: const TextStyle(fontSize: 48)),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(serverState?.alias ?? alias, style: const TextStyle(fontSize: 48)),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            // [FORK] 名字就在眼前，改它不必翻到设置页。
+                            Tooltip(
+                              message: t.receiveTab.editAlias,
+                              child: CustomIconButton(
+                                key: const ValueKey('edit-alias-btn'),
+                                onPressed: () => _editAlias(context, serverState: serverState, fallbackAlias: alias),
+                                child: Icon(
+                                  Icons.edit,
+                                  size: 22,
+                                  color: Theme.of(context).colorScheme.outline,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                         Visibility(
                           visible: serverState == null,

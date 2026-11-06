@@ -54,6 +54,28 @@ SendTab 的设备列表
 - 收到通告要不要回 register，取决于 `set_answer_announcements`，它跟随「HTTP 服务器是否在跑」。
 - `RegisterDeviceAction` 对**内容没变**的重复确认直接返回旧 state；收藏别名只在真的变了才落盘。
 
+## 改名的生效链
+
+别名（alias）不是一个地方的值，改一次要传三跳，少一跳就会出现「页面变了、别人看到的没变」：
+
+```
+settingsProvider.setAlias(新名字)              ← 持久化 + 设置页读它
+        │
+        ▼  serverProvider.restartServerFromSettings()
+syncProvider.alias（隔离子进程）              ← 广播报文里的名字取自这里（discovery.dart:74）
+        │
+        ▼  IsolateDiscoveryRestartAction
+discovery 重新 startDiscovery(alias: …)       ← 不重启就还是旧名字
+        │
+        ▼
+ServerState.alias                             ← 接收页大字、HTTP /register 响应用它
+```
+
+- **必须重启服务**：`ServerState.alias` 只在 `startServer` 时写入，`/register` 回复里的名字也是服务启动时的配置。只改设置的话，接收页大字（读 `serverState.alias`）根本不动。
+- **必须重启发现**：`startDiscovery` 在循环开头读 `syncProvider.alias`，不重开就继续用旧名字广播。设置页重启服务器的逻辑（`settings_tab_controller.dart:149`）也是这两步一起做。
+- 空别名会被 `startServer` 换成随机名（`generateRandomAlias`），所以接收页的改名对话框在输入为空时禁用「保存」，否则用户会以为改名失败。
+- 有传输在跑时重启服务会中断它，对话框会提前用红字提醒。
+
 ## 验证手法
 
 ```powershell

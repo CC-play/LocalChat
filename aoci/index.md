@@ -22,6 +22,7 @@
 | 会话持久化 / 迁移 | `app/lib/provider/persistence_provider.dart`（`ls_conversations`）→ `app/lib/util/shared_preferences/settings_migration.dart`（改名迁移） | — | `flutter test test/unit/util/shared_preferences/` |
 | 侧边栏 / Tab 顺序 | `app/lib/pages/home_page.dart` → `app/lib/pages/home_page_controller.dart` | — | `flutter analyze` |
 | 主题色 / 气泡配色 | `app/lib/config/theme.dart` → `app/lib/widget/chat/message_bubble.dart` | — | 见 [不变量](invariants.md#ui) |
+| 改自己的设备名称（接收页铅笔图标） | `app/lib/pages/tabs/receive_tab.dart`（`_editAlias`）→ `app/lib/widget/dialogs/device_name_dialog.dart` → `settingsProvider.setAlias` + `serverProvider.restartServerFromSettings` | [discovery](modules/discovery.md#改名的生效链) | 手动：接收页名字右边铅笔 → 改名 → 保存后名字应立刻变，设置页「设备名称」同步为同一个值 |
 | 界面文案 | `app/assets/i18n/en.json` + `zh-CN.json` → `fvm dart run slang` | — | `flutter analyze` |
 | 新增/修改一个设置项 | `app/lib/model/state/settings_state.dart`（加字段）→ `provider/settings_provider.dart`（init + setter）→ `provider/persistence_provider.dart`（key + getter/setter）→ `pages/tabs/settings_tab.dart`（`_BooleanEntry` / `_SettingsEntry`）→ 两份 i18n | — | `dart run build_runner build` + `dart run slang` + `flutter analyze` + `flutter test`（`mocks.mocks.dart` 会跟着重生成） |
 | 设备发现 / 扫描 | `app/lib/provider/network/nearby_devices_provider.dart` → `scan_facade.dart` → `packages/core/src/multicast/` | [discovery](modules/discovery.md) | `python %TEMP%\lspeer\watch_mc.py 30`：发送页可见时每 8 s 三个报文 |
@@ -70,6 +71,8 @@
 | `app/lib/pages/conversations_page.dart` | `_NotificationsOffBanner`：通知不可用时的提示条；标题改用 `PeerTitleText`，仅在重名时带指纹短码 |
 | `app/lib/util/conversation/peer_label.dart` | 整个文件为 fork 新增（重名消歧：指纹短码与名字分布统计） |
 | `app/lib/widget/chat/peer_title.dart` | 整个文件为 fork 新增（会话标题组件，列表与聊天页共用） |
+| `app/lib/pages/tabs/receive_tab.dart` | 名字右边的铅笔图标 + `_editAlias`：改完立刻重启接收服务，让新名字马上生效 |
+| `app/lib/widget/dialogs/device_name_dialog.dart` | 整个文件为 fork 新增（接收页改设备名称的输入框，取消返回 null） |
 | `app/lib/util/conversation/chat_presence.dart` | 整个文件为 fork 新增（前台判断，决定要不要弹通知） |
 | `app/lib/util/native/chat_notification.dart` | 整个文件为 fork 新增（通知发送 / 状态查询 / 点击回传） |
 | `app/windows/runner/flutter_window.cpp` | `RegisterClipboardChannel` 注册 |

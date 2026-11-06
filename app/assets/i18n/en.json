@@ -52,6 +52,8 @@
       "favorites": "Favorites",
       "on": "@:general.on"
     },
+    "editAlias": "Edit device name",
+    "editAliasBusy": "A transfer is in progress. Saving restarts the receive server and interrupts the transfer.",
     "link": "Receive via link"
   },
   "sendTab": {

@@ -198,6 +198,10 @@ class Translations$receiveTab$zh_CN extends Translations$receiveTab$en {
   @override
   late final Translations$receiveTab$quickSave$zh_CN quickSave = Translations$receiveTab$quickSave$zh_CN.internal(_root);
   @override
+  String get editAlias => '修改设备名称';
+  @override
+  String get editAliasBusy => '当前有传输进行中，保存会重启接收服务并中断传输。';
+  @override
   String get link => '通过链接接收';
 }
 

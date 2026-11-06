@@ -213,6 +213,12 @@ class Translations$receiveTab$en {
   late final Translations$receiveTab$infoBox$en infoBox = Translations$receiveTab$infoBox$en.internal(_root);
   late final Translations$receiveTab$quickSave$en quickSave = Translations$receiveTab$quickSave$en.internal(_root);
 
+  /// en: 'Edit device name'
+  String get editAlias => 'Edit device name';
+
+  /// en: 'A transfer is in progress. Saving restarts the receive server and interrupts the transfer.'
+  String get editAliasBusy => 'A transfer is in progress. Saving restarts the receive server and interrupts the transfer.';
+
   /// en: 'Receive via link'
   String get link => 'Receive via link';
 }

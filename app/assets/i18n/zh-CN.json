@@ -52,6 +52,8 @@
       "favorites": "收藏夹",
       "on": "@:general.on"
     },
+    "editAlias": "修改设备名称",
+    "editAliasBusy": "当前有传输进行中，保存会重启接收服务并中断传输。",
     "link": "通过链接接收"
   },
   "sendTab": {
