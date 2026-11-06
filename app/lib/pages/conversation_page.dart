@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:collection/collection.dart';
 import 'package:desktop_drop/desktop_drop.dart';
@@ -1343,7 +1344,8 @@ class _ComposerState extends State<_Composer> {
         child: CircularProgressIndicator(strokeWidth: 2),
       );
     } else if (_hasText) {
-      icon = const Icon(Icons.send);
+      // [FORK] 逆时针 90°：Icons.send 原本箭头朝右，转完朝正上（常见 IM 的发送键朝向）。
+      icon = Transform.rotate(angle: -math.pi / 2, child: const Icon(Icons.send));
     } else {
       icon = Icon(_isMobile ? Icons.add : Icons.folder_outlined);
     }
