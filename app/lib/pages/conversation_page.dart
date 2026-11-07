@@ -700,6 +700,7 @@ class _ConversationPageState extends State<ConversationPage> {
                                   MessageBubble(
                                     message: msg,
                                     peerInitial: initial,
+                                    peerFingerprint: conversation.peerFingerprint,
                                     // 桌面：右键；移动端：长按。两者走同一个菜单。
                                     onSecondaryTap: (position) => _handleBubbleMenu(position, msg),
                                     onLongPress: _selectableTextSupported ? null : (position) => _handleBubbleMenu(position, msg),

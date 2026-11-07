@@ -7,6 +7,8 @@ import 'package:localchat_app/pages/conversation_page.dart';
 import 'package:localchat_app/provider/conversation_provider.dart';
 import 'package:localchat_app/util/conversation/peer_label.dart';
 import 'package:localchat_app/util/native/chat_notification.dart';
+import 'package:localchat_app/util/ui/avatar_color.dart';
+import 'package:localchat_app/widget/chat/peer_avatar.dart';
 import 'package:localchat_app/widget/chat/peer_title.dart';
 import 'package:refena_flutter/refena_flutter.dart';
 import 'package:routerino/routerino.dart';
@@ -208,7 +210,7 @@ class _ConversationTile extends StatelessWidget {
       onTap: () => context.push(() => ConversationPage(peerFingerprint: conversation.peerFingerprint)),
       onLongPress: () => _confirmDelete(context),
       // [FORK] 未读数挂在头像右上角：44 的方框比头像大一圈，徽标锚 right/top，
-      // 正好压住圆形的右上弧外侧，不与标题行抢位置。
+      // 正好压在圆角方块的右上角外侧，不与标题行抢位置。
       leading: SizedBox(
         width: 44,
         height: 44,
@@ -217,16 +219,19 @@ class _ConversationTile extends StatelessWidget {
           clipBehavior: Clip.none,
           children: [
             Center(
-              child: CircleAvatar(
-                backgroundColor: theme.colorScheme.secondaryContainer,
-                foregroundColor: theme.colorScheme.onSecondaryContainer,
-                child: Text(conversation.initial),
+              // [FORK] 与聊天气泡共用同一个头像部件：圆角方块 + 按指纹取色。
+              child: PeerAvatar(
+                initial: conversation.initial,
+                colors: avatarColorsFor(conversation.peerFingerprint, theme.brightness),
+                size: 40,
               ),
             ),
             if (unread > 0)
               Positioned(
-                top: -3,
-                right: -3,
+                // 方块有实实在在的直角区域，徽标比圆形头像时再往外挪 1px，
+                // 避免压在头像本体上（徽标自带 1.5px 底色描边）。
+                top: -4,
+                right: -4,
                 child: _UnreadBadge(count: unread),
               ),
           ],

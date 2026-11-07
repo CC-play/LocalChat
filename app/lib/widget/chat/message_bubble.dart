@@ -5,7 +5,9 @@ import 'package:localchat_app/config/chat_palette.dart';
 import 'package:localchat_app/gen/strings.g.dart';
 import 'package:localchat_app/model/conversation/conversation.dart';
 import 'package:localchat_app/provider/conversation/chat_transfer_provider.dart';
+import 'package:localchat_app/util/ui/avatar_color.dart';
 import 'package:localchat_app/widget/chat/file_message_card.dart';
+import 'package:localchat_app/widget/chat/peer_avatar.dart';
 import 'package:refena_flutter/refena_flutter.dart';
 
 /// [FORK] 自己发出的气泡固定用这个蓝色；文字因此固定走白色系（不跟主题走，
@@ -19,6 +21,11 @@ class MessageBubble extends StatelessWidget {
 
   /// 对方（接收方消息）的头像占位字符。
   final String peerInitial;
+
+  /// 对端指纹，用于推导头像配色（同一台设备永远同一个颜色）。
+  ///
+  /// 只用于取色，不参与任何网络请求或身份校验。
+  final String peerFingerprint;
 
   final VoidCallback? onFileTap;
 
@@ -49,6 +56,7 @@ class MessageBubble extends StatelessWidget {
     super.key,
     required this.message,
     required this.peerInitial,
+    required this.peerFingerprint,
     this.onFileTap,
     this.onSecondaryTap,
     this.onLongPress,
@@ -84,23 +92,14 @@ class MessageBubble extends StatelessWidget {
       );
     }
 
-    final avatar = Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(
-        // [FORK] 头像跟随设置里的主题色（与固定蓝色气泡不同色，是有意为之）
-        color: isOutgoing ? theme.colorScheme.primary : theme.colorScheme.secondaryContainer,
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Center(
-        child: Text(
-          isOutgoing ? t.conversation.you : (peerInitial.isEmpty ? '?' : peerInitial),
-          style: TextStyle(
-            color: isOutgoing ? theme.colorScheme.onPrimary : theme.colorScheme.onSecondaryContainer,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
+    // [FORK] 头像：对端按指纹从 16 色板取固定色，自己跟主题色走。
+    // 颜色由 peer_avatar.dart 统一绘制，与会话列表复用同一个部件。
+    final avatar = PeerAvatar(
+      initial: isOutgoing ? t.conversation.you : peerInitial,
+      colors: isOutgoing
+          ? selfAvatarColors(theme.colorScheme)
+          : avatarColorsFor(peerFingerprint, theme.brightness),
+      size: 36,
     );
 
     final statusHint = switch (message.status) {
