@@ -223,6 +223,48 @@ Windows 资源管理器 `/select` 选中该文件，macOS 访达、Linux 文件�
 - **目录不存在时提示一句**（`t.conversation.revealInFolderFailed`，`TopToast`）：
   资源管理器对不存在的路径既不报错也不开窗口，用户只会觉得「点了没反应」。
 
+### 文件已不在本机
+
+`ChatMessage.filePath` 只是一个路径，文件随时可能被移动 / 更名 / 删除，所以「还在不在」
+是渲染时现查的。判断只有一处：`util/native/file_availability.dart` 的 `localFileExists`。
+
+- `null` / 空串 → 不存在（这条消息本来就没有本地副本，例如接收时只存进了相册）；
+- **只在桌面端 + 绝对路径下真的去 stat**：Android 的绝对路径可能落在 scoped storage，
+  `exists()` 会因权限不足误报 false，宁可说「有」也不能把能打开的文件说成丢了；
+  `content://` 这类 URI 不归 `File` 管，`exists()` 对它只会返回 false。
+
+三处表现（都由这一个判断派生，不各说各话）：
+
+| 位置 | 文件还在 | 文件已不在 |
+|---|---|---|
+| 卡片悬浮光标 | 手型 | 箭头 |
+| 卡片悬浮提示 | 无 | 「文件已被移动、更名或删除」；`filePath` 为空时换成「这个文件不在本机」 |
+| 菜单「打开文件所在位置」 | 可点 | 置灰（`enabled: false`），仍然显示 |
+
+置灰**不写死颜色**：`PopupMenuItem(enabled: false)` 自带 disabled 样式——M3 文字取
+`onSurface` 的 38%（浅色 → 灰 100 左右，深色 → `onSurface` 压暗到 38%），图标再叠
+0.38 / 0.5 的不透明度，深浅主题自动跟。如果自己给图标或文字上色，会和框架的透明度
+叠两层，反而更不协调。
+
+`FileMessageCard` 为此从 `StatelessWidget` 变成 `StatefulWidget`：`initState` 查一次，
+`MouseRegion.onEnter` 再查一次（文件可能是卡片渲染之后才被删的），结果有变化才 `setState`。
+「点开」时的兜底仍在 `util/native/open_file.dart`（不存在就不交给系统打开器，
+免得 Windows 先弹一个系统级「找不到文件」框）。这条提示走**顶部 toast**
+（`TopToast`，红字、3 秒自动收起），不是 `CannotOpenFileDialog`：文件不见了属于
+「点一下才知道」的轻量信息，弹框还得再点一次「关闭」，反而打断聊天。
+`CannotOpenFileDialog` 仍保留给「文件在、但系统打不开」这条分支——那里有
+「从历史里删除」的操作，需要按钮。
+
+`TopToast` 的正文用 `colorScheme.error`（真红字），不用 `onErrorContainer`
+——后者在浅色主题下是接近黑的深红（`#410002`），读起来不像告警。
+同一时刻只保留一条，新的顶掉旧的，不会叠出两个。
+
+`OverlayEntry` 的内容**不在任何 `Material` 之下**，会直接继承 `MaterialApp` 根部的
+`_errorTextStyle`（`material/app.dart`：红色等宽字体 + 黄色双下划线，本是给
+「缺 Material 的 Text」兜底的诊断样式）。所以 toast 里套了一层
+`Material(type: MaterialType.transparency)`，并且 `TextStyle` 显式写
+`decoration: TextDecoration.none`，两重保险。
+
 ### 删除该条记录
 
 `_deleteMessage(message)` 按固定顺序做三件事：

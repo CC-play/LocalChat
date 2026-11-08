@@ -407,6 +407,10 @@ class Translations$conversation$zh_CN extends Translations$conversation$en {
   @override
   String get fileMissing => '原文件已经不在了，无法重发';
   @override
+  String get fileUnavailable => '这个文件不在本机，无法打开';
+  @override
+  String get fileMovedOrDeleted => '文件已被移动、更名或删除';
+  @override
   String get notificationsOff => '通知已关闭';
   @override
   String get notificationsOffHint => '后台收到新消息时不会有提醒';

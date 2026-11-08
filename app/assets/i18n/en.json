@@ -236,6 +236,8 @@
     "deleteRecordSentFileContent": "This card will be deleted from the chat. The file the other side already received is not affected.",
     "deleteRecordPendingHint": "This message is still being sent. Deleting it will cancel the transfer first.",
     "fileMissing": "The original file is gone, can't resend",
+    "fileUnavailable": "This file is not on this device, so it can't be opened",
+    "fileMovedOrDeleted": "This file has been moved, renamed, or deleted",
     "notificationsOff": "Notifications are off",
     "notificationsOffHint": "No alerts for new messages in the background.",
     "notificationsEnable": "Turn on"

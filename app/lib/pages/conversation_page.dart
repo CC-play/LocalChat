@@ -20,6 +20,7 @@ import 'package:localchat_app/util/conversation/conversation_sender.dart';
 import 'package:localchat_app/util/conversation/peer_label.dart';
 import 'package:localchat_app/util/native/chat_notification.dart';
 import 'package:localchat_app/util/native/cross_file_converters.dart';
+import 'package:localchat_app/util/native/file_availability.dart';
 import 'package:localchat_app/util/native/open_file.dart';
 import 'package:localchat_app/util/native/open_folder.dart';
 import 'package:localchat_app/util/native/platform_check.dart';
@@ -386,6 +387,20 @@ class _ConversationPageState extends State<ConversationPage> {
     }
   }
 
+  /// [FORK] 点会话里的文件卡片。
+  ///
+  /// `filePath` 为空表示这条消息在本机没有可用的副本（例如接收时只存进了相册，
+  /// 没留下绝对路径）。这种情况不能静默吞掉点击，否则就是「点了没反应」，
+  /// 所以在顶部提示一句。
+  void _openFileMessage(ChatMessage message) {
+    final path = message.filePath;
+    if (path == null || path.isEmpty) {
+      TopToast.show(context, t.conversation.fileUnavailable);
+      return;
+    }
+    unawaited(openFile(context, message.fileType ?? FileType.other, path));
+  }
+
   /// [FORK] 在系统文件管理器里定位这条文件消息对应的文件（Windows
   /// 资源管理器里是「打开文件所在的位置」）。
   ///
@@ -433,6 +448,17 @@ class _ConversationPageState extends State<ConversationPage> {
         message.kind == ChatMessageKind.file &&
         (message.filePath?.isNotEmpty ?? false) &&
         checkPlatformIsDesktop();
+    // [FORK] 文件已经不在磁盘上时，这一项仍然显示、但置灰。
+    //
+    // 直接不显示会让人以为功能丢了；能点却发现没反应更糟。置灰用
+    // PopupMenuItem 自带的 disabled 样式（M3 取 onSurface 的 38%，M2 取
+    // theme.disabledColor），深浅主题都跟着主题走，所以这里不写死颜色。
+    final revealPath = canRevealInFolder ? message.filePath : null;
+    final revealEnabled = await localFileExists(revealPath);
+    if (!mounted) {
+      _menuOpen = false;
+      return;
+    }
     _ChatMenuAction? action;
     try {
       action = await showMenu<_ChatMenuAction>(
@@ -468,10 +494,13 @@ class _ConversationPageState extends State<ConversationPage> {
             ),
           // [FORK] 只在桌面端、且这条消息确实有本地路径时出现。
           // 位置按用户要求放在「复制」下面、「删除该条记录」上面。
+          // 文件已经不在了就置灰（enabled: false）—— 那一项没有任何可做的事：
+          // 资源管理器对不存在的路径既不报错也不开窗口，点下去等于没反应。
           if (canRevealInFolder)
             PopupMenuItem(
               value: _ChatMenuAction.revealInFolder,
               height: 40,
+              enabled: revealEnabled,
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -708,15 +737,9 @@ class _ConversationPageState extends State<ConversationPage> {
                                     onCancel: msg.status == ChatMessageStatus.pending ? () => unawaited(_cancelMessage(msg)) : null,
                                     onStalePending: msg.status == ChatMessageStatus.pending ? () => unawaited(_expireStaleMessage(msg)) : null,
                                     staleAfter: chatSendWatchdogTimeout,
-                                    onFileTap: msg.filePath == null
-                                        ? null
-                                        : () async {
-                                            await openFile(
-                                              context,
-                                              msg.fileType ?? FileType.other,
-                                              msg.filePath!,
-                                            );
-                                          },
+                                    // 恒传非 null：filePath 为空时由 _openFileMessage 弹提示，
+                                    // 让「点了没反应」变成「明确告诉你为什么打不开」。
+                                    onFileTap: () => _openFileMessage(msg),
                                   ),
                                 ],
                               );

@@ -489,6 +489,12 @@ class Translations$conversation$en {
   /// en: 'The original file is gone, can't resend'
   String get fileMissing => 'The original file is gone, can\'t resend';
 
+  /// en: 'This file is not on this device, so it can't be opened'
+  String get fileUnavailable => 'This file is not on this device, so it can\'t be opened';
+
+  /// en: 'This file has been moved, renamed, or deleted'
+  String get fileMovedOrDeleted => 'This file has been moved, renamed, or deleted';
+
   /// en: 'Notifications are off'
   String get notificationsOff => 'Notifications are off';
 

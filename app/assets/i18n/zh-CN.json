@@ -236,6 +236,8 @@
     "deleteRecordSentFileContent": "聊天里的这张卡片会被删除。对方已经收到的文件不受影响。",
     "deleteRecordPendingHint": "这条消息还在发送中，删除会先取消传输。",
     "fileMissing": "原文件已经不在了，无法重发",
+    "fileUnavailable": "这个文件不在本机，无法打开",
+    "fileMovedOrDeleted": "文件已被移动、更名或删除",
     "notificationsOff": "通知已关闭",
     "notificationsOffHint": "后台收到新消息时不会有提醒",
     "notificationsEnable": "去开启"

@@ -124,37 +124,48 @@ class _TopToastViewState extends State<_TopToastView> with SingleTickerProviderS
               child: Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 520),
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.errorContainer,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: theme.colorScheme.shadow.withValues(alpha: 0.18),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.error, size: 22, color: theme.colorScheme.error),
-                        const SizedBox(width: 10),
-                        Flexible(
-                          child: Text(
-                            widget.message,
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.normal,
-                              height: 1.35,
-                              color: theme.colorScheme.onErrorContainer,
+                  // OverlayEntry 的内容不在任何 Material 之下，没有这层的话文字会继承
+                  // MaterialApp 根部的 `_errorTextStyle`——红色等宽字体 + 黄色双下划线
+                  // （material/app.dart 里 `textStyle: _errorTextStyle`）。套一层透明
+                  // Material 就能拿到 theme.textTheme.bodyMedium 的正常文本样式。
+                  child: Material(
+                    type: MaterialType.transparency,
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.errorContainer,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: theme.colorScheme.shadow.withValues(alpha: 0.18),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.error, size: 22, color: theme.colorScheme.error),
+                          const SizedBox(width: 10),
+                          Flexible(
+                            child: Text(
+                              widget.message,
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                                height: 1.35,
+                                // 正文用 error 色（红字），而不是 onErrorContainer：
+                                // 后者在浅色主题下是接近黑的深红，读起来不像告警。
+                                color: theme.colorScheme.error,
+                                // 显式写死，避免以后有人把这层 Material 挪走又冒出下划线。
+                                decoration: TextDecoration.none,
+                              ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
