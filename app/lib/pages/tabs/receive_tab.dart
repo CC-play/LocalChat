@@ -16,7 +16,6 @@ import 'package:localchat_app/widget/custom_icon_button.dart';
 import 'package:localchat_app/widget/dialogs/device_name_dialog.dart';
 import 'package:localchat_app/widget/local_chat_logo.dart';
 import 'package:localchat_app/widget/responsive_list_view.dart';
-import 'package:localchat_app/widget/rotating_widget.dart';
 import 'package:localchat_isolates/isolate.dart';
 import 'package:localchat_isolates/util/sleep.dart';
 import 'package:refena_flutter/addons.dart';
@@ -124,10 +123,11 @@ class _ReceiveTabState extends State<ReceiveTab> {
                             builder: (context, ref) {
                               final animations = ref.watch(animationProvider);
                               final activeTab = ref.watch(homePageControllerProvider.select((state) => state.currentTab));
-                              return RotatingWidget(
-                                duration: const Duration(seconds: 15),
+                              // Only the arrow ring spins, the bubble stays still.
+                              return LocalChatLogo(
+                                withText: false,
+                                spinDuration: const Duration(seconds: 15),
                                 spinning: serverState != null && animations && activeTab == HomeTab.receive,
-                                child: const LocalChatLogo(withText: false),
                               );
                             },
                           ),
