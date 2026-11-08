@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:localchat_app/config/chat_palette.dart';
@@ -151,26 +153,114 @@ extension InputDecorationThemeExt on InputDecorationThemeData {
 /// [ColorMode.localchat] 走 null 分支自动跟随。
 const kSeedColor = Color(0xFF1E90FF);
 
+/// [FORK] 深色模式下 surface 系列的整体抬升量，单位是 M3 tone（等价于 CIE L*）。
+///
+/// `ColorScheme.fromSeed(kSeedColor, dark)` 给出的 `surface` 是 `#111318`，
+/// 即 M3 neutral tone 6（实测 L* 5.88）——在桌面上几乎与纯黑无异，整片背景
+/// 发闷，窗口和桌面也分不开。抬 6 档后是 `#1D1F24`（L* 11.9），与 VS Code
+/// 深色主题（`#1E1E1E`，L* 12.2）落在同一水平。
+///
+/// 平台强调色（`ColorMode.system`）生成的深色方案同样从 tone 6 起步，所以
+/// 所有深色分支都走这套抬升，见 [_determineColorScheme]。
+///
+/// 想再调深浅只改这个数字即可：每 +1 ≈ +1 L*。
+const double kDarkSurfaceLift = 6;
+
+const double _wpX = 0.95047;
+const double _wpY = 1.0;
+const double _wpZ = 1.08883;
+
+double _toLinear(double c) => c <= 0.04045 ? c / 12.92 : math.pow((c + 0.055) / 1.055, 2.4).toDouble();
+
+double _toSrgb(double c) => c <= 0.0031308 ? c * 12.92 : 1.055 * math.pow(c, 1 / 2.4).toDouble() - 0.055;
+
+/// CIE Lab 的 `f(t)`：XYZ 相对白点比值的立方根压缩（低亮度走线性段）。
+double _labF(double t) => t > 216 / 24389 ? math.pow(t, 1 / 3).toDouble() : (24389 / 27 * t + 16) / 116;
+
+double _labFInv(double t) {
+  final c = t * t * t;
+  return c > 216 / 24389 ? c : (116 * t - 16) * 27 / 24389;
+}
+
+/// 在 CIE Lab 空间里把颜色沿 L* 抬高 [lift] 档，保持 a* 和 b* 不变。
+///
+/// 为什么不用 HSL 或朝白色 lerp：那两种做法在低亮度区给出的 L* 增量不一致，
+/// 会把 surface 阶梯的相对间距压扁，气泡和背景就贴到一起了。Lab 的 L*
+/// 正是 M3 tone 的定义，改多少就是多少，阶梯形状原样平移。
+Color _liftTone(Color color, double lift) {
+  final argb = color.toARGB32();
+  final r = _toLinear(((argb >> 16) & 0xFF) / 255.0);
+  final g = _toLinear(((argb >> 8) & 0xFF) / 255.0);
+  final b = _toLinear((argb & 0xFF) / 255.0);
+
+  final fx = _labF((0.4124564 * r + 0.3575761 * g + 0.1804375 * b) / _wpX);
+  final fy = _labF((0.2126729 * r + 0.7151522 * g + 0.0721750 * b) / _wpY);
+  final fz = _labF((0.0193339 * r + 0.1191920 * g + 0.9503041 * b) / _wpZ);
+
+  final a = 500.0 * (fx - fy);
+  final bStar = 200.0 * (fy - fz);
+  final l = math.min(116.0 * fy - 16.0 + lift, 100.0);
+
+  final ny = (l + 16) / 116;
+  final nx = ny + a / 500;
+  final nz = ny - bStar / 200;
+  final x = _labFInv(nx) * _wpX;
+  final y = _labFInv(ny) * _wpY;
+  final z = _labFInv(nz) * _wpZ;
+
+  int channel(double linear) => (_toSrgb(linear.clamp(0.0, 1.0).toDouble()) * 255).round().clamp(0, 255);
+
+  return Color.fromARGB(
+    (argb >> 24) & 0xFF,
+    channel(3.2404548 * x - 1.5371389 * y - 0.4985315 * z),
+    channel(-0.9692664 * x + 1.8760109 * y + 0.0415561 * z),
+    channel(0.0556434 * x - 0.2040259 * y + 1.0572252 * z),
+  );
+}
+
+/// 把 `surface` 及其容器阶梯整体抬亮，层次间距保持不变。
+///
+/// 不动 `onSurface` / `onSurfaceVariant` / `outline`：文字与描边的对比度会
+/// 因此从 14.4:1 降到 12.6:1，仍远超 WCAG AAA 的 7:1。
+/// 也不动 `primary` / `secondary` 等强调色——只抬"底"，不抬"字"和"色"。
+ColorScheme _liftDarkSurfaces(ColorScheme scheme) {
+  return scheme.copyWith(
+    surface: _liftTone(scheme.surface, kDarkSurfaceLift),
+    surfaceDim: _liftTone(scheme.surfaceDim, kDarkSurfaceLift),
+    surfaceBright: _liftTone(scheme.surfaceBright, kDarkSurfaceLift),
+    surfaceContainerLowest: _liftTone(scheme.surfaceContainerLowest, kDarkSurfaceLift),
+    surfaceContainerLow: _liftTone(scheme.surfaceContainerLow, kDarkSurfaceLift),
+    surfaceContainer: _liftTone(scheme.surfaceContainer, kDarkSurfaceLift),
+    surfaceContainerHigh: _liftTone(scheme.surfaceContainerHigh, kDarkSurfaceLift),
+    surfaceContainerHighest: _liftTone(scheme.surfaceContainerHighest, kDarkSurfaceLift),
+  );
+}
+
 ColorScheme _determineColorScheme(ColorMode mode, Color customColor, Brightness brightness, DynamicColors? dynamicColors) {
-  final defaultColorScheme = ColorScheme.fromSeed(
+  final isDark = brightness == Brightness.dark;
+
+  ColorScheme lift(ColorScheme scheme) => isDark ? _liftDarkSurfaces(scheme) : scheme;
+  ColorScheme? liftOrNull(ColorScheme? scheme) => scheme == null ? null : lift(scheme);
+
+  final seeded = ColorScheme.fromSeed(
     seedColor: kSeedColor,
     brightness: brightness,
   );
 
   final colorScheme = switch (mode) {
-    ColorMode.system => brightness == Brightness.light ? dynamicColors?.light : dynamicColors?.dark,
+    // 平台强调色生成的深色方案同样从 tone 6 起步，一并抬亮
+    ColorMode.system => liftOrNull(brightness == Brightness.light ? dynamicColors?.light : dynamicColors?.dark),
     ColorMode.localchat => null,
-    ColorMode.oled => (dynamicColors?.dark ?? defaultColorScheme).copyWith(
-      surface: Colors.black,
-    ),
+    // OLED 的卖点是纯黑底，surface 必须留在 #000；容器照常抬亮，靠容器拉开层次
+    ColorMode.oled => lift(dynamicColors?.dark ?? seeded).copyWith(surface: Colors.black),
     ColorMode.yaru => throw 'Should reach here',
-    ColorMode.custom => ColorScheme.fromSeed(
+    ColorMode.custom => lift(ColorScheme.fromSeed(
       seedColor: customColor,
       brightness: brightness,
-    ),
+    )),
   };
 
-  return colorScheme ?? defaultColorScheme;
+  return colorScheme ?? lift(seeded);
 }
 
 ThemeData _getYaruTheme(Brightness brightness) {
