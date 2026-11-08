@@ -14,10 +14,15 @@ class AvatarColors {
 /// 色板中的一项。
 ///
 /// 四个色值分别是「浅色主题的底/字」和「深色主题的底/字」。
-/// 取值按 M3 的 tone 体系定档：浅色底 tone 90 + 字 tone 12，深色底 tone 30 +
-/// 字 tone 90。明度档位固定之后，十六个颜色的「轻重」才一致——一排头像看过去
-/// 不会有的刺眼、有的发灰。实测对比度：浅色最低 12.6:1，深色最低 7.2:1，
-/// 均高于 WCAG AA 的 4.5:1。
+/// 浅色底取 tone 84 + 字 tone 11，深色底取 tone 30 + 字 tone 90。
+///
+/// 为什么只有 8 色：同一明度下，sRGB 浅色档的彩度上限只有 C≈20 上下，
+/// 色相每 16.5° 只换来 ΔE≈5。实测同为统一明度时的最小色差：
+/// 16 色 5.2 / 12 色 6.7 / 10 色 8.3 / **8 色 10.4**。ΔE 5 是「要盯着看
+/// 才能分」的水平，只有 8 色能到一眼可辨。因此色相按 28° 均匀铺开，
+/// 起点 220°（纯蓝），绕一整圈到 57°（橙），完全避开绿区与青绿区。
+///
+/// 实测对比度：浅色最低 11.0:1，深色最低 7.2:1，均高于 WCAG AA 的 4.5:1。
 class _Swatch {
   final Color lightBackground;
   final Color lightForeground;
@@ -28,25 +33,21 @@ class _Swatch {
 }
 
 const List<_Swatch> _swatches = [
-  _Swatch(Color(0xFFCFE5FE), Color(0xFF002237), Color(0xFF144A6E), Color(0xFFCFE5FE)), // 蓝
-  _Swatch(Color(0xFFAEECFF), Color(0xFF01232B), Color(0xFF044E5D), Color(0xFFAEECFF)), // 天蓝
-  _Swatch(Color(0xFF9FF1EE), Color(0xFF012424), Color(0xFF02504F), Color(0xFF9FF1EE)), // 青
-  _Swatch(Color(0xFFAFF0D7), Color(0xFF00251A), Color(0xFF0D503E), Color(0xFFAFF0D7)), // 蓝绿
-  _Swatch(Color(0xFFC3EDC5), Color(0xFF012606), Color(0xFF294F2F), Color(0xFFC3EDC5)), // 绿
-  _Swatch(Color(0xFFDCE8B6), Color(0xFF1C2200), Color(0xFF404B22), Color(0xFFDCE8B6)), // 黄绿
-  _Swatch(Color(0xFFF4E1B1), Color(0xFF271F01), Color(0xFF51461D), Color(0xFFF4E1B1)), // 黄
-  _Swatch(Color(0xFFFEDCC2), Color(0xFF311A00), Color(0xFF603F22), Color(0xFFFEDCC2)), // 琥珀
-  _Swatch(Color(0xFFFFDBCF), Color(0xFF3B1300), Color(0xFF683B2B), Color(0xFFFFDBCF)), // 橙
-  _Swatch(Color(0xFFFEDAD8), Color(0xFF3F0E11), Color(0xFF6D3737), Color(0xFFFEDAD8)), // 红
-  _Swatch(Color(0xFFFED9E1), Color(0xFF3F0C1D), Color(0xFF6C3644), Color(0xFFFED9E1)), // 粉
-  _Swatch(Color(0xFFFED8EB), Color(0xFF3B0E29), Color(0xFF673752), Color(0xFFFED8EB)), // 洋红
-  _Swatch(Color(0xFFFED6FF), Color(0xFF321334), Color(0xFF5C3B5E), Color(0xFFFED6FF)), // 紫红
-  _Swatch(Color(0xFFE9DDFF), Color(0xFF23193D), Color(0xFF4D4068), Color(0xFFE9DDFF)), // 紫罗兰
-  _Swatch(Color(0xFFDCE1FF), Color(0xFF081F42), Color(0xFF38456E), Color(0xFFDCE1FF)), // 靛蓝
-  _Swatch(Color(0xFFDBE3EE), Color(0xFF192028), Color(0xFF404750), Color(0xFFDBE3EE)), // 中性
+  _Swatch(Color(0xFF7FDFF5), Color(0xFF082126), Color(0xFF2B4C53), Color(0xFFACEDFC)), // 蓝 h220
+  _Swatch(Color(0xFFA6D8F9), Color(0xFF09202C), Color(0xFF2A4A5D), Color(0xFFC8E7FC)), // 靛蓝 h248
+  _Swatch(Color(0xFFBFD2FB), Color(0xFF0B1E35), Color(0xFF2C476F), Color(0xFFD8E3FC)), // 紫罗兰 h276
+  _Swatch(Color(0xFFDACAFA), Color(0xFF160F5B), Color(0xFF4A3694), Color(0xFFE8DEFC)), // 紫 h304
+  _Swatch(Color(0xFFF5C2EA), Color(0xFF370A31), Color(0xFF6C3062), Color(0xFFFCD8F4)), // 品红 h333
+  _Swatch(Color(0xFFF9C4D2), Color(0xFF3C0A1E), Color(0xFF762E47), Color(0xFFFCDAE3)), // 玫红 h001
+  _Swatch(Color(0xFFFBC5BF), Color(0xFF3E0A08), Color(0xFF7B2C2B), Color(0xFFFCDBD7)), // 红 h029
+  _Swatch(Color(0xFFF9C7AA), Color(0xFF2E1808), Color(0xFF683C1F), Color(0xFFFCDCCA)), // 橙 h057
 ];
 
 /// 对方头像可用的颜色数量。
+///
+/// 8 色时，5 个会话里有约 80% 的概率出现重复配色（生日问题），比 16 色时的
+/// 50% 明显高。这是换取「一眼可辨」的代价：颜色只做粗分类，精确区分仍由
+/// 头像里的首字符和标题栏的指纹后缀（`PeerTitleText`）承担。
 int get avatarColorCount => _swatches.length;
 
 /// 按对端身份挑一枚稳定的头像配色。
