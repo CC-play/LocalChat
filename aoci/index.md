@@ -22,6 +22,7 @@
 | 会话持久化 / 迁移 | `app/lib/provider/persistence_provider.dart`（`ls_conversations`）→ `app/lib/util/shared_preferences/settings_migration.dart`（改名迁移） | — | `flutter test test/unit/util/shared_preferences/` |
 | 侧边栏 / Tab 顺序 | `app/lib/pages/home_page.dart` → `app/lib/pages/home_page_controller.dart` | — | `flutter analyze` |
 | 主题色 / 气泡配色 | `app/lib/config/theme.dart` → `app/lib/widget/chat/message_bubble.dart` | — | 见 [不变量](invariants.md#ui) |
+| Windows 标题栏颜色不跟主题 | `app/lib/util/native/title_bar_theme.dart`（`TitleBarTheme`，挂在 `MaterialApp.builder`）→ `app/windows/runner/title_bar_ext.cpp`（`DwmSetWindowAttribute`） | — | `flutter test test/unit/util/title_bar_theme_test.dart`；手动：系统开深色、App 切浅色，标题栏应变浅 |
 | 改自己的设备名称（接收页铅笔图标） | `app/lib/pages/tabs/receive_tab.dart`（`_editAlias`）→ `app/lib/widget/dialogs/device_name_dialog.dart` → `settingsProvider.setAlias` + `serverProvider.restartServerFromSettings` | [discovery](modules/discovery.md#改名的生效链) | 手动：接收页名字右边铅笔 → 改名 → 保存后名字应立刻变，设置页「设备名称」同步为同一个值 |
 | 界面文案 | `app/assets/i18n/en.json` + `zh-CN.json` → `fvm dart run slang` | — | `flutter analyze` |
 | 新增/修改一个设置项 | `app/lib/model/state/settings_state.dart`（加字段）→ `provider/settings_provider.dart`（init + setter）→ `provider/persistence_provider.dart`（key + getter/setter）→ `pages/tabs/settings_tab.dart`（`_BooleanEntry` / `_SettingsEntry`）→ 两份 i18n | — | `dart run build_runner build` + `dart run slang` + `flutter analyze` + `flutter test`（`mocks.mocks.dart` 会跟着重生成） |
@@ -68,6 +69,7 @@
 | `app/lib/config/chat_palette.dart` | 整个文件为 fork 新增（聊天页配色 `ChatPalette`，Local Chat + 浅色 → `#EBEBEB` 底 / `#FFFFFF` 对方气泡） |
 | `app/lib/widget/chat/message_bubble.dart` | 固定气泡色常量；对方气泡取 `ChatPalette.incomingBubble` |
 | `app/lib/widget/chat/top_toast.dart` | 顶部 Toast 说明 |
+| `app/lib/main.dart` | `MaterialApp.builder` 挂 `TitleBarTheme`：主题变化时把颜色推给 Windows 标题栏 |
 | `app/lib/widget/chat/file_message_card.dart` | 发出方向前景色 |
 | `app/lib/pages/conversations_page.dart` | `_NotificationsOffBanner`：通知不可用时的提示条；标题改用 `PeerTitleText`，仅在重名时带指纹短码 |
 | `app/lib/util/conversation/peer_label.dart` | 整个文件为 fork 新增（重名消歧：指纹短码与名字分布统计） |
@@ -76,8 +78,8 @@
 | `app/lib/widget/dialogs/device_name_dialog.dart` | 整个文件为 fork 新增（接收页改设备名称的输入框，取消返回 null） |
 | `app/lib/util/conversation/chat_presence.dart` | 整个文件为 fork 新增（前台判断，决定要不要弹通知） |
 | `app/lib/util/native/chat_notification.dart` | 整个文件为 fork 新增（通知发送 / 状态查询 / 点击回传） |
-| `app/windows/runner/flutter_window.cpp` | `RegisterClipboardChannel` 注册 |
-| `app/windows/runner/CMakeLists.txt` | 新的 runner 源文件 + `windowscodecs` / `shell32` 链接 |
+| `app/windows/runner/flutter_window.cpp` | `RegisterClipboardChannel` / `RegisterTitleBarChannel` 注册（后者把主窗口 HWND 交给通道） |
+| `app/windows/runner/CMakeLists.txt` | 新的 runner 源文件（`title_bar_ext.cpp` 等）+ `windowscodecs` / `shell32` 链接（`dwmapi` 已在上游链接） |
 | `app/android/.../MainActivity.kt` | `getClipboardImage` / `getClipboardFiles` 分支 + `readClipboardImage()` / `readClipboardFiles()` |
 | `app/lib/util/conversation/clipboard_image.dart` | 整个文件为 fork 新增（剪贴板文件与图片读取） |
 | `app/lib/util/conversation/conversation_media_picker.dart` | 整个文件为 fork 新增（会话页「相册」入口，wechat_assets_picker 多选） |
@@ -103,14 +105,18 @@ app/lib/pages/conversation_page.dart                 1089 行
 app/lib/widget/chat/message_bubble.dart               339 行
 app/lib/widget/chat/file_message_card.dart             76 行
 app/lib/widget/chat/top_toast.dart                    168 行
+app/lib/util/native/title_bar_theme.dart              117 行（标题栏跟随 App 主题，含 120ms debounce）
 app/lib/widget/chat/drop_confirm_dialog.dart          128 行
 app/windows/runner/clipboard_image_win.cpp            217 行（纯 Win32/WIC，可单独编译验证）
 app/windows/runner/clipboard_files_win.cpp            74 行（CF_HDROP → 路径，shellapi）
 app/windows/runner/clipboard_ext.cpp                   67 行
+app/windows/runner/title_bar_ext.cpp                 114 行（DWM：caption / text / border 三个属性）
+app/windows/runner/title_bar_ext.h                    16 行
 app/test/unit/provider/conversation_provider_test.dart 368 行（16 用例）
 app/test/unit/provider/chat_transfer_test.dart         127 行（11 用例）
 app/test/unit/util/clipboard_image_test.dart           75 行（9 用例）
 app/test/unit/config/chat_palette_test.dart            41 行（3 用例，锁死 #EBEBEB / #FFFFFF 只在 Local Chat 浅色生效）
+app/test/unit/util/title_bar_theme_test.dart           44 行（3 用例：浅色 / 深色 / OLED 纯黑底的颜色映射）
 ```
 
 合计约 1,786 行新代码 + 上游文件内约 250 行钩子；相对 `v1.18.2` 全量为 28 文件、+2,763 / −101（含生成物）。

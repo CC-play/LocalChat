@@ -12,6 +12,7 @@ add_executable(${BINARY_NAME} WIN32
   "clipboard_image_win.cpp"
   "flutter_window.cpp"
   "main.cpp"
+  "title_bar_ext.cpp"
   "utils.cpp"
   "win32_window.cpp"
   "winrt_ext.cpp"

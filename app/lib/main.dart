@@ -15,6 +15,7 @@ import 'package:localchat_app/provider/network/server/server_provider.dart';
 import 'package:localchat_app/provider/settings_provider.dart';
 import 'package:localchat_app/util/native/chat_notification.dart';
 import 'package:localchat_app/util/native/platform_check.dart';
+import 'package:localchat_app/util/native/title_bar_theme.dart';
 import 'package:localchat_app/util/ui/dynamic_colors.dart';
 import 'package:localchat_app/widget/watcher/life_cycle_watcher.dart';
 import 'package:localchat_app/widget/watcher/shortcut_watcher.dart';
@@ -111,6 +112,11 @@ class LocalChatApp extends StatelessWidget {
               theme: getTheme(colorMode, customColor, Brightness.light, dynamicColors),
               darkTheme: getTheme(colorMode, customColor, Brightness.dark, dynamicColors),
               themeMode: colorMode == ColorMode.oled ? ThemeMode.dark : themeMode,
+              // [FORK] Windows 的标题栏由 DWM 画，挂在这里才能拿到解析后的主题，
+              // 让标题栏颜色跟随 App 主题而不是系统深浅色。
+              builder: (context, child) => TitleBarTheme(
+                child: child ?? const SizedBox.shrink(),
+              ),
               navigatorKey: context.read(navigationProvider).key,
               home: RouterinoHome(
                 builder: () => const HomePage(
