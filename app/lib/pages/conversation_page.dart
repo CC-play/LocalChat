@@ -41,7 +41,16 @@ import 'package:refena_flutter/refena_flutter.dart';
 ///
 /// 声明顺序即菜单里的显示顺序：复制 → 取消传输 → 打开文件所在位置 → 删除该条记录。
 /// 破坏性动作放最后，和菜单里那行红字的位置一致。
-enum _ChatMenuAction { copy, cancelTransfer, revealInFolder, delete }
+/// 气泡菜单的动作。声明顺序即显示顺序。
+enum _ChatMenuAction {
+  copy,
+
+  /// [FORK] 进入多选：勾选多条后一次性删除。
+  select,
+  cancelTransfer,
+  revealInFolder,
+  delete,
+}
 
 /// 单个对端设备的会话窗口。
 class ConversationPage extends StatefulWidget {
@@ -72,6 +81,13 @@ class _ConversationPageState extends State<ConversationPage> {
 
   /// [FORK] 页面级 Ctrl+V 需要把活交给输入条（剪贴板读取与确认卡片都在那里）。
   final _composerKey = GlobalKey<_ComposerState>();
+
+  /// [FORK] 页面级快捷键的焦点。
+  ///
+  /// 只在多选态用得上：进入多选要收起键盘（`unfocus`），焦点会退回 route 自己的
+  /// `FocusScopeNode`，而它在页面的**外层** —— Esc 沿焦点链向上找根本不会经过
+  /// [_PasteShortcuts]，退出多选的快捷键就会失效。所以主动把焦点拿回来。
+  final _shortcutFocusNode = FocusNode(debugLabel: 'conversation-shortcuts');
 
   /// 当前选中文本；由 [SelectionArea.onSelectionChanged] 维护，仅作字段用（不 setState）。
   String? _selectedText;
@@ -104,9 +120,22 @@ class _ConversationPageState extends State<ConversationPage> {
   /// 上一次构建时的软键盘高度，用来发现「键盘刚弹出」。
   double _keyboardInset = 0;
 
+  /// [FORK] 是否处于多选态。
+  ///
+  /// 多选态下底部输入栏整体让位给 [_SelectionBar]，气泡的右键/长按菜单、
+  /// 打开文件、点转圈取消全部关闭，整行点击只做一件事：切换选中。
+  bool _selecting = false;
+
+  /// [FORK] 多选态下已选中的消息 id。
+  ///
+  /// 用 id 而不是下标：删除、对端新消息、重发都会让列表顺序变化，
+  /// 下标一错就会删到别的消息。
+  final _selectedIds = <String>{};
+
   @override
   void dispose() {
     _scrollController.dispose();
+    _shortcutFocusNode.dispose();
     super.dispose();
   }
 
@@ -126,6 +155,12 @@ class _ConversationPageState extends State<ConversationPage> {
     final keyboardOpened = keyboardInset > _keyboardInset;
     _messageCount = count;
     _keyboardInset = keyboardInset;
+
+    // [FORK] 多选态下不跟随新消息：用户正在往上翻着勾选，列表突然跳到底部
+    // 会打断选择。计数仍然更新（见上），退出多选后的判断才不会被这一次吞掉。
+    if (_selecting) {
+      return;
+    }
 
     if (first || keyboardOpened || (grew && _isNearBottom)) {
       _stickToBottomSoon();
@@ -305,6 +340,11 @@ class _ConversationPageState extends State<ConversationPage> {
   }
 
   Future<void> _autoShowMenu(Offset fallbackPosition) async {
+    // [FORK] 多选态不弹菜单：桌面端拖选产生的选区在这里没有用处，
+    // 弹出来还会盖住正在勾选的内容。
+    if (_selecting) {
+      return;
+    }
     // 必须等一帧再读：选区在 pointer up 之后才最终化，而双击选词更晚——
     // 选词发生在手势竞技场裁决阶段，比 Listener.onPointerUp 还迟，
     // 所以判断不能提前返回。
@@ -339,6 +379,10 @@ class _ConversationPageState extends State<ConversationPage> {
   /// [FORK] 菜单里除「复制」外还有「打开文件所在位置」（桌面端、文件消息）
   /// 和「删除该条记录」，所以这里把整条 message 传下去。
   void _handleBubbleMenu(Offset position, ChatMessage message) {
+    // [FORK] 多选态下气泡的右键 / 长按不弹菜单（build 里也传了 null，这里兜底）。
+    if (_selecting) {
+      return;
+    }
     final body = message.kind == ChatMessageKind.text ? (message.text ?? '') : (message.fileName ?? '');
     final selected = _selectedText;
     // 选区必须确实落在这一条气泡里，才按「复制选中部分」处理，否则容易复制到别处的内容。
@@ -350,6 +394,116 @@ class _ConversationPageState extends State<ConversationPage> {
         text: text.isEmpty ? null : text,
       ),
     );
+  }
+
+  // ---------------------------------------------------------------------------
+  // 多选删除
+  // ---------------------------------------------------------------------------
+
+  /// [FORK] 进入多选态，并把触发菜单的这条先勾上。
+  ///
+  /// 先勾当前条是主流 IM 的默认行为：点「多选」的意图通常是「我要删这一条，
+  /// 顺便再勾几条」，少一步点击。
+  void _enterSelectionMode(ChatMessage message) {
+    // 键盘会顶掉底部面板；多选期间输入框也不可见，留着焦点没有意义。
+    FocusScope.of(context).unfocus();
+    // 收起移动端附件面板：它属于输入条，多选态下整条被遮住，
+    // 不收起的话退出多选会看到它「自己又弹出来」。
+    _composerKey.currentState?._closePanel();
+    // 桌面端的蓝色文字选区在这里没有用处，留着只会和整行高亮打架。
+    _selectionKey.currentState?.selectableRegion.clearSelection();
+    _selectedText = null;
+    _selectionTouched = false;
+    // 把焦点交给页面级快捷键，Esc 才能退出多选（见 _shortcutFocusNode）。
+    _shortcutFocusNode.requestFocus();
+
+    setState(() {
+      _selecting = true;
+      _selectedIds
+        ..clear()
+        ..add(message.id);
+    });
+  }
+
+  /// 切换单条选中。
+  ///
+  /// 全部取消后**不自动退出**：用户可能只是取消了几条准备重选，面板突然消失
+  /// 会让人以为操作被打断了。退出只走显式入口（退出按钮 / 返回 / Esc）。
+  void _toggleSelected(String messageId) {
+    setState(() {
+      if (!_selectedIds.remove(messageId)) {
+        _selectedIds.add(messageId);
+      }
+    });
+  }
+
+  void _exitSelectionMode() {
+    if (!_selecting) {
+      return;
+    }
+    setState(() {
+      _selecting = false;
+      _selectedIds.clear();
+    });
+  }
+
+  /// [FORK] 删除当前选中的所有消息。
+  ///
+  /// 顺序与单条删除一致，不能换：
+  /// 1. 还在「发送中」的先取消 —— 否则记录从列表消失后，后台仍会把文件传完；
+  /// 2. 删接收历史里同 id 的条目（只有**收到的文件**才有），一次写盘 + 一次联动；
+  /// 3. 删会话里的这批消息。`DeleteChatMessagesAction` 在删空时会一并移除会话。
+  Future<void> _deleteSelected() async {
+    final ids = {..._selectedIds};
+    if (ids.isEmpty) {
+      return;
+    }
+
+    final conversation = _effectiveConversation();
+    final selected = conversation?.messages.where((m) => ids.contains(m.id)).toList() ?? const <ChatMessage>[];
+    if (selected.isEmpty) {
+      // 选中的消息已经被别处删掉了（例如在接收历史页联动了同一张卡片）。
+      _exitSelectionMode();
+      return;
+    }
+
+    final confirmed = await showDeleteSelectedDialog(context, selected);
+    if (!mounted || !confirmed) {
+      return;
+    }
+
+    final ref = context.ref;
+
+    // 同一批文件共用一个 ticket，`cancelChatMessage` 内部会整批收敛，
+    // 所以这里逐条调用是幂等的 —— 不需要先按 ticket 去重。
+    final target = _currentTarget();
+    if (target != null) {
+      for (final message in selected) {
+        if (message.status != ChatMessageStatus.pending) {
+          continue;
+        }
+        await cancelChatMessage(
+          ref: ref,
+          target: target,
+          messageId: message.id,
+          errorMessage: t.conversation.sendCancelled,
+        );
+      }
+    }
+
+    await ref.redux(receiveHistoryProvider).dispatchAsync(RemoveHistoryEntriesAction(ids));
+    await ref.redux(conversationProvider).dispatchAsync(DeleteChatMessagesAction(ids));
+
+    if (!mounted) {
+      return;
+    }
+    _exitSelectionMode();
+
+    // 会话被删空时整条会话都没了，留在页面上只会看到「该会话已被删除」。
+    final stillExists = ref.read(conversationProvider).any((c) => c.peerFingerprint == widget.peerFingerprint);
+    if (!stillExists) {
+      unawaited(Navigator.of(context).maybePop());
+    }
   }
 
   /// [FORK] 删除单条消息（文本气泡与文件卡片共用）。
@@ -497,6 +651,21 @@ class _ConversationPageState extends State<ConversationPage> {
                 ],
               ),
             ),
+          // [FORK] 多选：勾选多条后一次性删除。拖选文字带出的菜单
+          // （message == null）没有可勾选的对象，不显示。
+          if (message != null)
+            PopupMenuItem(
+              value: _ChatMenuAction.select,
+              height: 40,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.checklist, size: 16),
+                  const SizedBox(width: 10),
+                  Text(t.conversation.selectMessages),
+                ],
+              ),
+            ),
           // [FORK] 正在传输的文件才给这一项。放在最上面：它是这条消息当下
           // 唯一可做的「止损」动作，不该排在「打开文件所在位置」后面。
           // 走的是和点气泡转圈同一个 [cancelChatMessage]：整批一起停、
@@ -566,6 +735,10 @@ class _ConversationPageState extends State<ConversationPage> {
       case _ChatMenuAction.copy:
         if (text != null) {
           await Clipboard.setData(ClipboardData(text: text));
+        }
+      case _ChatMenuAction.select:
+        if (message != null) {
+          _enterSelectionMode(message);
         }
       case _ChatMenuAction.cancelTransfer:
         if (message != null) {
@@ -710,7 +883,8 @@ class _ConversationPageState extends State<ConversationPage> {
     // [FORK] 聊天页配色（Local Chat + 浅色为中性灰底 + 纯白对方气泡）
     final palette = ChatPalette.of(context);
 
-    final content = DropTarget(
+    // [FORK] 用 Widget 类型（不用 var）：iOS 上会在外面再包一层返回手势补丁。
+    Widget content = DropTarget(
       // [FORK] 会话窗口自己接住拖拽。主页那层 DropTarget 会同时收到事件
       // （desktop_drop 不做冒泡判定，只按各自 bounds 命中），
       // 所以在 home_page 里按「当前路由是否最上层」把它关掉。
@@ -755,16 +929,22 @@ class _ConversationPageState extends State<ConversationPage> {
                                     message: msg,
                                     peerInitial: initial,
                                     peerFingerprint: conversation.peerFingerprint,
+                                    // [FORK] 多选态：整行点击切换选中，其余入口全部让位。
+                                    selectionMode: _selecting,
+                                    selected: _selectedIds.contains(msg.id),
+                                    onToggleSelected: () => _toggleSelected(msg.id),
                                     // 桌面：右键；移动端：长按。两者走同一个菜单。
-                                    onSecondaryTap: (position) => _handleBubbleMenu(position, msg),
-                                    onLongPress: _selectableTextSupported ? null : (position) => _handleBubbleMenu(position, msg),
-                                    onRetry: msg.status == ChatMessageStatus.failed ? () => unawaited(_retryMessage(msg)) : null,
-                                    onCancel: msg.status == ChatMessageStatus.pending ? () => unawaited(_cancelMessage(msg)) : null,
-                                    onStalePending: msg.status == ChatMessageStatus.pending ? () => unawaited(_expireStaleMessage(msg)) : null,
+                                    onSecondaryTap: _selecting ? null : (position) => _handleBubbleMenu(position, msg),
+                                    onLongPress: _selecting || _selectableTextSupported ? null : (position) => _handleBubbleMenu(position, msg),
+                                    onRetry: !_selecting && msg.status == ChatMessageStatus.failed ? () => unawaited(_retryMessage(msg)) : null,
+                                    onCancel: !_selecting && msg.status == ChatMessageStatus.pending ? () => unawaited(_cancelMessage(msg)) : null,
+                                    onStalePending: !_selecting && msg.status == ChatMessageStatus.pending
+                                        ? () => unawaited(_expireStaleMessage(msg))
+                                        : null,
                                     staleAfter: chatSendWatchdogTimeout,
                                     // 恒传非 null：filePath 为空时由 _openFileMessage 弹提示，
                                     // 让「点了没反应」变成「明确告诉你为什么打不开」。
-                                    onFileTap: () => _openFileMessage(msg),
+                                    onFileTap: _selecting ? null : () => _openFileMessage(msg),
                                   ),
                                 ],
                               );
@@ -772,11 +952,25 @@ class _ConversationPageState extends State<ConversationPage> {
                           ),
                         ),
                 ),
-                _Composer(
-                  key: _composerKey,
-                  conversation: conversation,
-                  onSent: _stickToBottomSoon,
+                // [FORK] 多选态：底部输入栏整体让位给选择面板。
+                //
+                // 用 Offstage 而不是 if/else 二选一：`_ComposerState` 持有
+                // TextEditingController，直接移除会 dispose 掉它，用户输入到一半的
+                // 草稿会凭空消失。Offstage 保留 state，不占布局也不参与命中测试。
+                Offstage(
+                  offstage: _selecting,
+                  child: _Composer(
+                    key: _composerKey,
+                    conversation: conversation,
+                    onSent: _stickToBottomSoon,
+                  ),
                 ),
+                if (_selecting)
+                  _SelectionBar(
+                    count: _selectedIds.length,
+                    onDelete: () => unawaited(_deleteSelected()),
+                    onExit: _exitSelectionMode,
+                  ),
               ],
             ),
           ),
@@ -785,9 +979,34 @@ class _ConversationPageState extends State<ConversationPage> {
       ),
     );
 
-    return _PasteShortcuts(
-      onPaste: () => _composerKey.currentState?.handlePaste(),
-      child: content,
+    // [FORK] iOS 的返回手势补丁，见 [_SelectionEdgeSwipe]。
+    //
+    // 只在 iOS 上包这一层（`Platform.isIOS` 恒定，树结构不会来回变化，
+    // 不会让 ListView 重建、丢滚动位置）。
+    if (Platform.isIOS) {
+      content = _SelectionEdgeSwipe(
+        enabled: _selecting,
+        onSwipe: _exitSelectionMode,
+        child: content,
+      );
+    }
+
+    // [FORK] 多选态拦截返回：移动端的返回键 / 侧滑手势先退出多选，
+    // 而不是直接把整个会话关掉。
+    return PopScope(
+      canPop: !_selecting,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _selecting) {
+          _exitSelectionMode();
+        }
+      },
+      child: _PasteShortcuts(
+        onPaste: () => _composerKey.currentState?.handlePaste(),
+        // 只在多选态给出 Esc：非多选时 Esc 保持「什么都不做」。
+        onEscape: _selecting ? _exitSelectionMode : null,
+        focusNode: _shortcutFocusNode,
+        child: content,
+      ),
     );
   }
 
@@ -943,6 +1162,11 @@ class _PasteClipboardIntent extends Intent {
   const _PasteClipboardIntent();
 }
 
+/// [FORK] 多选态下按 Esc 退出多选。
+class _ExitSelectionIntent extends Intent {
+  const _ExitSelectionIntent();
+}
+
 /// [FORK] 页面级 Ctrl/Cmd+V。
 ///
 /// 挂在会话页而不是输入框上：**不点输入框也能粘贴**。
@@ -954,20 +1178,35 @@ class _PasteClipboardIntent extends Intent {
 /// 沿 context 向上找 Shortcuts 根本不会经过这里（表现为「什么都没聚焦时按 Ctrl+V 无效」）。
 class _PasteShortcuts extends StatelessWidget {
   final VoidCallback onPaste;
+
+  /// [FORK] 多选态下的 Esc：退出多选。为 null 时不注册 Esc 快捷键
+  /// （非多选时按 Esc 必须保持「什么都不做」）。
+  final VoidCallback? onEscape;
+
+  /// [FORK] 页面级快捷键的焦点节点，由页面持有。
+  ///
+  /// 多选态下页面会主动 `requestFocus()`，否则焦点退回 route 的 FocusScope，
+  /// Esc 找不到这里的 Shortcuts。
+  final FocusNode? focusNode;
+
   final Widget child;
 
   const _PasteShortcuts({
     required this.onPaste,
+    this.onEscape,
+    this.focusNode,
     required this.child,
   });
 
   @override
   Widget build(BuildContext context) {
+    final onEscape = this.onEscape;
     return Shortcuts(
-      shortcuts: const <ShortcutActivator, Intent>{
-        SingleActivator(LogicalKeyboardKey.keyV, control: true): _PasteClipboardIntent(),
+      shortcuts: <ShortcutActivator, Intent>{
+        const SingleActivator(LogicalKeyboardKey.keyV, control: true): const _PasteClipboardIntent(),
         // macOS 用 Command，顺手支持一下；原生侧没接也不影响文本粘贴。
-        SingleActivator(LogicalKeyboardKey.keyV, meta: true): _PasteClipboardIntent(),
+        const SingleActivator(LogicalKeyboardKey.keyV, meta: true): const _PasteClipboardIntent(),
+        if (onEscape != null) const SingleActivator(LogicalKeyboardKey.escape): const _ExitSelectionIntent(),
       },
       child: Actions(
         actions: <Type, Action<Intent>>{
@@ -977,11 +1216,176 @@ class _PasteShortcuts extends StatelessWidget {
               return null;
             },
           ),
+          if (onEscape != null)
+            _ExitSelectionIntent: CallbackAction<_ExitSelectionIntent>(
+              onInvoke: (intent) {
+                onEscape();
+                return null;
+              },
+            ),
         },
         // 只负责把焦点留在本页：真正要粘贴的是 [onPaste]。
         child: Focus(
+          focusNode: focusNode,
           autofocus: true,
           child: child,
+        ),
+      ),
+    );
+  }
+}
+
+/// [FORK] iOS 的「侧滑返回」补丁。
+///
+/// iOS 上 [PopScope.canPop] 为 false 会把 `CupertinoPageRoute` 的返回手势直接
+/// 关掉（`popGestureEnabled == false`），`onPopInvokedWithResult` 根本不会被调用 ——
+/// 也就是说系统侧滑在多选态下**完全失效**，用户只能去点底部的「退出」。
+///
+/// 这里在页面左边缘补一条指针跟踪带：水平右滑超过阈值就退出多选。
+/// 用 [Listener] 而不是 `GestureDetector`：它不参与手势竞技场、也不消费事件，
+/// 边缘上的点击（勾选圈）照常落到子节点。
+///
+/// Android 不需要这一层：返回键与预测性返回手势都会走系统的 pop 请求，
+/// 由 [PopScope] 拦下。
+class _SelectionEdgeSwipe extends StatefulWidget {
+  final bool enabled;
+  final VoidCallback onSwipe;
+  final Widget child;
+
+  const _SelectionEdgeSwipe({
+    required this.enabled,
+    required this.onSwipe,
+    required this.child,
+  });
+
+  @override
+  State<_SelectionEdgeSwipe> createState() => _SelectionEdgeSwipeState();
+}
+
+class _SelectionEdgeSwipeState extends State<_SelectionEdgeSwipe> {
+  /// 起点必须落在左边缘这条带子里；更深处的横向拖动只是普通点击。
+  static const _edgeWidth = 24.0;
+
+  /// 累计水平位移超过这个值才算「返回手势」，避免轻微抖动误退出。
+  static const _triggerDistance = 72.0;
+
+  int? _pointer;
+  Offset? _start;
+
+  void _reset() {
+    _pointer = null;
+    _start = null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      onPointerDown: (event) {
+        if (!widget.enabled || _pointer != null || event.position.dx > _edgeWidth) {
+          return;
+        }
+        _pointer = event.pointer;
+        _start = event.position;
+      },
+      onPointerMove: (event) {
+        final start = _start;
+        if (!widget.enabled || event.pointer != _pointer || start == null) {
+          return;
+        }
+        final delta = event.position - start;
+        // 右滑且明显偏水平：竖直分量大的多半是在滑列表，不该退出。
+        if (delta.dx >= _triggerDistance && delta.dx > delta.dy.abs() * 1.2) {
+          _reset();
+          widget.onSwipe();
+        }
+      },
+      onPointerUp: (event) {
+        if (event.pointer == _pointer) {
+          _reset();
+        }
+      },
+      onPointerCancel: (event) {
+        if (event.pointer == _pointer) {
+          _reset();
+        }
+      },
+      child: widget.child,
+    );
+  }
+}
+
+/// [FORK] 多选态的底部面板：替代输入栏。
+///
+/// 与输入栏共用同一底色和顶部细线，切换时只是内容变了 —— 否则底部会突然
+/// 多出一条边框、少一段留白，看起来像换了张卡片。
+///
+/// 按钮顺序：[删除] 在左、[退出] 在最右。右端是拇指最容易够到的位置，
+/// 留给非破坏性的退出，降低误触删除的概率。
+class _SelectionBar extends StatelessWidget {
+  final int count;
+  final VoidCallback onDelete;
+  final VoidCallback onExit;
+
+  const _SelectionBar({
+    required this.count,
+    required this.onDelete,
+    required this.onExit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final enabled = count > 0;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 6, 8, 6),
+      decoration: BoxDecoration(
+        color: ChatPalette.of(context).composerBackground,
+        border: Border(
+          top: BorderSide(color: theme.colorScheme.outlineVariant, width: 0.5),
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: 40,
+          child: Row(
+            children: [
+              // Expanded + ellipsis：窄屏（iPhone SE 一类）上「已选 12 条」不能把
+              // 右侧两个按钮挤出屏幕。
+              Expanded(
+                child: Text(
+                  t.conversation.selectedCount(count: count),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 14, color: theme.colorScheme.onSurfaceVariant),
+                ),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.icon(
+                // 一条都没选时置灰：删 0 条的确认框没有意义。
+                onPressed: enabled ? onDelete : null,
+                icon: const Icon(Icons.delete_outline, size: 18),
+                label: Text(t.general.delete),
+                style: FilledButton.styleFrom(
+                  backgroundColor: theme.colorScheme.error,
+                  foregroundColor: theme.colorScheme.onError,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  minimumSize: const Size(0, 40),
+                ),
+              ),
+              const SizedBox(width: 4),
+              TextButton(
+                onPressed: onExit,
+                style: TextButton.styleFrom(
+                  foregroundColor: theme.colorScheme.onSurfaceVariant,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  minimumSize: const Size(0, 40),
+                ),
+                child: Text(t.conversation.exitSelection),
+              ),
+            ],
+          ),
         ),
       ),
     );

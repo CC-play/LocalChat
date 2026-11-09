@@ -78,6 +78,12 @@
 | 提示音的合并窗口（600ms）必须大于音频时长（500ms） | 连发两条时 `play()` 重设音源，第一声被截成半声 |
 | 音频资源统一单声道 44.1kHz 16-bit WAV、峰值约 -2 dBFS | 原始素材 -8 dBFS 在各平台都明显偏轻；多声道/异采样率会让 GStreamer 与 Media Foundation 行为不一致 |
 | Local Chat 主题的种子色只在 `config/theme.dart` 的 `kSeedColor` 改（`#1E90FF`），不要在别处再写死 `Colors.teal` | `localchat` 走 null 分支跟随 `defaultColorScheme`，写死第二处就会出现两套配色 |
+| 多选态**不改变**消息列表的 widget 树：`SelectionArea` / `Listener` 外壳保持原样，只在回调里 `if (_selecting) return` | `SelectionArea` 没有 `enabled` 参数，二选一渲染会让桌面端 `ListView` 整棵重建、`ScrollController` 的 offset 丢失，进多选直接跳回顶部 |
+| 多选态必须把 `MessageBubble` 的 `onFileTap` / `onCancel` / `onRetry` 传 `null` | 文件卡片内层 `InkWell` 在手势竞技场里优先于外层 `GestureDetector`，点卡片会打开文件而不是选中 |
+| 多选删除走 `RemoveHistoryEntriesAction`（批量），不要循环派发 `RemoveHistoryEntryAction` | N 条会触发 2N 次全量 JSON 写盘 + 2N 次会话联动 |
+| 底部切换用 `Offstage` 保留 `_Composer`，不要用 `if/else` 二选一 | `_ComposerState` 持有 `TextEditingController`，被移除会 dispose，用户输入到一半的草稿凭空消失 |
+| 多选态进入时要 `unfocus` 并 `requestFocus` 到页面级 `_shortcutFocusNode` | 焦点退回 route 的 `FocusScope`（在页面外层），Esc 沿焦点链找不到 `_PasteShortcuts`，退出快捷键失效 |
+| iOS 上 `PopScope.canPop=false` 会连带关掉系统返回手势，侧滑退出靠 `_SelectionEdgeSwipe`（左边缘 24px 起手、水平右滑 72px） | `onPopInvokedWithResult` 根本不会被调用，iOS 侧滑在多选态完全没有反应 |
 
 ## 为什么不做符号索引
 

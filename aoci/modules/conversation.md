@@ -35,7 +35,7 @@
 | `app/lib/util/conversation/send_failure.dart` | 失败原因（18 类）+ 三档分类器 + 文案，见「失败原因分类」 |
 | `app/lib/provider/conversation/chat_transfer_provider.dart` | 上传进度与**发送阶段**旁路（每条消息一个 `ValueNotifier`） |
 | `app/lib/pages/conversations_page.dart` | 列表 + 空态 + 全清 + 长按删除 |
-| `app/lib/pages/conversation_page.dart` | 详情 + 底部输入栏（[附件][输入][发送]）+ 文字选区/右键「复制」菜单 + Ctrl+V 粘贴（文件 / 图片 / 文本） |
+| `app/lib/pages/conversation_page.dart` | 详情 + 底部输入栏（[附件][输入][发送]）+ 文字选区/右键「复制」菜单 + Ctrl+V 粘贴（文件 / 图片 / 文本）+ 气泡多选删除 |
 | `app/lib/util/conversation/clipboard_image.dart` | 剪贴板文件与图片读取（原生通道）+ 落缓存目录 + 文件名消毒 |
 | `app/lib/util/conversation/chat_presence.dart` | 只记「App 是否在前台」，决定收到消息要不要弹通知 |
 | `app/lib/util/native/chat_notification.dart` | 通知的 Dart 入口：发送 / 清除 / 查状态 / 跳设置 / 点击回调 |
@@ -256,17 +256,17 @@ LocalChat **没有**可调的「发送超时」：对端 App 没开时 prepare-u
 - 确定态与不确定态共用同一个 `_bar()`，固定 96×3，切换时不跳布局。
 - 秒数由 `_SendProgressFooter` 自己的 1s ticker 驱动（只重建这一行小字），同一 ticker 还负责 `chatSendWatchdogTimeout` 的兜底 —— 但**读盘校验期间不累加**（见「主动取消与界面兜底」）。
 
-## 气泡菜单：复制 / 取消传输 / 打开文件所在位置 / 删除该条记录
+## 气泡菜单：复制 / 多选 / 取消传输 / 打开文件所在位置 / 删除该条记录
 
 菜单由页面统一弹（`_showMessageMenu`），桌面右键、移动端长按、桌面拖选三条入口共用一份。
-显示顺序即 `_ChatMenuAction` 的声明顺序：复制 → 取消传输 → 打开文件所在位置 → 删除该条记录
-（「取消传输」是当下最相关的止损动作，排在定位/删除之前；破坏性项仍排最后）。
+显示顺序即 `_ChatMenuAction` 的声明顺序：复制 → 多选 → 取消传输 → 打开文件所在位置 → 删除该条记录
+（「多选」是内容操作，紧跟复制；「取消传输」是当下最相关的止损动作，排在定位/删除之前；破坏性项仍排最后）。
 
 | 入口 | 平台 | 菜单项 |
 |---|---|---|
-| 气泡右键（`MessageBubble.onSecondaryTap`） | 桌面 | 复制 + 取消传输（仅传输中的文件）+ 打开文件所在位置（仅文件消息）+ 删除该条记录 |
-| 气泡长按（`MessageBubble.onLongPress`） | 移动端 | 复制 + 取消传输（同上）+ 删除该条记录 |
-| 拖选 / 双击选词后自动弹（`Listener.onPointerUp` → `_autoShowMenu`） | 桌面 | 只有复制（选区不属于某一条消息） |
+| 气泡右键（`MessageBubble.onSecondaryTap`） | 桌面 | 复制 + 多选 + 取消传输（仅传输中的文件）+ 打开文件所在位置（仅文件消息）+ 删除该条记录 |
+| 气泡长按（`MessageBubble.onLongPress`） | 移动端 | 复制 + 多选 + 取消传输（同上）+ 删除该条记录 |
+| 拖选 / 双击选词后自动弹（`Listener.onPointerUp` → `_autoShowMenu`） | 桌面 | 只有复制（选区不属于某一条消息，没有可多选的对象） |
 
 **文字选区只在桌面开**（`_selectableTextSupported`）：移动端 `SelectionArea` 的选词手势
 会在手势竞技场里赢走长按，而它的工具条又被 `contextMenuBuilder` 置空，导致手机上
@@ -308,6 +308,49 @@ Windows 资源管理器 `/select` 选中该文件，macOS 访达、Linux 文件�
   落盘时同名文件会被改名成 `xxx (1).txt`，用消息里记的名字会选不中。
 - **目录不存在时提示一句**（`t.conversation.revealInFolderFailed`，`TopToast`）：
   资源管理器对不存在的路径既不报错也不开窗口，用户只会觉得「点了没反应」。
+
+### 多选删除
+
+入口在同一个菜单里：右键 / 长按气泡 →「多选」。点进去时**当前这条自动选中**——
+点「多选」的意图通常是「删这条，顺便再勾几条」。拖选文字带出的菜单没有具体消息，
+不显示这一项。
+
+多选态下整行点击只做一件事：切换选中。菜单、打开文件、点转圈取消全部让位。
+三条硬约束：
+
+- 消息列表的 widget 树**保持不变**。`SelectionArea` 没有 `enabled` 参数，二选一渲染会让
+  桌面端 `ListView` 整棵重建、`ScrollController` 的 offset 丢失，进多选会直接跳回顶部。
+  所以只在 `_handlePointerUp` / `_handleBubbleMenu` 里 `if (_selecting) return`，
+  并在进入时 `clearSelection()`。
+- `MessageBubble` 的 `onFileTap` / `onCancel` / `onRetry` 一律传 `null`。文件卡片内层
+  `InkWell` 在手势竞技场里优先于外层 `GestureDetector`，不置空就是「点了选中不了、
+  反而把文件打开了」。
+- 底部用 `Offstage` 保留 `_Composer`，不要 `if/else` 二选一。`_ComposerState` 持有
+  `TextEditingController`，被移除会 dispose，输入到一半的草稿会丢。
+
+底部面板 `_SelectionBar` 与输入栏同一底色、同一条顶部细线，切换时只是内容变了。
+布局：左「已选 N 条」，右侧 [删除]（红色实心，N=0 置灰）+ [退出]（文字按钮，最右）。
+右端拇指最易触达，留给非破坏性的退出。
+
+退出有四条等价路径：面板「退出」；Android 返回键 / 预测性返回（走 `PopScope`）；
+桌面 `Esc`；iOS 左边缘右滑。两个平台细节：
+
+- **iOS 侧滑要自己补**。`PopScope(canPop: false)` 会连带关掉 `CupertinoPageRoute`
+  的返回手势（`popGestureEnabled == false`），`onPopInvokedWithResult` 根本不会被调用。
+  `_SelectionEdgeSwipe` 用 `Listener`（不进手势竞技场、不消费事件）在左边缘 24px 内
+  跟踪指针，水平右滑超过 72px 且明显偏水平就退出。
+- **Esc 要先抢焦点**。进入多选会 `unfocus` 收起键盘，焦点退回 route 自己的
+  `FocusScope`（在页面**外层**），Esc 沿焦点链向上找不会经过 `_PasteShortcuts`。
+  所以进入多选时 `requestFocus()` 到页面持有的 `_shortcutFocusNode`。
+
+删除顺序与单条一致，不能换：取消传输中的（`cancelChatMessage` 按 ticket 整批收敛，
+逐条调用幂等）→ 删接收历史（`RemoveHistoryEntriesAction`，一次写盘 + 一次联动）→
+删会话消息（`DeleteChatMessagesAction`，删空则一并移除会话，页面随即 `maybePop`）。
+选中的消息在别处已经被删掉时（例如在接收历史页联动了同一张卡片）直接退出，不弹确认框。
+
+确认卡片 `showDeleteSelectedDialog` 不复用单条那张：一次勾二十条时只摆一条预览等于
+没告诉用户删的是什么。预览最多列 3 条，其余折成「…等 N 条」；「含接收文件」
+「含传输中」两个副作用按实际组成分别提示。
 
 ### 文件已不在本机
 

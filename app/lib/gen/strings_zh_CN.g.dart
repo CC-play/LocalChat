@@ -450,6 +450,22 @@ class Translations$conversation$zh_CN extends Translations$conversation$en {
   String get cancelTransfer => '取消传输';
   @override
   String get transferCancelled => '已取消传输';
+  @override
+  String get selectMessages => '多选';
+  @override
+  String selectedCount({required Object count}) => '已选 ${count} 条';
+  @override
+  String get exitSelection => '退出';
+  @override
+  String deleteSelectedTitle({required Object count}) => '删除所选的 ${count} 条记录？';
+  @override
+  String get deleteSelectedContent => '只会从本机聊天记录里移除，对方那里不受影响。此操作不可撤销。';
+  @override
+  String deleteSelectedFileHint({required Object count}) => '其中 ${count} 条是收到的文件，接收历史里对应的条目也会一并删除。磁盘上的文件不受影响。';
+  @override
+  String deleteSelectedPendingHint({required Object count}) => '其中 ${count} 条还在发送中，删除会先取消传输。';
+  @override
+  String deleteSelectedMore({required Object count}) => '…等 ${count} 条';
 }
 
 // Path: receiveHistoryPage

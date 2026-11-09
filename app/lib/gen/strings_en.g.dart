@@ -554,6 +554,32 @@ class Translations$conversation$en {
 
   /// en: 'Transfer cancelled'
   String get transferCancelled => 'Transfer cancelled';
+
+  /// en: 'Select'
+  String get selectMessages => 'Select';
+
+  /// en: '{count} selected'
+  String selectedCount({required Object count}) => '${count} selected';
+
+  /// en: 'Exit'
+  String get exitSelection => 'Exit';
+
+  /// en: 'Delete {count} selected records?'
+  String deleteSelectedTitle({required Object count}) => 'Delete ${count} selected records?';
+
+  /// en: 'They are only removed from the chat history on this device. The other side is not affected. This cannot be undone.'
+  String get deleteSelectedContent =>
+      'They are only removed from the chat history on this device. The other side is not affected. This cannot be undone.';
+
+  /// en: '{count} of them are received files; the matching entries in the receive history will be deleted too. Files already saved on disk are not affected.'
+  String deleteSelectedFileHint({required Object count}) =>
+      '${count} of them are received files; the matching entries in the receive history will be deleted too. Files already saved on disk are not affected.';
+
+  /// en: '{count} of them are still being sent. Deleting them will cancel the transfer first.'
+  String deleteSelectedPendingHint({required Object count}) => '${count} of them are still being sent. Deleting them will cancel the transfer first.';
+
+  /// en: '…and {count} more'
+  String deleteSelectedMore({required Object count}) => '…and ${count} more';
 }
 
 // Path: receiveHistoryPage

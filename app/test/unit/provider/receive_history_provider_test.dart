@@ -176,6 +176,39 @@ void main() {
     verify(persistenceService.setReceiveHistory([]));
   });
 
+  // [FORK] 聊天页多选删除走批量 action：一次写盘删多条。
+  test('Should remove many entries with one write', () async {
+    final service = ReduxNotifier.test(
+      redux: ReceiveHistoryService(persistenceService),
+      initialState: [
+        _createEntry('1'),
+        _createEntry('2'),
+        _createEntry('3'),
+        _createEntry('4'),
+      ],
+    );
+
+    await service.dispatchAsync(RemoveHistoryEntriesAction({'1', '3'}));
+
+    expect(service.state, [_createEntry('2'), _createEntry('4')]);
+    verify(persistenceService.setReceiveHistory([_createEntry('2'), _createEntry('4')])).called(1);
+  });
+
+  test('Should not write when no entry matches the batch', () async {
+    final service = ReduxNotifier.test(
+      redux: ReceiveHistoryService(persistenceService),
+      initialState: [
+        _createEntry('1'),
+        _createEntry('2'),
+      ],
+    );
+
+    await service.dispatchAsync(RemoveHistoryEntriesAction({'9', '10'}));
+
+    expect(service.state, [_createEntry('1'), _createEntry('2')]);
+    verifyNever(persistenceService.setReceiveHistory(any));
+  });
+
   // [FORK] 文本消息只归会话，历史里的遗留文本条目在 init 时清掉。
   test('Should drop legacy text entries on init', () {
     when(persistenceService.getReceiveHistory()).thenReturn([
@@ -257,6 +290,38 @@ void main() {
 
     expect(container.read(receiveHistoryProvider), isEmpty);
     expect(container.read(conversationProvider), isEmpty, reason: '两个文件都被删空，会话也不该留壳');
+  });
+
+  // [FORK] 多选删除同样要联动会话里的卡片，且只动被选中的那几条。
+  test('Should delete linked chat messages in one batch', () async {
+    when(persistenceService.getReceiveHistory()).thenReturn([
+      _createEntry('f1'),
+      _createEntry('f2'),
+      _createEntry('f3'),
+    ]);
+    when(persistenceService.getConversations()).thenReturn([
+      Conversation(
+        peerFingerprint: 'fp',
+        peerAlias: 'Peer',
+        lastActivity: DateTime(2026, 1, 1),
+        unreadCount: 3,
+        messages: [_fileMessage('f1'), _fileMessage('f2'), _fileMessage('f3')],
+      ),
+    ]);
+
+    final container = RefenaContainer(
+      overrides: [persistenceProvider.overrideWithValue(persistenceService)],
+    );
+    addTearDown(container.disposeContainer);
+
+    await container.redux(receiveHistoryProvider).dispatchAsync(RemoveHistoryEntriesAction({'f1', 'f3'}));
+
+    expect(container.read(receiveHistoryProvider).map((e) => e.id), ['f2']);
+    expect(
+      container.read(conversationProvider).single.messages.map((m) => m.id),
+      ['f2'],
+      reason: '只删被选中的两条，剩下那条的卡片要留着',
+    );
   });
 }
 

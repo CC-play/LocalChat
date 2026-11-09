@@ -130,6 +130,35 @@ class RemoveHistoryEntryAction extends AsyncReduxAction<ReceiveHistoryService, L
   }
 }
 
+/// [FORK] 批量删除历史条目（聊天页多选删除用）。
+///
+/// 为什么不循环派发 [RemoveHistoryEntryAction]：每个 action 都会
+/// `setReceiveHistory(全量 JSON)` 一次、再联动派发一次会话删除，
+/// N 条就是 2N 次全量写盘。这里合并成一次写盘 + 一次联动。
+/// 没有命中任何条目时直接返回原 state，不写盘。
+class RemoveHistoryEntriesAction extends AsyncReduxAction<ReceiveHistoryService, List<ReceiveHistoryEntry>> {
+  final Set<String> entryIds;
+
+  RemoveHistoryEntriesAction(this.entryIds);
+
+  @override
+  Future<List<ReceiveHistoryEntry>> reduce() async {
+    if (entryIds.isEmpty || state.isEmpty) {
+      return state;
+    }
+
+    final updated = state.where((e) => !entryIds.contains(e.id)).toList();
+    if (updated.length == state.length) {
+      return state;
+    }
+
+    await notifier._persistence.setReceiveHistory(updated);
+    // [FORK] 与单条删除同语义：聊天里的文件卡片是同一份数据的另一个视图。
+    await notifier.deleteLinkedChatMessages(entryIds);
+    return updated;
+  }
+}
+
 /// Removes all history entries.
 class RemoveAllHistoryEntriesAction extends AsyncReduxAction<ReceiveHistoryService, List<ReceiveHistoryEntry>> {
   @override
