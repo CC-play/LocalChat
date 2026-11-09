@@ -1,8 +1,10 @@
 import 'package:localchat_app/model/conversation/conversation.dart';
 import 'package:localchat_app/provider/conversation/chat_transfer_provider.dart';
 import 'package:localchat_app/provider/conversation_provider.dart';
+import 'package:localchat_app/provider/settings_provider.dart';
 import 'package:localchat_app/util/conversation/chat_presence.dart';
 import 'package:localchat_app/util/native/chat_notification.dart';
+import 'package:localchat_app/util/native/notification_sound.dart';
 import 'package:localchat_isolates/model/device.dart';
 import 'package:localchat_isolates/model/file_type.dart';
 import 'package:logging/logging.dart';
@@ -67,6 +69,20 @@ Future<void> recordReceivedText({
   // [FORK] 写完再提醒：通知失败绝不能影响收消息本身。
   // 只做文本 —— 收到文件本来就会弹接收确认页，再发一条通知是重复打扰。
   await _notifyIncomingText(sender: sender, senderAlias: senderAlias, text: text);
+
+  // [FORK] 提示音。手机在后台时那一声由系统通知负责，这里只管前台和桌面端。
+  await NotificationSound.playMessage(enabled: _notificationSoundEnabled(ref));
+}
+
+/// 读提示音开关。
+///
+/// 读不到就当作关闭：宁可不响，也不能让异常冒到接收路径上。
+bool _notificationSoundEnabled(Ref ref) {
+  try {
+    return ref.read(settingsProvider).notificationSound;
+  } catch (_) {
+    return false;
+  }
 }
 
 /// [FORK] App 不在前台时补一条系统通知。

@@ -1343,6 +1343,9 @@ class Translations$settingsTab$receive$en {
   /// en: 'Auto-accept text messages'
   String get autoAcceptTextMessages => 'Auto-accept text messages';
 
+  /// en: 'Notification sound'
+  String get notificationSound => 'Notification sound';
+
   /// en: 'Require PIN'
   String get requirePin => _root.webSharePage.requirePin;
 

@@ -10,6 +10,9 @@ icon: assets/img/logo-512.png
 requires:
   - libappindicator
   - xdg-user-dirs
+  # 提示音（audioplayers_linux）链接 gstreamer，缺了会在播放时直接失败
+  - gstreamer1
+  - gstreamer1-plugins-base
 
 keywords:
   - Sharing

@@ -27,6 +27,8 @@ class SettingsState with SettingsStateMappable {
   // [FORK] silently accept text messages (they never write a file to disk, so there is
   // nothing to pick); when false the receive page asks for confirmation like any transfer
   final bool autoAcceptTextMessages;
+  // [FORK] play a short sound when a message / file arrives
+  final bool notificationSound;
   final String? receivePin; // null = disabled
   final bool autoFinish; // automatically finish sessions
   final bool minimizeToTray; // minimize to tray instead of exiting the app
@@ -60,6 +62,7 @@ class SettingsState with SettingsStateMappable {
     required this.quickSave,
     required this.quickSaveFromFavorites,
     required this.autoAcceptTextMessages,
+    required this.notificationSound,
     required this.receivePin,
     required this.autoFinish,
     required this.minimizeToTray,

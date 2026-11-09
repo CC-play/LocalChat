@@ -17,6 +17,7 @@ import 'package:localchat_app/util/alias_generator.dart';
 import 'package:localchat_app/util/device_type_ext.dart';
 import 'package:localchat_app/util/i18n.dart';
 import 'package:localchat_app/util/native/macos_channel.dart';
+import 'package:localchat_app/util/native/notification_sound.dart';
 import 'package:localchat_app/util/native/pick_directory_path.dart';
 import 'package:localchat_app/util/native/platform_check.dart';
 import 'package:localchat_app/widget/custom_dropdown_button.dart';
@@ -183,6 +184,17 @@ class SettingsTab extends StatelessWidget {
                   value: vm.settings.autoAcceptTextMessages,
                   onChanged: (b) async {
                     await ref.notifier(settingsProvider).setAutoAcceptTextMessages(b);
+                  },
+                ),
+                _BooleanEntry(
+                  label: t.settingsTab.receive.notificationSound,
+                  value: vm.settings.notificationSound,
+                  onChanged: (b) async {
+                    await ref.notifier(settingsProvider).setNotificationSound(b);
+                    // 打开时立刻试听一声，否则用户没法确认自己开的是什么声音。
+                    if (b) {
+                      await NotificationSound.playMessage(enabled: true);
+                    }
                   },
                 ),
                 _BooleanEntry(

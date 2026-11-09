@@ -101,6 +101,11 @@ class SettingsStateMapper extends ClassMapperBase<SettingsState> {
     'autoAcceptTextMessages',
     _$autoAcceptTextMessages,
   );
+  static bool _$notificationSound(SettingsState v) => v.notificationSound;
+  static const Field<SettingsState, bool> _f$notificationSound = Field(
+    'notificationSound',
+    _$notificationSound,
+  );
   static String? _$receivePin(SettingsState v) => v.receivePin;
   static const Field<SettingsState, String> _f$receivePin = Field(
     'receivePin',
@@ -194,6 +199,7 @@ class SettingsStateMapper extends ClassMapperBase<SettingsState> {
     #quickSave: _f$quickSave,
     #quickSaveFromFavorites: _f$quickSaveFromFavorites,
     #autoAcceptTextMessages: _f$autoAcceptTextMessages,
+    #notificationSound: _f$notificationSound,
     #receivePin: _f$receivePin,
     #autoFinish: _f$autoFinish,
     #minimizeToTray: _f$minimizeToTray,
@@ -229,6 +235,7 @@ class SettingsStateMapper extends ClassMapperBase<SettingsState> {
       quickSave: data.dec(_f$quickSave),
       quickSaveFromFavorites: data.dec(_f$quickSaveFromFavorites),
       autoAcceptTextMessages: data.dec(_f$autoAcceptTextMessages),
+      notificationSound: data.dec(_f$notificationSound),
       receivePin: data.dec(_f$receivePin),
       autoFinish: data.dec(_f$autoFinish),
       minimizeToTray: data.dec(_f$minimizeToTray),
@@ -330,6 +337,7 @@ abstract class SettingsStateCopyWith<$R, $In extends SettingsState, $Out>
     bool? quickSave,
     bool? quickSaveFromFavorites,
     bool? autoAcceptTextMessages,
+    bool? notificationSound,
     String? receivePin,
     bool? autoFinish,
     bool? minimizeToTray,
@@ -393,6 +401,7 @@ class _SettingsStateCopyWithImpl<$R, $Out>
     bool? quickSave,
     bool? quickSaveFromFavorites,
     bool? autoAcceptTextMessages,
+    bool? notificationSound,
     Object? receivePin = $none,
     bool? autoFinish,
     bool? minimizeToTray,
@@ -428,6 +437,7 @@ class _SettingsStateCopyWithImpl<$R, $Out>
         #quickSaveFromFavorites: quickSaveFromFavorites,
       if (autoAcceptTextMessages != null)
         #autoAcceptTextMessages: autoAcceptTextMessages,
+      if (notificationSound != null) #notificationSound: notificationSound,
       if (receivePin != $none) #receivePin: receivePin,
       if (autoFinish != null) #autoFinish: autoFinish,
       if (minimizeToTray != null) #minimizeToTray: minimizeToTray,
@@ -471,6 +481,10 @@ class _SettingsStateCopyWithImpl<$R, $Out>
     autoAcceptTextMessages: data.get(
       #autoAcceptTextMessages,
       or: $value.autoAcceptTextMessages,
+    ),
+    notificationSound: data.get(
+      #notificationSound,
+      or: $value.notificationSound,
     ),
     receivePin: data.get(#receivePin, or: $value.receivePin),
     autoFinish: data.get(#autoFinish, or: $value.autoFinish),

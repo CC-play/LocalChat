@@ -20,6 +20,9 @@ dependencies:
   - gir1.2-appindicator3-0.1 | gir1.2-ayatanaappindicator3-0.1
   - libayatana-ido3-0.4-0
   - xdg-user-dirs
+  # 提示音（audioplayers_linux）链接 gstreamer，缺了会在播放时直接失败
+  - libgstreamer1.0-0
+  - libgstreamer-plugins-base1.0-0
 
 postinstall_scripts:
   - echo "Installed LocalChat successfully"

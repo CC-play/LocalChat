@@ -74,6 +74,9 @@
 | 聊天页背景 / 对方气泡 / 输入栏一律取 `ChatPalette.of(context)`（`config/chat_palette.dart`），**不要**改 `ColorScheme.surface` | 改 surface 是全局的，会把设置页、发送页、对话框一起染灰 |
 | 输入框与附件面板**不描边**。输入框必须同时覆盖 `border` / `enabledBorder` / `focusedBorder` 为 `BorderSide.none` | 主题 `inputDecorationTheme` 给后两者设了 `secondaryContainer` 描边，只改 `border` 仍会画出边框 |
 | 输入栏顶部 `outlineVariant` 0.5px 细线是**唯一**的区分手段（`localchat` 浅色下输入栏与消息区同色），不要顺手删 | 删掉后消息列表直接贴住输入区，没有视觉断点 |
+| 提示音只在「手机前台 / 桌面端」自播；手机后台必须留给系统通知渠道 | 两条路径同时出声，用户听到「叮咚」两声 |
+| 提示音的合并窗口（600ms）必须大于音频时长（500ms） | 连发两条时 `play()` 重设音源，第一声被截成半声 |
+| 音频资源统一单声道 44.1kHz 16-bit WAV、峰值约 -2 dBFS | 原始素材 -8 dBFS 在各平台都明显偏轻；多声道/异采样率会让 GStreamer 与 Media Foundation 行为不一致 |
 | Local Chat 主题的种子色只在 `config/theme.dart` 的 `kSeedColor` 改（`#1E90FF`），不要在别处再写死 `Colors.teal` | `localchat` 走 null 分支跟随 `defaultColorScheme`，写死第二处就会出现两套配色 |
 
 ## 为什么不做符号索引

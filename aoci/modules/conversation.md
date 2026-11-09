@@ -481,6 +481,30 @@ Flutter 的 `Clipboard.getData` **只认纯文本**：`ClipboardData` 里只有 
 - 横幅出现条件三选一：`areNotificationsEnabled() == false`（整个 App 被关，vivo 这类 ROM 常见）、渠道 `importance == NONE`、没给 `POST_NOTIFICATIONS`。点「去开启」先试 `Permission.notification.request()`，拿不到就跳系统渠道设置页。
 - 没有引入 `flutter_local_notifications`：项目已经在 `MainActivity` 上有自建 MethodChannel（SAF、剪贴板都走它），而现成的 `flutter_foreground_task` 只提供前台服务通知（静音、不可横幅）。加一个依赖还要动 manifest 的 receiver，不划算。
 
+### 提示音
+
+系统通知覆盖不到三个场景：桌面端根本没有系统通知（托盘藏着时收消息零反馈）、文件接收请求从不发通知（直接弹接收页）、手机前台按设计不弹通知。这些地方补一声短音。
+
+| 环节 | 位置 |
+|---|---|
+| 统一入口 | `util/native/notification_sound.dart`（`NotificationSound`） |
+| 什么时候响 | `NotificationSoundGate`：600ms 合并窗口 + 按 `sessionId` 去重 |
+| 收到文本 | `conversation_recorder.dart` 的 `recordReceivedText` 末尾 |
+| 收到文件请求 | `receive_controller.dart` 的 `onPrepareUpload`，`push(ReceivePage)` 之前 |
+| 自动接收落盘完成 | `receive_controller.dart` 的 `onFileUploadResult`，`error == null` 分支 |
+| 音频资源 | `app/assets/audio/notify_message.wav`（玻璃双音，0.5s）、`notify_file.wav`（咚叮，0.42s） |
+| 开关 | 设置 → 接收 → 提示音（`notificationSound`，默认开） |
+
+要点：
+
+- **手机后台绝不自播**：那条路径由系统通知渠道出声，两边都响就是「叮咚」两声。判断在 `playMessage` 里，条件是 `_isMobile && !ChatPresence.isForeground`。
+- **文件按会话去重**：手动接受时「请求」响过一次，随后每个文件落盘还会再调一次 `playFile`，靠 `sessionId` 集合挡住；自动接收（quickSave）没有请求那一声，由落盘那次补上。
+- **合并窗口必须大于音频时长**（600ms > 500ms）：否则对方连发两条会调用 `play()` 重新设置音源，第一声被截成半声。
+- 音频上下文写在 `_audioContext()`：Android 用 `usage=notification` + `contentType=sonification` + `audioFocus=none`（默认 `usage=media` 走 STREAM_MUSIC，会**绕过静音和勿扰**）；iOS 用 `ambient`，静音键拨下时不响。
+- 播放器常驻（`ReleaseMode.stop`）并在 `main.dart` 首帧后 `warmUp()`，否则第一声迟到 100~300ms。
+- 依赖 `audioplayers`：Windows 走 Media Foundation、Linux 走 GStreamer（**deb/rpm 打包要声明 gstreamer 依赖**）、Android/iOS 走各自原生播放器。
+- 音频后期：原始素材峰值只有 -8 dBFS（明显偏轻），已 +6 dB 归一到 -2 dBFS，并转单声道、裁剪尾部静音。
+
 ## 状态机
 
 ```

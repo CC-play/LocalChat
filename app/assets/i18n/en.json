@@ -119,6 +119,7 @@
       "quickSave": "@:general.quickSave",
       "quickSaveFromFavorites": "@:general.quickSaveFromFavorites",
       "autoAcceptTextMessages": "Auto-accept text messages",
+      "notificationSound": "Notification sound",
       "requirePin": "@:webSharePage.requirePin",
       "autoFinish": "Auto Finish",
       "destination": "Save to folder",

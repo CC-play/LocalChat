@@ -100,6 +100,7 @@ const _saveToHistory = 'ls_save_to_history';
 const _quickSave = 'ls_quick_save'; // a QuickSaveMode; was a bool until storage version 2 ('ls_quick_save_from_favorites' is merged into this key)
 const _receivePin = 'ls_receive_pin';
 const _autoAcceptTextMessages = 'ls_auto_accept_text_messages'; // [FORK] bool, defaults to true
+const _notificationSound = 'ls_notification_sound'; // [FORK] bool, defaults to true
 const _autoFinish = 'ls_auto_finish';
 const _minimizeToTray = 'ls_minimize_to_tray';
 const _https = 'ls_https';
@@ -447,6 +448,15 @@ class PersistenceService {
 
   Future<void> setCreateChecksums(bool createChecksums) async {
     await _prefs.setBool(_createChecksums, createChecksums);
+  }
+
+  /// [FORK] 收到消息 / 文件时播放提示音。
+  bool getNotificationSound() {
+    return _prefs.getBool(_notificationSound) ?? true;
+  }
+
+  Future<void> setNotificationSound(bool enabled) async {
+    await _prefs.setBool(_notificationSound, enabled);
   }
 
   bool getVerifyChecksums() {

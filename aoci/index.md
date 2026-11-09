@@ -20,6 +20,7 @@
 | 想在资源管理器里定位收到的文件 | `conversation_page.dart`（`canRevealInFolder` / `_revealInFolder`）→ `util/native/open_folder.dart`（`openFolder`） | [conversation](modules/conversation.md#打开文件所在位置) | 桌面端右键文件卡片 → 「打开文件所在位置」应在资源管理器里选中该文件；文本气泡不出现该项 |
 | 收文本消息（静默接收 / 改成先确认） | `app/lib/provider/network/server/controller/receive_controller.dart`（`onPrepareUpload` 的文本分支 + `onAccept`）→ `settings_tab.dart`（「自动接收文本消息」） | [conversation](modules/conversation.md#接收文本静默还是先确认) | 关掉开关后用假对端发一条：应弹接收页，点「拒绝」会话里不留记录 |
 | 收到文件的记录时机 | `receive_controller.dart:377`（`error == null` 分支） | [conversation](modules/conversation.md) | 传一个文件后看会话 |
+| 收到消息没声音 / 想换提示音 | `app/lib/util/native/notification_sound.dart`（`playMessage` / `playFile` / `NotificationSoundGate`）→ 触发点 `conversation_recorder.dart`、`receive_controller.dart` → 音频 `app/assets/audio/` | [conversation](modules/conversation.md#提示音) | `flutter test test/unit/util/notification_sound_test.dart`；真机：手机后台收消息只响一声（通知的），前台收消息响提示音 |
 | 会话持久化 / 迁移 | `app/lib/provider/persistence_provider.dart`（`ls_conversations`）→ `app/lib/util/shared_preferences/settings_migration.dart`（改名迁移） | — | `flutter test test/unit/util/shared_preferences/` |
 | 侧边栏 / Tab 顺序 | `app/lib/pages/home_page.dart` → `app/lib/pages/home_page_controller.dart` | — | `flutter analyze` |
 | 主题色 / 气泡配色 | `app/lib/config/theme.dart` → `app/lib/widget/chat/message_bubble.dart` | — | 见 [不变量](invariants.md#ui) |
@@ -43,6 +44,7 @@
 | `deliverFiles` / `pickConversationFiles` | 同上 | 会话页发文件（只在握手阶段重试） |
 | `describeSendFailure` / `failureForStatusCode` | `util/conversation/send_failure.dart` | 失败原因 → 气泡文案的唯一入口 |
 | `recordReceivedText` / `recordReceivedFile` | `util/conversation/conversation_recorder.dart` | 接收侧写会话的唯一入口 |
+| `NotificationSound` | `util/native/notification_sound.dart` | 收到消息 / 文件时的提示音（含节流与会话去重） |
 | `HomeTab` | `pages/home_page.dart` | 枚举顺序 == `PageView.children` 顺序 |
 | `ReceiveController` | `provider/network/server/controller/receive_controller.dart` | 服务端事件处理器（非路由） |
 

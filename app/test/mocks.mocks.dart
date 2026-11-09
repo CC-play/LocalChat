@@ -390,6 +390,24 @@ class MockPersistenceService extends _i1.Mock
           as _i5.Future<void>);
 
   @override
+  bool getNotificationSound() =>
+      (super.noSuchMethod(
+            Invocation.method(#getNotificationSound, []),
+            returnValue: false,
+            returnValueForMissingStub: false,
+          )
+          as bool);
+
+  @override
+  _i5.Future<void> setNotificationSound(bool? enabled) =>
+      (super.noSuchMethod(
+            Invocation.method(#setNotificationSound, [enabled]),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
+
+  @override
   bool getVerifyChecksums() =>
       (super.noSuchMethod(
             Invocation.method(#getVerifyChecksums, []),

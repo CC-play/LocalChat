@@ -14,6 +14,7 @@ import 'package:localchat_app/provider/network/nearby_devices_provider.dart';
 import 'package:localchat_app/provider/network/server/server_provider.dart';
 import 'package:localchat_app/provider/settings_provider.dart';
 import 'package:localchat_app/util/native/chat_notification.dart';
+import 'package:localchat_app/util/native/notification_sound.dart';
 import 'package:localchat_app/util/native/platform_check.dart';
 import 'package:localchat_app/util/native/title_bar_theme.dart';
 import 'package:localchat_app/util/ui/dynamic_colors.dart';
@@ -58,6 +59,8 @@ Future<void> main(List<String> args) async {
         ),
       ),
     );
+    // [FORK] 预热提示音：第一声迟到 100~300ms 比不响还怪。
+    unawaited(NotificationSound.warmUp());
   });
 }
 

@@ -23,6 +23,7 @@ import 'package:localchat_app/provider/selection/selected_sending_files_provider
 import 'package:localchat_app/provider/settings_provider.dart';
 import 'package:localchat_app/util/conversation/conversation_recorder.dart';
 import 'package:localchat_app/util/native/directories.dart';
+import 'package:localchat_app/util/native/notification_sound.dart';
 import 'package:localchat_app/util/native/platform_check.dart';
 import 'package:localchat_app/util/native/tray_helper.dart';
 import 'package:localchat_app/widget/dialogs/open_file_dialog.dart';
@@ -232,6 +233,13 @@ class ReceiveController {
 
     server.ref.notifier(selectedReceivingFilesProvider).setFiles(files.values.toList());
 
+    // [FORK] 有人要发文件过来：响一声提醒用户去点接受。
+    // 同一会话只响一次，落盘完成那一处会被去重挡掉，多文件不会连环响。
+    // 文本走不到这里出声：文本没有「文件音」，它的提示音在写入会话时统一播（`recordReceivedText`）。
+    if (message == null) {
+      unawaited(NotificationSound.playFile(enabled: settings.notificationSound, sessionId: sessionId));
+    }
+
     // ignore: use_build_context_synchronously, unawaited_futures
     Routerino.context.push(() => ReceivePage(receiveProvider));
   }
@@ -399,6 +407,15 @@ class ReceiveController {
         filePath: filePath,
         fileSize: receivingFile.file.size,
         fileType: fileType,
+      );
+
+      // [FORK] 自动接收（quickSave）不经过「请求」那一页，也就没有那一声，
+      // 在这里补上；手动接受时请求那一声已经响过，会被同一 sessionId 去重。
+      unawaited(
+        NotificationSound.playFile(
+          enabled: server.ref.read(settingsProvider).notificationSound,
+          sessionId: event.sessionId,
+        ),
       );
     } else {
       server.ref.notifier(fileTransferProvider).setStatus(sessionId: event.sessionId, fileId: fileId, status: FileStatus.failed);

@@ -11,6 +11,19 @@
 
 import 'package:flutter/widgets.dart';
 
+class $AssetsAudioGen {
+  const $AssetsAudioGen();
+
+  /// File path: assets/audio/notify_file.wav
+  String get notifyFile => 'assets/audio/notify_file.wav';
+
+  /// File path: assets/audio/notify_message.wav
+  String get notifyMessage => 'assets/audio/notify_message.wav';
+
+  /// List of all assets
+  List<String> get values => [notifyFile, notifyMessage];
+}
+
 class $AssetsImgGen {
   const $AssetsImgGen();
 
@@ -44,6 +57,7 @@ class $AssetsImgGen {
 
 abstract final class Assets {
   static const String changelog = 'assets/CHANGELOG.md';
+  static const $AssetsAudioGen audio = $AssetsAudioGen();
   static const $AssetsImgGen img = $AssetsImgGen();
 
   /// List of all assets

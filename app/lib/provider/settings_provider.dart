@@ -61,6 +61,7 @@ class SettingsService extends PureNotifier<SettingsState> {
     quickSave: _persistence.getQuickSave() == QuickSaveMode.on,
     quickSaveFromFavorites: _persistence.getQuickSave() == QuickSaveMode.paired,
     autoAcceptTextMessages: _persistence.isAutoAcceptTextMessages(),
+    notificationSound: _persistence.getNotificationSound(),
     receivePin: _persistence.getReceivePin(),
     autoFinish: _persistence.isAutoFinish(),
     minimizeToTray: _persistence.isMinimizeToTray(),
@@ -296,6 +297,14 @@ class SettingsService extends PureNotifier<SettingsState> {
     await _persistence.setCreateChecksums(createChecksums);
     state = state.copyWith(
       createChecksums: createChecksums,
+    );
+  }
+
+  /// [FORK] 收到消息 / 文件时播放提示音。
+  Future<void> setNotificationSound(bool enabled) async {
+    await _persistence.setNotificationSound(enabled);
+    state = state.copyWith(
+      notificationSound: enabled,
     );
   }
 
