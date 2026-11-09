@@ -40,6 +40,14 @@ target_compile_definitions(${BINARY_NAME} PRIVATE "FLUTTER_VERSION_BUILD=${FLUTT
 # Disable Windows macros that collide with C++ standard library functions.
 target_compile_definitions(${BINARY_NAME} PRIVATE "NOMINMAX")
 
+# [FORK] 这些源文件里有中文注释，存的是 UTF-8（无 BOM）。MSVC 默认按系统代码页
+# （简体中文机器上是 GBK）解析，中文字节会被成对误读，其中一部分第二字节是 0x5C，
+# 等于行尾反斜杠——注释把换行吃掉，下一行代码并进注释，报一堆莫名其妙的
+# 「caption: 未声明的标识符」。显式指定源码与执行字符集。
+if(MSVC)
+  target_compile_options(${BINARY_NAME} PRIVATE "/utf-8")
+endif()
+
 # Add dependency libraries and include directories. Add any application-specific
 # dependencies here.
 target_link_libraries(${BINARY_NAME} PRIVATE flutter flutter_wrapper_app)
