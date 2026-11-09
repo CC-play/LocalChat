@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' show File, Platform;
+import 'dart:io' show File, Platform, SecureSocket, Socket, SocketException;
 
 import 'package:collection/collection.dart';
 import 'package:file_selector/file_selector.dart';
@@ -11,16 +11,24 @@ import 'package:localchat_app/provider/conversation/chat_transfer_provider.dart'
 import 'package:localchat_app/provider/conversation_provider.dart';
 import 'package:localchat_app/provider/network/nearby_devices_provider.dart';
 import 'package:localchat_app/provider/network/send_provider.dart';
+import 'package:localchat_app/provider/settings_provider.dart';
 import 'package:localchat_app/util/conversation/conversation_recorder.dart';
+import 'package:localchat_app/util/conversation/send_failure.dart';
 import 'package:localchat_app/util/native/channel/android_channel.dart' as android_channel;
 import 'package:localchat_app/util/native/cross_file_converters.dart';
 import 'package:localchat_isolates/constants.dart';
 import 'package:localchat_isolates/model/device.dart';
 import 'package:localchat_isolates/model/file_type.dart';
 import 'package:localchat_isolates/model/session_status.dart';
+import 'package:localchat_isolates/rust/api/cancel.dart' as rust_cancel;
+import 'package:localchat_isolates/util/file_hash.dart';
 import 'package:logging/logging.dart';
 import 'package:refena_flutter/refena_flutter.dart';
 import 'package:uuid/uuid.dart';
+
+// 失败原因的定义挪到了 `send_failure.dart`（`send_provider` 也要用，放在这里
+// 会形成循环依赖）。这里原样再导出一次，调用方import 本文件就够了。
+export 'package:localchat_app/util/conversation/send_failure.dart';
 
 /// 会话页的「发送」入口。
 ///
@@ -70,14 +78,27 @@ const Duration uploadStallTimeout = Duration(seconds: 60);
 /// 看门狗的巡检间隔。
 const Duration _stallCheckInterval = Duration(seconds: 10);
 
+/// 超时之后复检对端状态的等待上限。
+///
+/// 只是「再握一次手」，局域网内 0.1 秒内就会有结论；2 秒是给冻结进程留的
+/// 观察窗口——它连 ServerHello 都不会回，早晚都是超时。
+const Duration _diagnosisTimeout = Duration(seconds: 2);
+
+/// 一次 prepare-upload 尝试超过这个时长仍未返回，就认为请求**已经送达**，
+/// 对端应用层正在等用户点「接受」。
+///
+/// 局域网内 TCP + TLS + 请求体通常几十毫秒就完成（实测 0.03 s），2 秒还没
+/// 返回只可能是对端卡在等人决策。用它把「连不上」和「在等对方」区分开，
+/// 气泡页脚才能说清楚那句「发送中」到底在等什么。
+const Duration _acceptAwaitThreshold = Duration(seconds: 2);
+
 /// 界面兜底阈值：超过这个时间仍显示「发送中」，就由气泡直接把它标失败。
 ///
 /// 发送流程自己会在 [textSendRetryWindow] + [_timeoutGrace] 后收尾，这个阈值
 /// 只负责兜住「流程已经不在了、气泡却还挂着」的情况：异常逃逸、页面销毁导致
 /// ref 失效（上传看门狗依赖页面 ref，此时会静默退出）。
 /// 它不依赖任何后台任务，只要那条气泡还在屏幕上就会生效。
-final Duration chatSendWatchdogTimeout =
-    textSendRetryWindow + _timeoutGrace + const Duration(seconds: 5);
+final Duration chatSendWatchdogTimeout = textSendRetryWindow + _timeoutGrace + const Duration(seconds: 5);
 
 /// 一条消息正在进行的发送。
 ///
@@ -99,26 +120,11 @@ class _SendTicket {
 /// 没有任何 UI 需要观察它，不值得引入一个 provider 的生命周期管理。
 final _inFlight = <String, _SendTicket>{};
 
-/// 文本消息发送失败的原因，由 UI 层翻译成文案。
-enum SendFailure {
-  /// 用户自己点了取消。
-  cancelled,
-
-  /// 对方点了拒绝。
-  peerDeclined,
-
-  /// 对方正在与另一台设备传输。
-  peerBusy,
-
-  /// 找不到对方的地址（设备已离线且没有历史 IP）。
-  unreachable,
-
-  /// 重发时原文件已经不在了（被移动 / 删除，或缓存目录被系统清理）。
-  fileMissing,
-
-  /// 其它错误（网络、TLS 指纹不匹配等）。
-  unknown,
-}
+/// 正在进行的校验和计算，按会话 id 索引。
+///
+/// 哈希已经从重试窗口里移出来单独成段，但它仍然必须可取消：用户点了气泡上的
+/// 转圈，不能让它继续闷头读几十 GB 磁盘。
+final _hashCancel = <String, rust_cancel.RsCancellationToken>{};
 
 /// 解析会话对应的可发送设备。
 ///
@@ -167,6 +173,7 @@ Future<SendFailure?> sendTextMessage({
   required Ref ref,
   required Device target,
   required String text,
+
   /// [FORK] 重发时传入原消息 id：复用已有气泡，不再插一条新的。
   String? messageIdOverride,
 }) async {
@@ -227,11 +234,12 @@ Future<SendFailure?> sendTextMessage({
     ).timeout(textSendRetryWindow + _timeoutGrace);
   } on TimeoutException {
     _logger.warning('Text message did not finish within $textSendRetryWindow');
-    failure = SendFailure.unreachable;
+    // 130 秒里一次答复都没等到：复检一次，区分「对端被冻结」和「没人点接受」。
+    failure = await _diagnoseTimeout(target);
   } catch (e, st) {
     // 任何逃逸的异常都必须落成失败，否则气泡会永远停在「发送中」。
     _logger.warning('Failed to send a text message', e, st);
-    failure = SendFailure.unknown;
+    failure = classifySendError(e);
   } finally {
     _inFlight.remove(messageId);
     // 失败的后台会话会留在 map 里，聊天场景不需要它继续存在。
@@ -257,6 +265,8 @@ Future<SendFailure?> sendTextMessage({
     fileType: FileType.text,
     success: failure == null,
     text: trimmed,
+    // 失败原因必须落到气泡上：否则 UI 只能显示那句笼统的「发送失败」。
+    errorMessage: failure == null ? null : describeSendFailure(failure),
   );
 
   return failure;
@@ -320,44 +330,44 @@ Future<SendFailure?> _attemptTextSend({
   required String sessionId,
 }) async {
   try {
-    await ref.notifier(sendProvider).startSession(
-      target: target,
-      files: [file],
-      background: true,
-      // 传入固定 id，才能在结束后读回这次会话的结局。
-      sessionIdOverride: sessionId,
-      // 固定文件 id = 消息 id。少了这一条，`startSession` 会另外生成一个 uuid，
-      // 上传事件按那个 id 又写一条「发送中」气泡，于是同一条消息出现两个气泡
-      // （接收端只收到一份）。
-      fileIdsOverride: [messageId],
-    );
+    await ref
+        .notifier(sendProvider)
+        .startSession(
+          target: target,
+          files: [file],
+          background: true,
+          // 传入固定 id，才能在结束后读回这次会话的结局。
+          sessionIdOverride: sessionId,
+          // 固定文件 id = 消息 id。少了这一条，`startSession` 会另外生成一个 uuid，
+          // 上传事件按那个 id 又写一条「发送中」气泡，于是同一条消息出现两个气泡
+          // （接收端只收到一份）。
+          fileIdsOverride: [messageId],
+        );
 
     // 成功时 startSession 会把会话收掉（收到 204 后 fileMap 为空）。
     final session = ref.read(sendProvider)[sessionId];
     if (session == null) {
       return null;
     }
-    return _failureOf(session.status);
+    // `finished` 在这里仍然是「成功」：文本没有「一个都没选中」这种结局。
+    return sendFailureOfStatus(session.status, errorMessage: session.errorMessage);
   } catch (e) {
     _logger.warning('Failed to send a text message', e);
-    return SendFailure.unknown;
+    return classifySendError(e);
   }
 }
 
-/// 值得重试的失败：连接层面的问题（对方离线、网络抖动）。
+/// 值得重试的失败：只有「再等一下对方可能就好了」的那几类。
 ///
-/// 「对方拒绝」和「对方忙」是明确的答复，重试没有意义。
+/// 判据是「对端有没有作出明确答复」：连接层面没通（离线、无响应、本机网络断）
+/// 重试有意义——对方可能刚好打开 App、刚好解锁屏幕。
+/// 而拒绝、忙、限流、密码错、证书不符、空间不足都是确定的结论，
+/// 重试只是把同一个错误再问一遍。
 bool _isRetryable(SendFailure failure) {
-  switch (failure) {
-    case SendFailure.unreachable:
-    case SendFailure.unknown:
-      return true;
-    case SendFailure.cancelled:
-    case SendFailure.peerDeclined:
-    case SendFailure.peerBusy:
-    case SendFailure.fileMissing:
-      return false;
-  }
+  return switch (failure) {
+    SendFailure.peerOffline || SendFailure.peerNoResponse || SendFailure.localNetwork || SendFailure.unknown => true,
+    _ => false,
+  };
 }
 
 /// 打开系统文件选择器。
@@ -397,6 +407,7 @@ Future<SendFailure?> deliverFiles({
   required Ref ref,
   required Device target,
   required List<CrossFile> files,
+
   /// [FORK] 重发时传入原消息 id：复用已有气泡，不再插新的。
   List<String>? messageIds,
 }) async {
@@ -438,6 +449,23 @@ Future<SendFailure?> deliverFiles({
   }
 
   try {
+    // [FORK] 校验和先单独算完，再进重试窗口。
+    //
+    // 原实现把哈希留在 startSession 内部，外面套着 textSendRetryWindow：
+    // 读盘和「等对方接受」抢同一个 2 分钟。debug 构建下 30 GiB 的哈希要
+    // 7 分钟，请求一次都没发出就被判超时（见 2026-11-08 传输失败诊断）。
+    // 现在它可取消、有进度、不设上限，也不占「等对方」的额度。
+    await _precomputeChecksums(
+      ref: ref,
+      files: files,
+      fileIds: fileIds,
+      checksums: checksums,
+      ticket: ticket,
+    );
+    if (ticket.cancelled) {
+      return SendFailure.cancelled;
+    }
+
     // [FORK] 与文本同一个硬上限：握手阶段的 await 可能永不返回，
     // 不能只靠循环内的 deadline 判断。
     final result = await _deliverWithRetry(
@@ -453,11 +481,12 @@ Future<SendFailure?> deliverFiles({
     enteredTransfer = result.enteredTransfer;
   } on TimeoutException {
     _logger.warning('File delivery did not finish within $textSendRetryWindow');
-    failure = SendFailure.unreachable;
+    // 与文本同款复检：这次是文件，但「冻结 / 没点接受」的判定逻辑一致。
+    failure = await _diagnoseTimeout(target);
   } catch (e, st) {
     // 异常也必须落到下面的 _failPendingFiles，否则气泡永远转圈。
     _logger.warning('Failed to deliver files', e, st);
-    failure = SendFailure.unknown;
+    failure = classifySendError(e);
   } finally {
     for (final id in fileIds) {
       // 只在还是自己的令牌时才移除：重发会在旧流程收尾前就注册新令牌。
@@ -489,12 +518,89 @@ Future<SendFailure?> deliverFiles({
   }
 
   ref.notifier(sendProvider).closeSession(sessionId);
-  final pendingCount = await _failPendingFiles(ref: ref, target: target, files: files, fileIds: fileIds);
+  final pendingCount = await _failPendingFiles(ref: ref, target: target, files: files, fileIds: fileIds, failure: failure);
   if (pendingCount == 0) {
     // 所有气泡都已是终态：说明它们在重试期间已经传完了，不该报失败。
     return null;
   }
   return failure;
+}
+
+/// [FORK] 在进入网络阶段之前，把这一批文件的校验和算完。
+///
+/// 单独成段的原因见调用处：它必须是**可取消**、**有进度**、**不设上限**的，
+/// 而不是塞进一个「等对方接受」的窗口里。算不出来不阻塞发送——协议里
+/// `sha256` 本来就是可选字段，接收端只在收到它时才校验。
+Future<void> _precomputeChecksums({
+  required Ref ref,
+  required List<CrossFile> files,
+  required List<String> fileIds,
+  required Map<String, String> checksums,
+  required _SendTicket ticket,
+}) async {
+  final ChatTransferNotifier transfer;
+  try {
+    // 设置里关掉了「发送时生成校验和」，就没有这一段要算，
+    // 页脚也不该假装在校验。
+    if (!ref.read(settingsProvider).createChecksums) {
+      return;
+    }
+    transfer = ref.read(chatTransferProvider);
+  } catch (e) {
+    // 容器已失效：交给网络阶段自己的错误路径收尾。
+    _logger.warning('Cannot precompute checksums, ref is no longer valid', e);
+    return;
+  }
+
+  final cancelToken = rust_cancel.createCancellationToken();
+  _hashCancel[ticket.sessionId] = cancelToken;
+  try {
+    // 整批一起标成「校验中」：多文件是逐个读盘的，若只给当前那个文件设阶段，
+    // 排在后面的文件会停在「发送中」并被 135 秒的 UI 兜底误判成失败。
+    _setPhaseAll(transfer, fileIds, ChatTransferPhase.hashing);
+    for (var i = 0; i < files.length; i++) {
+      if (ticket.cancelled) {
+        return;
+      }
+      final id = fileIds[i];
+      final file = files[i];
+      transfer.setPhase(id, ChatTransferPhase.hashing);
+      try {
+        checksums[id] = await calculateFileHash(
+          path: file.path,
+          bytes: file.bytes,
+          cancelToken: cancelToken,
+          onProgress: (hashed) {
+            transfer.report(
+              messageId: id,
+              progress: file.size == 0 ? 1 : (hashed / file.size).clamp(0, 1),
+            );
+          },
+        );
+      } catch (e) {
+        // 与 send_provider 原有行为一致：读不出来就不带校验和发，
+        // 不能因为没法校验就整条发不出去。
+        _logger.warning('Could not calculate the checksum of ${file.name}', e);
+      }
+      // 算完（或失败）都推到满，否则页脚会永远停在 63%。
+      transfer.report(messageId: id, progress: 1);
+    }
+  } finally {
+    _hashCancel.remove(ticket.sessionId);
+  }
+}
+
+/// 批量切换一批气泡所在的阶段。
+///
+/// 多文件是一次 prepare-upload 请求带上去的，对端会同时接受或拒绝，
+/// 所以这些气泡的阶段天然同步，不需要逐条判断。
+void _setPhaseAll(ChatTransferNotifier? transfer, List<String> fileIds, ChatTransferPhase phase) {
+  if (transfer == null) {
+    return;
+  }
+  for (final id in fileIds) {
+    transfer.setPhase(id, phase);
+  }
 }
 
 /// 握手阶段的重试循环。
@@ -514,20 +620,38 @@ Future<({SendFailure? failure, bool enteredTransfer})> _deliverWithRetry({
   SendFailure? failure;
   var attempt = 0;
 
+  // [FORK] 阶段提示用。拿不到 notifier 就只是没有页脚文案，不影响发送。
+  ChatTransferNotifier? transfer;
+  try {
+    transfer = ref.read(chatTransferProvider);
+  } catch (_) {
+    transfer = null;
+  }
+
   while (true) {
     if (ticket.cancelled) {
       return (failure: SendFailure.cancelled, enteredTransfer: false);
     }
 
     attempt++;
-    final result = await _attemptFileSend(
-      ref: ref,
-      target: target,
-      files: files,
-      fileIds: fileIds,
-      sessionId: sessionId,
-      checksums: checksums,
-    );
+    _setPhaseAll(transfer, fileIds, ChatTransferPhase.connecting);
+    // 久到不像「被拒绝」，就说明请求已经躺在对端应用层里等用户点接受了。
+    final awaitAcceptWatch = Timer(_acceptAwaitThreshold, () {
+      _setPhaseAll(transfer, fileIds, ChatTransferPhase.waitingAccept);
+    });
+    ({SendFailure? failure, bool enteredTransfer, Set<String> acceptedIds}) result;
+    try {
+      result = await _attemptFileSend(
+        ref: ref,
+        target: target,
+        files: files,
+        fileIds: fileIds,
+        sessionId: sessionId,
+        checksums: checksums,
+      );
+    } finally {
+      awaitAcceptWatch.cancel();
+    }
 
     // 令牌拿到手之后用户才点取消：此时文件已经在往对端写了，
     // 交给 upload 事件收尾（看门狗也会看到取消标记），不能在这里标失败，
@@ -539,7 +663,14 @@ Future<({SendFailure? failure, bool enteredTransfer})> _deliverWithRetry({
             if (!result.acceptedIds.contains(fileIds[i])) i,
         ];
         if (rejected.isNotEmpty) {
-          await _failFilesAt(ref: ref, target: target, files: files, fileIds: fileIds, indexes: rejected);
+          await _failFilesAt(
+            ref: ref,
+            target: target,
+            files: files,
+            fileIds: fileIds,
+            indexes: rejected,
+            failure: SendFailure.cancelled,
+          );
         }
         return (failure: null, enteredTransfer: true);
       }
@@ -554,7 +685,14 @@ Future<({SendFailure? failure, bool enteredTransfer})> _deliverWithRetry({
           if (!result.acceptedIds.contains(fileIds[i])) i,
       ];
       if (rejected.isNotEmpty) {
-        await _failFilesAt(ref: ref, target: target, files: files, fileIds: fileIds, indexes: rejected);
+        await _failFilesAt(
+          ref: ref,
+          target: target,
+          files: files,
+          fileIds: fileIds,
+          indexes: rejected,
+          failure: SendFailure.peerDismissed,
+        );
       }
       return (failure: null, enteredTransfer: true);
     }
@@ -645,7 +783,15 @@ Future<void> _watchStalledUploads({
     } catch (e, st) {
       _logger.warning('Failed to close a stalled session', e, st);
     }
-    await _failFilesAt(ref: ref, target: target, files: files, fileIds: fileIds, indexes: pending);
+    await _failFilesAt(
+      ref: ref,
+      target: target,
+      files: files,
+      fileIds: fileIds,
+      indexes: pending,
+      // 传输中途彻底没动静：对端可能息屏被冻结、Wi-Fi 掉了，或者干脆退出了 App。
+      failure: SendFailure.uploadInterrupted,
+    );
     return;
   }
 }
@@ -665,11 +811,18 @@ Future<bool> cancelChatMessage({
   required Ref ref,
   required Device target,
   required String messageId,
+
   /// 气泡下方显示的原因文案（通常是「已取消」）。
   String? errorMessage,
 }) async {
   final ticket = _inFlight[messageId];
   ticket?.cancelled = true;
+
+  // 停在哈希阶段时，光取消网络请求没有用：读盘还在闷头跑，
+  // 得把哈希的取消令牌一起停掉，取消才是立即生效的。
+  if (ticket != null) {
+    _hashCancel.remove(ticket.sessionId)?.cancel();
+  }
 
   // 同一批文件共用一个令牌：整批一起停。否则会出现「取消了一条、
   // 剩下几条还在后台排队上传」的怪状态。
@@ -690,10 +843,7 @@ Future<bool> cancelChatMessage({
   }
 
   final peerFingerprint = peerKeyOf(target);
-  final messages = ref.read(conversationProvider)
-          .firstWhereOrNull((c) => c.peerFingerprint == peerFingerprint)
-          ?.messages ??
-      const <ChatMessage>[];
+  final messages = ref.read(conversationProvider).firstWhereOrNull((c) => c.peerFingerprint == peerFingerprint)?.messages ?? const <ChatMessage>[];
 
   for (final id in ids) {
     // 只动还在「发送中」的：已经传完的那几条不能被改回失败。
@@ -708,7 +858,9 @@ Future<bool> cancelChatMessage({
     }
 
     try {
-      await ref.redux(conversationProvider).dispatchAsync(
+      await ref
+          .redux(conversationProvider)
+          .dispatchAsync(
             UpdateChatMessageAction(
               peerFingerprint: peerFingerprint,
               messageId: id,
@@ -741,7 +893,9 @@ Future<SendFailure?> retryChatMessage({
   }
 
   // 先恢复成「发送中」：点下去立刻有反馈，也顺手挡掉连点。
-  await ref.redux(conversationProvider).dispatchAsync(
+  await ref
+      .redux(conversationProvider)
+      .dispatchAsync(
         MarkChatMessagePendingAction(
           peerFingerprint: peerKeyOf(target),
           messageId: message.id,
@@ -754,7 +908,7 @@ Future<SendFailure?> retryChatMessage({
   if (message.kind == ChatMessageKind.text) {
     final text = message.text;
     if (text == null || text.trim().isEmpty) {
-      await _markMessageFailed(ref, target, message);
+      await _markMessageFailed(ref, target, message, failure: SendFailure.unknown);
       return SendFailure.unknown;
     }
     return sendTextMessage(
@@ -770,7 +924,7 @@ Future<SendFailure?> retryChatMessage({
   final path = message.filePath;
   if (path == null || !File(path).existsSync()) {
     _logger.info('Cannot retry, source file is gone: $path');
-    await _markMessageFailed(ref, target, message);
+    await _markMessageFailed(ref, target, message, failure: SendFailure.fileMissing);
     return SendFailure.fileMissing;
   }
 
@@ -794,13 +948,16 @@ Future<SendFailure?> retryChatMessage({
 }
 
 /// 把气泡标回失败（重发过程中发现根本发不出去时用）。
-Future<void> _markMessageFailed(Ref ref, Device target, ChatMessage message) async {
+Future<void> _markMessageFailed(Ref ref, Device target, ChatMessage message, {SendFailure? failure}) async {
   try {
-    await ref.redux(conversationProvider).dispatchAsync(
+    await ref
+        .redux(conversationProvider)
+        .dispatchAsync(
           UpdateChatMessageAction(
             peerFingerprint: peerKeyOf(target),
             messageId: message.id,
             status: ChatMessageStatus.failed,
+            errorMessage: failure == null ? null : describeSendFailure(failure),
           ),
         );
   } catch (e, st) {
@@ -821,25 +978,29 @@ Future<({SendFailure? failure, bool enteredTransfer, Set<String> acceptedIds})> 
   required Map<String, String> checksums,
 }) async {
   try {
-    await ref.notifier(sendProvider).startSession(
-      target: target,
-      files: files,
-      background: true,
-      // 固定会话 id，才能回读这次的结局。
-      sessionIdOverride: sessionId,
-      // 固定文件 id，上传事件才能对上已经画出来的气泡。
-      fileIdsOverride: fileIds,
-      checksumCache: checksums,
-    );
+    await ref
+        .notifier(sendProvider)
+        .startSession(
+          target: target,
+          files: files,
+          background: true,
+          // 固定会话 id，才能回读这次的结局。
+          sessionIdOverride: sessionId,
+          // 固定文件 id，上传事件才能对上已经画出来的气泡。
+          fileIdsOverride: fileIds,
+          checksumCache: checksums,
+        );
   } catch (e) {
     _logger.warning('Failed to send files', e);
-    return (failure: SendFailure.unknown, enteredTransfer: false, acceptedIds: const <String>{});
+    return (failure: classifySendError(e), enteredTransfer: false, acceptedIds: const <String>{});
   }
 
   final session = ref.read(sendProvider)[sessionId];
   if (session == null) {
-    // startSession 内部已把会话收掉：对端一个文件都没接受（空 fileMap / 204）。
-    return (failure: SendFailure.peerDeclined, enteredTransfer: false, acceptedIds: const <String>{});
+    // startSession 内部已把会话收掉：对端一个文件都没接受（204 → 空 fileMap）。
+    // 真正的成功同样会把会话收掉，但那时气泡已经被 upload 事件写成「已发送」，
+    // 调用方只会去动仍是 pending 的那几条，所以这里的结论不会覆盖成功的记录。
+    return (failure: SendFailure.peerDismissed, enteredTransfer: false, acceptedIds: const <String>{});
   }
 
   final accepted = {
@@ -850,7 +1011,16 @@ Future<({SendFailure? failure, bool enteredTransfer, Set<String> acceptedIds})> 
     return (failure: null, enteredTransfer: true, acceptedIds: accepted);
   }
 
-  return (failure: _failureOf(session.status), enteredTransfer: false, acceptedIds: const <String>{});
+  // 对端整批拒绝时，失败原因常常只落在文件级 errorMessage 上（上传阶段失败的
+  // 场景），所以两者一起交给分类器。
+  final fileError = session.files.values.map((f) => f.errorMessage).firstWhere((e) => e != null && e.isNotEmpty, orElse: () => null);
+  final classified = sendFailureOfStatus(session.status, errorMessage: session.errorMessage ?? fileError);
+  return (
+    // 一个 token 都没拿到却报「已完成」：对端把整批都取消勾选了。
+    failure: classified ?? (session.status == SessionStatus.finished ? SendFailure.peerDismissed : SendFailure.unknown),
+    enteredTransfer: false,
+    acceptedIds: const <String>{},
+  );
 }
 
 /// 把仍是「发送中」的气泡标成失败，返回实际改动的条数。
@@ -862,6 +1032,9 @@ Future<int> _failPendingFiles({
   required Device target,
   required List<CrossFile> files,
   required List<String> fileIds,
+
+  /// 写进气泡的失败原因。不传就只有那句笼统的「发送失败」。
+  SendFailure? failure,
 }) async {
   final peerKey = peerKeyOf(target);
   final messages = ref.read(conversationProvider).firstWhereOrNull((c) => c.peerFingerprint == peerKey)?.messages ?? const <ChatMessage>[];
@@ -874,7 +1047,7 @@ Future<int> _failPendingFiles({
     }
   }
 
-  return _failFilesAt(ref: ref, target: target, files: files, fileIds: fileIds, indexes: indexes);
+  return _failFilesAt(ref: ref, target: target, files: files, fileIds: fileIds, indexes: indexes, failure: failure);
 }
 
 Future<int> _failFilesAt({
@@ -883,7 +1056,9 @@ Future<int> _failFilesAt({
   required List<CrossFile> files,
   required List<String> fileIds,
   required List<int> indexes,
+  SendFailure? failure,
 }) async {
+  final errorMessage = failure == null ? null : describeSendFailure(failure);
   for (final i in indexes) {
     await markSentFile(
       ref: ref,
@@ -894,21 +1069,58 @@ Future<int> _failFilesAt({
       fileSize: files[i].size,
       fileType: files[i].fileType,
       success: false,
+      errorMessage: errorMessage,
     );
   }
   return indexes.length;
 }
 
-SendFailure? _failureOf(SessionStatus status) {
-  switch (status) {
-    case SessionStatus.finished:
-      return null;
-    case SessionStatus.declined:
-      return SendFailure.peerDeclined;
-    case SessionStatus.recipientBusy:
-    case SessionStatus.tooManyAttempts:
-      return SendFailure.peerBusy;
-    default:
+/// 硬超时之后，回头确认一次对端到底处于什么状态。
+///
+/// 这一步能把两种长得一模一样的情况分开：
+/// - 手机被系统冻结 → TCP 能连上，但 TLS 握手永远等不到 ServerHello；
+/// - 手机正常、接收页开着，只是没人点「接受」→ 握手秒过，请求就躺在应用层。
+///
+/// 只在对端已经「130 秒没回话」之后跑一次，正常发送路径上没有任何额外开销。
+/// 证书校验必须关掉：这里只判断「对面的进程还活着吗」，不涉及任何数据。
+Future<SendFailure> _diagnoseTimeout(Device target) async {
+  final ip = target.ip;
+  if (ip == null || ip.isEmpty) {
+    return SendFailure.peerOffline;
+  }
+
+  // 对端不开 HTTPS 时，明文端口连得上就说明进程活着。
+  if (!target.https) {
+    try {
+      final socket = await Socket.connect(ip, target.port, timeout: _diagnosisTimeout);
+      socket.destroy();
+      return SendFailure.acceptTimeout;
+    } on SocketException {
+      return SendFailure.peerOffline;
+    } on TimeoutException {
+      return SendFailure.peerNoResponse;
+    } catch (_) {
       return SendFailure.unknown;
+    }
+  }
+
+  try {
+    final socket = await SecureSocket.connect(
+      ip,
+      target.port,
+      timeout: _diagnosisTimeout,
+      onBadCertificate: (_) => true,
+    );
+    socket.destroy();
+    // 握手成功 = 对端服务在跑、能处理请求，那 130 秒就只是没人在手机上点接受。
+    return SendFailure.acceptTimeout;
+  } on TimeoutException {
+    // TCP 连上了却迟迟没有 ServerHello：Android 冻结进程的典型指纹。
+    return SendFailure.peerNoResponse;
+  } on SocketException {
+    return SendFailure.peerOffline;
+  } catch (_) {
+    // 握手被对端拒绝（比如它只接受已知指纹）同样说明进程活着。
+    return SendFailure.acceptTimeout;
   }
 }

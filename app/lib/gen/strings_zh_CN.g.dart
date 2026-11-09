@@ -416,6 +416,40 @@ class Translations$conversation$zh_CN extends Translations$conversation$en {
   String get notificationsOffHint => '后台收到新消息时不会有提醒';
   @override
   String get notificationsEnable => '去开启';
+  @override
+  String verifyingChecksum({required Object percent}) => '校验中 ${percent}%';
+  @override
+  String get connectingPeer => '正在连接…';
+  @override
+  String get waitingForPeer => '等待对方接受…';
+  @override
+  String get peerNoResponse => '已连上，但对方没有任何响应，请解锁手机并打开 LocalChat 后重发';
+  @override
+  String get acceptTimeout => '请求已送达，但对方没有在 2 分钟内接受';
+  @override
+  String get peerDismissed => '对方关闭了接收窗口，没有接受文件';
+  @override
+  String get peerRateLimited => '对方拒绝的次数太多，请稍后再试';
+  @override
+  String get peerAborted => '对方中断了传输';
+  @override
+  String get authRejected => '连接密码不正确，或取消了密码输入';
+  @override
+  String get tlsMismatch => '设备证书校验失败，对方可能重装过应用';
+  @override
+  String get localNetwork => '本机网络异常，请检查 Wi-Fi 连接';
+  @override
+  String get receiverStorageFull => '对方存储空间不足';
+  @override
+  String get receiverError => '对方无法保存文件';
+  @override
+  String get checksumMismatch => '校验不一致，文件在传输中损坏';
+  @override
+  String get uploadInterrupted => '传输中断';
+  @override
+  String get cancelTransfer => '取消传输';
+  @override
+  String get transferCancelled => '已取消传输';
 }
 
 // Path: receiveHistoryPage

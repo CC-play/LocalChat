@@ -32,6 +32,8 @@
 | `app/lib/provider/conversation_provider.dart` | Redux 状态 + 5 个 action + `unreadConversationCountProvider` |
 | `app/lib/util/conversation/conversation_recorder.dart` | 接收侧写入口，`peerKeyOf()` 决定会话主键 |
 | `app/lib/util/conversation/conversation_sender.dart` | 发送侧：`resolveConversationTarget` / `sendTextMessage` / `pickConversationFiles` + `deliverFiles`（含 2 分钟离线重试） |
+| `app/lib/util/conversation/send_failure.dart` | 失败原因（18 类）+ 三档分类器 + 文案，见「失败原因分类」 |
+| `app/lib/provider/conversation/chat_transfer_provider.dart` | 上传进度与**发送阶段**旁路（每条消息一个 `ValueNotifier`） |
 | `app/lib/pages/conversations_page.dart` | 列表 + 空态 + 全清 + 长按删除 |
 | `app/lib/pages/conversation_page.dart` | 详情 + 底部输入栏（[附件][输入][发送]）+ 文字选区/右键「复制」菜单 + Ctrl+V 粘贴（文件 / 图片 / 文本） |
 | `app/lib/util/conversation/clipboard_image.dart` | 剪贴板文件与图片读取（原生通道）+ 落缓存目录 + 文件名消毒 |
@@ -107,12 +109,39 @@ IPv6 链路本地地址形如 `fe80::3524:1f%3`，列表一行放不下；而且
 **边界**：`ConversationPage.device` 只在「发起会话」这条路径上传；从会话列表进来时它是 null，
 找不到会话仍然显示「该会话已被删除」——即原有的删除后残留页面行为没有变。
 
+## 发送阶段与超时结构
+
+一次文件发送有四段**性质完全不同**的等待，各自该有独立的判死条件。混成一个总窗口会直接毁掉大文件传输（30 GB 在 dev 构建下光算校验和就要 7 分钟，130 秒的窗口连一次 `prepare-upload` 都发不出去，气泡报「发送失败」而手机根本没收到任何请求）。
+
+| 阶段 | 判死条件 | 起算点 | 代码 |
+|---|---|---|---|
+| 本地校验和 | 无上限，只能用户取消 | 点击发送 | `_precomputeChecksums` |
+| 连接 / 送达 | 压在上面的 2 分钟里（真正连不上会秒级被拒） | 校验完成 | `_deliverWithRetry` |
+| 等待对方接受 | 2 分钟 | 请求真正送达 | 同上（`waitingAccept` 阶段） |
+| 传输数据 | 60 秒无进度 | 拿到 upload token | `_watchStalledUploads` |
+
+**校验和为什么必须在窗口之外**：`send_provider.startSession` 内部的 `await calculateFileHash` 原本也被 `.timeout(130s)` 包住。`createChecksums` 默认开启，30 GiB 的完整 SHA-256 在 `opt-level=0` 下约 7.4 分钟 —— 窗口先到，`SendFailure` 已经落地，请求一个字节都没出去。现在 `_precomputeChecksums` 在 `_deliverWithRetry` 之前跑：**不设时间上限**（纯本地，慢只该慢自己），但**可取消**（`_hashCancel` 按 sessionId 存 cancel token，取消时读盘立刻停），算完填进 `checksums`，`startSession` 命中 `checksumCache` 后直接跳过二次读盘。设置里关掉 `createChecksums` 时整段跳过。
+
+**阶段状态机**（`chat_transfer_provider.dart`）：`ChatTransferPhase { hashing, connecting, waitingAccept, uploading }`，每条消息一个 `ValueNotifier`，与进度表同一套设计 —— 阶段变化只重建那一条气泡的页脚。
+
+- `waitingAccept` 的判定是**单次 `prepare-upload` 超过 2 秒仍未返回**。局域网实测 TCP+TLS 只要 0.03 s，2 秒不回只可能是在等人点接受（接收端在「需要确认」模式下会 hold 住请求）。
+- `uploading` 由 upload 事件驱动（`send_provider.dart` 的 `HttpUploadFileProgressEvent` 分支），不让发送流程在两个地方各写一次。
+- `finish` / `reset` 一并清理阶段，避免重发时串阶段。
+
+**两个必须一起改的坑**：
+
+1. **`hashing` 阶段不能计入 UI 兜底**（`chatSendWatchdogTimeout = 135s`）。否则 30 GiB 在 dev 构建下算 7 分钟，气泡会被自己的看门狗判成失败 —— 这是「2 分钟失败」的第二条触发路径，和上一条独立。
+2. **批量发送要在进校验前先把整批标成 `hashing`**，否则排在后面、还没轮到算哈希的文件阶段还停在旧值，会被同一个兜底误杀。
+
+**收益**：校验和与「探测对端是否在线」本来是串行的（对方没开 App 也要先白等 10 分钟哈希才发现连不上）。分离后哈希阶段有独立进度，用户至少知道它在做什么。
+
 ## 离线重试（2 分钟窗口）
 
 LocalChat **没有**可调的「发送超时」：对端 App 没开时 prepare-upload 会被系统 TCP 栈秒级拒绝（值不可配置）。所以「给对方时间拿起手机」只能靠重试。
 
 - `textSendRetryWindow = 2min`，`_retryInterval = 2s`；全程复用同一个 `sessionId`，避免 `fileTransferProvider` 里堆积一次性状态。
-- 只重试 `unreachable` / `unknown`；`peerDeclined` / `peerBusy` 是明确答复，立即失败。
+- **2 分钟只覆盖「连接 + 等对方点接受」，不含本地校验和**。校验和在 `_deliverWithRetry` 之前由 `_precomputeChecksums` 算完，见「发送阶段与超时结构」。
+- 只重试 `peerOffline` / `peerNoResponse` / `localNetwork` / `unknown`（对端没给出明确答复）；其余一律立即失败，见「失败原因分类」。
 - **文件只在握手阶段重试**：一旦 `session.files` 里有 `token != null`，说明已进入流式上传，重来会在对端留下半截文件 → 停止重试，后续交给 upload 事件。
 - 跨重试复用 `checksumCache`（`send_provider.startSession` 的 `[FORK]` 参数），否则两分钟内会把几百 MB 文件反复读盘哈希。
 - 投递全程在后台：页面不 `await`，输入框不锁；结果由气泡状态（转圈 / 红色感叹号）和顶部 Toast 表达。
@@ -147,6 +176,36 @@ LocalChat **没有**可调的「发送超时」：对端 App 没开时 prepare-u
 
 **3. 附带修复：异常逃逸。** 两条路径的 `catch` 现在都会把 `failure` 置为非空并继续走到 `markSentFile` / `_failPendingFiles`。之前中途抛异常会让已置为 pending 的气泡再也无人收尾。
 
+## 失败原因分类
+
+定义在 `app/lib/util/conversation/send_failure.dart`（`enum SendFailure`，18 个取值 + `failureForStatusCode` + `classifySendErrorText` + `describeSendFailure`），`conversation_sender.dart` 再 `export` 一次，调用方 import 习惯不变。
+
+**为什么单独一个文件**：`send_provider.dart` 也要用这套分类（发送 Tab / 收藏 / 地址等入口的气泡收尾），而 `conversation_sender` 已经 import 了 `send_provider`。定义留在 sender 里会让 provider 反向依赖它形成循环。
+
+**三档来源，优先级从高到低**：
+
+1. 结构化错误（`RsHttpClientError_StatusCode` / `_ConnectionError` 等）；
+2. 错误文本关键词（`classifySendErrorText`）；
+3. `unknown`。
+
+关键词表的**顺序有讲究**：空间不足 / 校验不一致 / 证书 / PIN / 连接被拒 / DNS / 超时 / 连接重置，具体原因必须排在「超时」大类之前，否则所有超时都会被归到同一个笼统项。
+
+**`peerNoResponse` 与 `acceptTimeout` 的区分**（最值得记的一条）：这两者在发送端**长得完全一样** —— 都是 `prepare-upload` 发出去后永远没有回音，最后被 130 秒硬超时砍掉。区别只在对端：
+
+| 对端真实状态 | 网络指纹 | 归类 |
+|---|---|---|
+| App 进程被系统冻结（息屏 / 不在前台） | 内核接了 TCP，TLS 握手零字节超时 | `peerNoResponse`「已连上，但对方没有任何响应」 |
+| App 正常、接收页开着但没人点 | 握手秒过，请求躺在应用层 | `acceptTimeout`「请求已送达，但对方没有在 2 分钟内接受」 |
+| App 没开 / 服务未监听 | 连接被拒 | `peerOffline`「对方不可达」 |
+
+判定方式是 `_diagnoseTimeout(target)`：硬超时**之后**用 `SecureSocket.connect(..., timeout: 2s, onBadCertificate: true)` 再握一次手 —— 只看连通性、不发任何数据。只在已经等满窗口之后跑，正常路径零开销。
+
+**重试集合随之收紧**：只有 `peerOffline` / `peerNoResponse` / `localNetwork` / `unknown` 可重试（对端没给出明确答复）；其余（拒绝、忙、限流、204、PIN 错、证书不符、空间不足、写盘失败、校验不一致）立即定论 —— 重试只是把同一个错误再问一遍。
+
+**分类必须落到气泡上**，否则等于没做：`_failPendingFiles` / `_failFilesAt` 接受 `failure` 参数，经 `describeSendFailure` 写进 `ChatMessage.errorMessage`，覆盖四条路径 —— 文本消息、文件投递失败、重发失败（源文件丢失）、上传看门狗。`send_provider._settlePreRecorded` 同步改。之前这些地方调 `markSentFile(success: false)` 时根本没传 `errorMessage`，气泡只能退回那句笼统的「发送失败」。
+
+单测：`test/unit/util/send_failure_test.dart`（15 用例，含「具体原因优先于超时大类」这类顺序陷阱）。
+
 ## 主动取消与界面兜底
 
 上一轮修掉「窗口根本不起作用」之后，仍然会收到「点了重发一直在转圈」的反馈。原因不同：**这次它确实在工作** —— 对着离线对端每 2 秒重试一次，界面只写「发送中…」，既看不出推进，也无法中止。超时存在不等于用户能感知。
@@ -158,6 +217,8 @@ LocalChat **没有**可调的「发送超时」：对端 App 没开时 prepare-u
 3. **界面兜底**：`chatSendWatchdogTimeout = window + grace + 5s`。气泡下方的倒计时（`_SendProgressFooter` 的 1s ticker）走满就回调 `onStalePending` → 直接标失败。它不依赖任何后台任务，专门覆盖「发送流程已经不在了、气泡却还挂着」：异常逃逸，或**页面销毁后 `ref` 失效导致上传看门狗静默退出**（`_watchStalledUploads` 里 `ref.read` 抛异常就 `return`，正是最隐蔽的一条）。
 
 **取消后不再写终态**：`sendTextMessage` / `deliverFiles` 在 `ticket.cancelled` 时直接返回，不调 `markSentFile` / `_failPendingFiles`。否则会把「已取消」覆盖成「发送失败」，甚至在「用户点取消的同一瞬间刚好发成功」时改回「已发送」。
+
+**兜底计时在 `hashing` 阶段暂停**：ticker 每轮先读一次 `phaseOf(messageId)`，等于 `ChatTransferPhase.hashing` 就直接 `return`，不累加 `_seconds`。校验和是本地读盘、有进度、可取消的工作，30 GiB 在 dev 构建下要几分钟，用它去触发「发送中太久」的兜底等于自我误杀 —— 这是「2 分钟失败」的第二条独立触发路径，只改窗口起点治不了它。批量发送同理：进校验前先把**整批**标成 `hashing`，否则排在后面、还没轮到算哈希的文件会停在旧阶段被误杀。
 
 **倒计时是这次的关键**：`sending` 文案换成 `sendingCountdown`（「发送中 12s…」）。纯「发送中…」连续几十秒，用户无法区分「在工作」和「卡死」—— 这正是本次反馈的来源。
 
@@ -181,29 +242,54 @@ LocalChat **没有**可调的「发送超时」：对端 App 没开时 prepare-u
 - 进度为 `null`（还没进入上传）时分两段表达，见下。
 - 百分比用 `floor` 而不是 `round`：99.6% 还没传完，显示 100% 会让人以为卡住了。
 
-**等待阶段（`progress == null`）为什么要分两段**：`createChecksums` 默认开启，几十 MB 的文件在真正上传前要先被 Rust 整个读一遍算校验和，**这个阶段不会发出任何进度事件**。所以：
+**页脚按阶段渲染**（`ChatTransferPhase`，见「发送阶段与超时结构」）：同一行小字，三种形态。
 
-- 前 3 秒只说事实「发送中 3s…」（`sendingCountdown`），避免每条小消息都闪一下扫动效果；
-- 超过 3 秒追加一条**不确定态**的 `LinearProgressIndicator(value: null)`，明确「在动，只是还不知道百分比」。
+| 阶段 | 文案 | 进度条 |
+|---|---|---|
+| `hashing` | 校验中 42%（`verifyingChecksum`） | 确定态，值来自哈希进度 |
+| `connecting` | 正在连接…（`connectingPeer`） | 扫动（`value: null`） |
+| `waitingAccept` | 等待对方接受…（`waitingForPeer`） | 扫动 |
+| `uploading` | 发送中 42%（`sendingProgress`） | 确定态 |
+| `null`（旧流程 / 未登记） | 发送中 12s…（`sendingCountdown`） | 优先真实进度，没有就扫动 |
+
+- 没有真实百分比且**进入该阶段不足 3 秒**时只给一句话（`indeterminateAfter`），避免每条小消息都闪一下扫动条。
 - 确定态与不确定态共用同一个 `_bar()`，固定 96×3，切换时不跳布局。
-- 秒数由 `_SendProgressFooter` 自己的 1s ticker 驱动（只重建这一行小字），同一 ticker 还负责 `chatSendWatchdogTimeout` 的兜底（见「主动取消与界面兜底」）。
+- 秒数由 `_SendProgressFooter` 自己的 1s ticker 驱动（只重建这一行小字），同一 ticker 还负责 `chatSendWatchdogTimeout` 的兜底 —— 但**读盘校验期间不累加**（见「主动取消与界面兜底」）。
 
-## 气泡菜单：复制 / 打开文件所在位置 / 删除该条记录
+## 气泡菜单：复制 / 取消传输 / 打开文件所在位置 / 删除该条记录
 
 菜单由页面统一弹（`_showMessageMenu`），桌面右键、移动端长按、桌面拖选三条入口共用一份。
-显示顺序即 `_ChatMenuAction` 的声明顺序：复制 → 打开文件所在位置 → 删除该条记录
-（破坏性项排最后，与那行红字的位置一致）。
+显示顺序即 `_ChatMenuAction` 的声明顺序：复制 → 取消传输 → 打开文件所在位置 → 删除该条记录
+（「取消传输」是当下最相关的止损动作，排在定位/删除之前；破坏性项仍排最后）。
 
 | 入口 | 平台 | 菜单项 |
 |---|---|---|
-| 气泡右键（`MessageBubble.onSecondaryTap`） | 桌面 | 复制 + 打开文件所在位置（仅文件消息）+ 删除该条记录 |
-| 气泡长按（`MessageBubble.onLongPress`） | 移动端 | 复制 + 删除该条记录 |
+| 气泡右键（`MessageBubble.onSecondaryTap`） | 桌面 | 复制 + 取消传输（仅传输中的文件）+ 打开文件所在位置（仅文件消息）+ 删除该条记录 |
+| 气泡长按（`MessageBubble.onLongPress`） | 移动端 | 复制 + 取消传输（同上）+ 删除该条记录 |
 | 拖选 / 双击选词后自动弹（`Listener.onPointerUp` → `_autoShowMenu`） | 桌面 | 只有复制（选区不属于某一条消息） |
 
 **文字选区只在桌面开**（`_selectableTextSupported`）：移动端 `SelectionArea` 的选词手势
 会在手势竞技场里赢走长按，而它的工具条又被 `contextMenuBuilder` 置空，导致手机上
 选中文字**没有任何复制入口**——占着长按却不可用。所以移动端不套 `SelectionArea`，
 把长按让给菜单，「复制」变成菜单项反而可用。
+
+### 取消传输
+
+只在下面三个条件同时成立时出现（`_showMessageMenu` 里的 `canCancelTransfer`）：
+
+```dart
+message.kind == ChatMessageKind.file &&
+message.isOutgoing &&
+message.status == ChatMessageStatus.pending
+```
+
+- **传完（sent / received）不显示**：没有进行中的任务可停。
+- **失败（failed）不显示**：流程已经终止，恢复入口是红色感叹号重发。
+- **接收方向不显示**：`cancelChatMessage` 找的是发送侧的 `_SendTicket`，接收方向上没有对应凭证 —— 硬用只会把气泡改成失败，真实请求还在跑，是个假按钮。接收端的中止在接收页上，语义是另一套。
+
+动作不走新逻辑，直接复用点转圈的 `_cancelMessage` → `cancelChatMessage`：整批文件一起停、`_hashCancel` 中断读盘（正在算的 30 GB 校验和会立刻停）、`closeSession` 取消挂起的 `prepare-upload`。
+
+结果文案按消息类型分岔：文件的 toast 与页脚是「已取消传输」（`transferCancelled`），文本仍是「已取消发送」（`sendCancelled`）—— 菜单里给的词和结果提示必须是同一个。
 
 ### 打开文件所在位置
 

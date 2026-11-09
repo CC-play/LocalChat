@@ -96,9 +96,7 @@ class MessageBubble extends StatelessWidget {
     // 颜色由 peer_avatar.dart 统一绘制，与会话列表复用同一个部件。
     final avatar = PeerAvatar(
       initial: isOutgoing ? t.conversation.you : peerInitial,
-      colors: isOutgoing
-          ? selfAvatarColors(theme.colorScheme)
-          : avatarColorsFor(peerFingerprint, theme.brightness),
+      colors: isOutgoing ? selfAvatarColors(theme.colorScheme) : avatarColorsFor(peerFingerprint, theme.brightness),
       size: 36,
     );
 
@@ -271,6 +269,13 @@ class _SendProgressFooterState extends State<_SendProgressFooter> {
       if (!mounted) {
         return;
       }
+      // 校验和阶段可能持续几分钟（大文件在 debug 构建下尤其明显），但它是
+      // 本地读盘、有进度、随时可取消的工作，不该被「发送中太久」的兜底判定
+      // 误杀。这一段不累加计时，等进入网络阶段再开始数。
+      final phase = context.ref.read(chatTransferProvider).phaseOf(widget.messageId).value;
+      if (phase == ChatTransferPhase.hashing) {
+        return;
+      }
       setState(() => _seconds++);
       if (!_reportedStale && _seconds >= widget.staleAfter.inSeconds) {
         _reportedStale = true;
@@ -287,41 +292,63 @@ class _SendProgressFooterState extends State<_SendProgressFooter> {
 
   @override
   Widget build(BuildContext context) {
-    final notifier = context.ref.read(chatTransferProvider).progressOf(widget.messageId);
+    final transfer = context.ref.read(chatTransferProvider);
+    final progressListenable = transfer.progressOf(widget.messageId);
+    final phaseListenable = transfer.phaseOf(widget.messageId);
 
-    return ValueListenableBuilder<double?>(
-      valueListenable: notifier,
-      builder: (context, progress, _) {
-        if (progress == null) {
-          final hint = Text(
-            t.conversation.sendingCountdown(seconds: _seconds),
-            style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.outline),
-          );
-          if (_seconds < _SendProgressFooter.indeterminateAfter.inSeconds) {
-            return hint;
-          }
-          // 等太久了还不知道百分比：画一条扫动的条，至少让人看到它没停。
-          return Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _bar(value: null),
-              const SizedBox(width: 6),
-              hint,
-            ],
-          );
-        }
+    return AnimatedBuilder(
+      animation: Listenable.merge([progressListenable, phaseListenable]),
+      builder: (context, _) {
+        final phase = phaseListenable.value;
+        final progress = progressListenable.value;
+        final theme = Theme.of(context);
+
+        // 本地校验和上传一样有真实百分比；连接与等待接受没有，画扫动条。
+        final double? barValue = switch (phase) {
+          ChatTransferPhase.hashing => progress,
+          ChatTransferPhase.uploading => progress,
+          ChatTransferPhase.connecting => null,
+          ChatTransferPhase.waitingAccept => null,
+          null => progress,
+        };
 
         // 用 floor 而不是 round：99.6% 还没传完，显示 100% 会让人以为卡住了。
-        final percent = (progress * 100).floor().clamp(0, 100);
+        String uploadLabel(double? value) {
+          if (value == null) {
+            return t.conversation.sendingCountdown(seconds: _seconds);
+          }
+          return t.conversation.sendingProgress(percent: (value * 100).floor().clamp(0, 100));
+        }
+
+        final label = switch (phase) {
+          ChatTransferPhase.hashing => t.conversation.verifyingChecksum(
+            percent: ((progress ?? 0) * 100).floor().clamp(0, 100),
+          ),
+          ChatTransferPhase.connecting => t.conversation.connectingPeer,
+          ChatTransferPhase.waitingAccept => t.conversation.waitingForPeer,
+          ChatTransferPhase.uploading => uploadLabel(progress),
+          null => uploadLabel(progress),
+        };
+
+        final text = Text(
+          label,
+          style: TextStyle(
+            fontSize: 10,
+            color: barValue == null ? theme.colorScheme.outline : widget.color,
+          ),
+        );
+
+        if (barValue == null && _seconds < _SendProgressFooter.indeterminateAfter.inSeconds) {
+          // 刚进入「连接 / 等待接受」的前几秒只给一句话，避免每条小消息都闪一下条。
+          return text;
+        }
+
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _bar(value: progress),
+            _bar(value: barValue),
             const SizedBox(width: 6),
-            Text(
-              t.conversation.sendingProgress(percent: percent),
-              style: TextStyle(fontSize: 10, color: widget.color),
-            ),
+            text,
           ],
         );
       },

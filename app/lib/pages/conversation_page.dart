@@ -36,12 +36,12 @@ import 'package:refena_flutter/refena_flutter.dart';
 
 /// 气泡右键 / 长按 / 选中后弹出的菜单项。
 ///
-/// [FORK] 「删除该条记录」「打开文件所在位置」是本 fork 加的；
+/// [FORK] 「删除该条记录」「打开文件所在位置」「取消传输」是本 fork 加的；
 /// 「复制」沿用上游的选区带出逻辑。
 ///
-/// 声明顺序即菜单里的显示顺序：复制 → 打开文件所在位置 → 删除该条记录。
+/// 声明顺序即菜单里的显示顺序：复制 → 取消传输 → 打开文件所在位置 → 删除该条记录。
 /// 破坏性动作放最后，和菜单里那行红字的位置一致。
-enum _ChatMenuAction { copy, revealInFolder, delete }
+enum _ChatMenuAction { copy, cancelTransfer, revealInFolder, delete }
 
 /// 单个对端设备的会话窗口。
 class ConversationPage extends StatefulWidget {
@@ -180,9 +180,7 @@ class _ConversationPageState extends State<ConversationPage> {
       return;
     }
     try {
-      final conversation = context.ref
-          .read(conversationProvider)
-          .firstWhereOrNull((c) => c.peerFingerprint == widget.peerFingerprint);
+      final conversation = context.ref.read(conversationProvider).firstWhereOrNull((c) => c.peerFingerprint == widget.peerFingerprint);
       if (conversation == null) {
         return;
       }
@@ -215,17 +213,21 @@ class _ConversationPageState extends State<ConversationPage> {
       return;
     }
 
+    // 文件说「取消传输」、文本说「取消发送」：菜单/提示里用的是哪个词，
+    // 结果气泡上就该出现哪个词，否则用户会怀疑自己点错了东西。
+    final cancelledText = message.kind == ChatMessageKind.file ? t.conversation.transferCancelled : t.conversation.sendCancelled;
+
     final cancelled = await cancelChatMessage(
       ref: context.ref,
       target: target,
       messageId: message.id,
-      errorMessage: t.conversation.sendCancelled,
+      errorMessage: cancelledText,
     );
     if (!mounted || !cancelled) {
       // 没停成说明它刚好已经结束了，气泡上会显示真实结局，不用再提示。
       return;
     }
-    TopToast.show(context, t.conversation.sendCancelled);
+    TopToast.show(context, cancelledText);
   }
 
   /// [FORK] 兜底：气泡挂在「发送中」太久，直接判失败。
@@ -259,10 +261,7 @@ class _ConversationPageState extends State<ConversationPage> {
   ///
   /// 草稿只在「从发送页发起会话」这条路径上存在，见 [_draftConversation]。
   Conversation? _effectiveConversation() {
-    return context.ref
-            .read(conversationProvider)
-            .firstWhereOrNull((c) => c.peerFingerprint == widget.peerFingerprint) ??
-        _draftConversation();
+    return context.ref.read(conversationProvider).firstWhereOrNull((c) => c.peerFingerprint == widget.peerFingerprint) ?? _draftConversation();
   }
 
   /// [FORK] 用 [ConversationPage.device] 拼一个不落库的草稿会话。
@@ -287,7 +286,8 @@ class _ConversationPageState extends State<ConversationPage> {
     );
   }
 
-  void _handleSelectionChanged(SelectedContent? content) {    final text = content?.plainText;
+  void _handleSelectionChanged(SelectedContent? content) {
+    final text = content?.plainText;
     _selectedText = text;
     if (text != null && text.isNotEmpty) {
       _selectionTouched = true;
@@ -439,15 +439,20 @@ class _ConversationPageState extends State<ConversationPage> {
 
     _menuOpen = true;
     final theme = Theme.of(context);
+    // [FORK] 「取消传输」只给自己发出、且还停在「发送中」的文件。
+    //
+    // 已经传完（sent / received）没有进行中的任务可停；失败的消息本来就已终止，
+    // 恢复入口是红色感叹号重发。这两种都不显示，避免菜单里出现一个点了等于
+    // 什么都没做的项。接收方向也不给：接收端的中止在接收页上，语义是另一套。
+    final canCancelTransfer =
+        message != null && message.kind == ChatMessageKind.file && message.isOutgoing && message.status == ChatMessageStatus.pending;
     // [FORK] 「打开文件所在位置」的出现条件集中在菜单打开时算一次。
     //
     // 桌面端才给：手机上既没有文件夹可浏览，收到的文件路径还可能是
     // `content://`（相册 / 下载管理器给的 URI），`openFolder` 在 Android 上
     // 走的是完全不同的分支，语义不是「定位到文件」。
-    final canRevealInFolder = message != null &&
-        message.kind == ChatMessageKind.file &&
-        (message.filePath?.isNotEmpty ?? false) &&
-        checkPlatformIsDesktop();
+    final canRevealInFolder =
+        message != null && message.kind == ChatMessageKind.file && (message.filePath?.isNotEmpty ?? false) && checkPlatformIsDesktop();
     // [FORK] 文件已经不在磁盘上时，这一项仍然显示、但置灰。
     //
     // 直接不显示会让人以为功能丢了；能点却发现没反应更糟。置灰用
@@ -489,6 +494,23 @@ class _ConversationPageState extends State<ConversationPage> {
                   const Icon(Icons.copy, size: 16),
                   const SizedBox(width: 10),
                   Text(t.general.copy),
+                ],
+              ),
+            ),
+          // [FORK] 正在传输的文件才给这一项。放在最上面：它是这条消息当下
+          // 唯一可做的「止损」动作，不该排在「打开文件所在位置」后面。
+          // 走的是和点气泡转圈同一个 [cancelChatMessage]：整批一起停、
+          // 哈希的读盘也会被取消令牌中断，不必等它把 30 GB 扫完。
+          if (canCancelTransfer)
+            PopupMenuItem(
+              value: _ChatMenuAction.cancelTransfer,
+              height: 40,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.stop_circle_outlined, size: 16),
+                  const SizedBox(width: 10),
+                  Text(t.conversation.cancelTransfer),
                 ],
               ),
             ),
@@ -544,6 +566,10 @@ class _ConversationPageState extends State<ConversationPage> {
       case _ChatMenuAction.copy:
         if (text != null) {
           await Clipboard.setData(ClipboardData(text: text));
+        }
+      case _ChatMenuAction.cancelTransfer:
+        if (message != null) {
+          await _cancelMessage(message);
         }
       case _ChatMenuAction.revealInFolder:
         if (message != null) {
@@ -719,8 +745,7 @@ class _ConversationPageState extends State<ConversationPage> {
                             itemBuilder: (context, index) {
                               // 正向列表：index 0 是最旧一条，最新一条在底部。
                               final msg = messages[index];
-                              final showDate =
-                                  index == 0 || _needsDateSeparator(messages[index - 1].timestamp, msg.timestamp);
+                              final showDate = index == 0 || _needsDateSeparator(messages[index - 1].timestamp, msg.timestamp);
 
                               return Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -854,22 +879,10 @@ class _DropOverlay extends StatelessWidget {
 }
 
 /// 把发送失败的原因翻译成用户能看懂的文案。
-String _describeSendFailure(SendFailure failure) {
-  switch (failure) {
-    case SendFailure.peerDeclined:
-      return t.conversation.peerDeclined;
-    case SendFailure.peerBusy:
-      return t.conversation.peerBusy;
-    case SendFailure.unreachable:
-      return t.conversation.peerUnreachable;
-    case SendFailure.fileMissing:
-      return t.conversation.fileMissing;
-    case SendFailure.cancelled:
-      return t.conversation.sendCancelled;
-    case SendFailure.unknown:
-      return t.conversation.sendFailed;
-  }
-}
+///
+/// 细分逻辑在 `conversation_sender.dart` 里（发送流程自己也要用它写气泡），
+/// 这里只是给页面留一个就近的入口。
+String _describeSendFailure(SendFailure failure) => describeSendFailure(failure);
 
 /// 后台投递文件，只在最终失败时回调 [onFailure]。
 ///

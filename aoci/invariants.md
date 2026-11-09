@@ -42,6 +42,16 @@
 | 文本消息判定必须排在 `showFromTray()` **之前** | 对方每说一句都抢走窗口焦点 |
 | 消息 ID 复用 `fileId` / 源 `file.id` | 重传、重试会产生重复气泡 |
 
+## 发送流程
+
+| 约束 | 违反后果 |
+|---|---|
+| 校验和必须在重试窗口**之外**预计算（`_precomputeChecksums` → `checksumCache`），不要让 `startSession` 里的 `calculateFileHash` 落在 `.timeout()` 下面 | 30 GiB 在 dev 构建下算 7.4 分钟 > 130 秒窗口，`prepare-upload` 一次都发不出去，气泡报「发送失败」而对端没收到任何请求 |
+| 气泡的 UI 兜底（`chatSendWatchdogTimeout`）在 `ChatTransferPhase.hashing` 阶段必须停止累加，批量发送要先把整批标 `hashing` | 大文件会被自己的看门狗判死；排在队尾、还没轮到算哈希的文件会停在旧阶段被误杀 |
+| 失败必须经 `describeSendFailure` 写进 `ChatMessage.errorMessage`，不能只改 `status` | 气泡退回那句笼统的「发送失败」，18 类分类等于没做 |
+| `SendFailure` 的定义只放 `util/conversation/send_failure.dart`（`conversation_sender` 只 export） | `send_provider` 需要这套分类，定义留在 sender 里会形成循环依赖 |
+| 传输中的文件取消走 `cancelChatMessage`（整批 + 哈希令牌 + `closeSession`），不要在菜单里另写一套 | 只改气泡状态、不停真请求，会留下「取消了一条、其余几条还在后台上传」和读盘继续跑 |
+
 ## fork
 
 | 约束 | 违反后果 |

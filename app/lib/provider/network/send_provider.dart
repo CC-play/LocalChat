@@ -16,6 +16,7 @@ import 'package:localchat_app/provider/http_provider.dart';
 import 'package:localchat_app/provider/selection/selected_sending_files_provider.dart';
 import 'package:localchat_app/provider/settings_provider.dart';
 import 'package:localchat_app/util/conversation/conversation_recorder.dart';
+import 'package:localchat_app/util/conversation/send_failure.dart';
 import 'package:localchat_app/widget/dialogs/pin_dialog.dart';
 import 'package:localchat_isolates/isolate.dart';
 import 'package:localchat_isolates/model/device.dart';
@@ -133,6 +134,14 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
       return;
     }
     final transferNotifier = ref.read(fileTransferProvider);
+    // 细分失败原因：状态码能直接定性的先定性，剩下的按 Rust 侧留下的原文归类。
+    // `finished` 走到这里说明对端回的是 204（一个都没选中），
+    // 真正的成功不会留下未完成的文件，下面的 FileStatus.finished 判断已经挡掉了。
+    final failure = switch (session.status) {
+      SessionStatus.finished => SendFailure.peerDismissed,
+      _ => sendFailureOfStatus(session.status, errorMessage: errorMessage),
+    };
+    final detail = failure == null ? errorMessage : describeSendFailure(failure);
     for (final id in ids) {
       final file = session.files[id];
       if (file == null) {
@@ -151,7 +160,7 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
         fileType: file.file.fileType,
         text: file.file.fileType == FileType.text ? file.file.preview : null,
         success: false,
-        errorMessage: errorMessage,
+        errorMessage: detail,
       );
     }
   }
@@ -801,7 +810,10 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
                 );
             // [FORK] 聊天视图：把上传进度同步给对应的气泡。
             // 普通（非聊天）发送没有气泡在等这个 id，notifier 内部会直接丢弃。
-            ref.read(chatTransferProvider).report(messageId: event.fileId, progress: event.progress);
+            final chatTransfer = ref.read(chatTransferProvider);
+            chatTransfer.report(messageId: event.fileId, progress: event.progress);
+            // 有字节在动 = 对方已经点了接受，页脚该从「等待对方接受」切到百分比。
+            chatTransfer.setPhase(event.fileId, ChatTransferPhase.uploading);
             _updateForegroundServiceProgress(sessionId);
           case HttpUploadFileFinishedEvent():
             // set progress to 100% when successfully finished
@@ -849,7 +861,9 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
                 fileType: failedFile.file.fileType,
                 text: failedFile.file.fileType == FileType.text ? failedFile.file.preview : null,
                 success: false,
-                errorMessage: event.error,
+                // 上传阶段失败：对端写盘失败、校验不一致、连接中断都在这里。
+                // 原文是 Rust/对端给的英文，能归类就换成可读文案。
+                errorMessage: describeSendErrorText(event.error),
               );
             }
         }

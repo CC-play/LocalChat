@@ -503,6 +503,57 @@ class Translations$conversation$en {
 
   /// en: 'Turn on'
   String get notificationsEnable => 'Turn on';
+
+  /// en: 'Verifying checksum {percent}%'
+  String verifyingChecksum({required Object percent}) => 'Verifying checksum ${percent}%';
+
+  /// en: 'Connecting…'
+  String get connectingPeer => 'Connecting…';
+
+  /// en: 'Waiting for the other device to accept…'
+  String get waitingForPeer => 'Waiting for the other device to accept…';
+
+  /// en: 'Connected, but the device isn't responding. Unlock it and open LocalChat.'
+  String get peerNoResponse => 'Connected, but the device isn\'t responding. Unlock it and open LocalChat.';
+
+  /// en: 'Request delivered, but it wasn't accepted in time.'
+  String get acceptTimeout => 'Request delivered, but it wasn\'t accepted in time.';
+
+  /// en: 'The other device closed the request without accepting.'
+  String get peerDismissed => 'The other device closed the request without accepting.';
+
+  /// en: 'Too many requests. Wait a moment and try again.'
+  String get peerRateLimited => 'Too many requests. Wait a moment and try again.';
+
+  /// en: 'The other device cancelled the transfer.'
+  String get peerAborted => 'The other device cancelled the transfer.';
+
+  /// en: 'Wrong PIN, or PIN entry was cancelled.'
+  String get authRejected => 'Wrong PIN, or PIN entry was cancelled.';
+
+  /// en: 'Certificate check failed. The other device may have reinstalled the app.'
+  String get tlsMismatch => 'Certificate check failed. The other device may have reinstalled the app.';
+
+  /// en: 'This device's network is down. Check the Wi-Fi connection.'
+  String get localNetwork => 'This device\'s network is down. Check the Wi-Fi connection.';
+
+  /// en: 'The other device is out of storage.'
+  String get receiverStorageFull => 'The other device is out of storage.';
+
+  /// en: 'The other device could not save the file.'
+  String get receiverError => 'The other device could not save the file.';
+
+  /// en: 'Checksum mismatch. The file arrived corrupted.'
+  String get checksumMismatch => 'Checksum mismatch. The file arrived corrupted.';
+
+  /// en: 'Transfer interrupted.'
+  String get uploadInterrupted => 'Transfer interrupted.';
+
+  /// en: 'Cancel transfer'
+  String get cancelTransfer => 'Cancel transfer';
+
+  /// en: 'Transfer cancelled'
+  String get transferCancelled => 'Transfer cancelled';
 }
 
 // Path: receiveHistoryPage
