@@ -20,3 +20,14 @@ opt-level = 2
 
 [profile.dev.package.num-bigint-dig]
 opt-level = 2
+
+# File hashing is the only path that reads whole multi-GB files. Unoptimized
+# it runs ~20x slower (measured: 0.07 GiB/s at opt-level 0 vs 1.45 GiB/s at 3),
+# which turns a 30 GiB checksum into a ~7 minute stall. That stall sits inside
+# the 2 minute send window (conversation_sender.dart:451), so large files fail
+# with "unreachable" before prepare-upload is ever sent.
+[profile.dev.package.sha2]
+opt-level = 3
+
+[profile.dev.package.digest]
+opt-level = 3
