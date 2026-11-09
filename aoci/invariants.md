@@ -84,6 +84,9 @@
 | 底部切换用 `Offstage` 保留 `_Composer`，不要用 `if/else` 二选一 | `_ComposerState` 持有 `TextEditingController`，被移除会 dispose，用户输入到一半的草稿凭空消失 |
 | 多选态进入时要 `unfocus` 并 `requestFocus` 到页面级 `_shortcutFocusNode` | 焦点退回 route 的 `FocusScope`（在页面外层），Esc 沿焦点链找不到 `_PasteShortcuts`，退出快捷键失效 |
 | iOS 上 `PopScope.canPop=false` 会连带关掉系统返回手势，侧滑退出靠 `_SelectionEdgeSwipe`（左边缘 24px 起手、水平右滑 72px） | `onPopInvokedWithResult` 根本不会被调用，iOS 侧滑在多选态完全没有反应 |
+| 启动画面（`widget/startup_splash.dart`）必须复用 `LocalChatLogo` + `color: Colors.white`，不要另画一套图形 | 两处图形一旦分叉，启动动画和接收页的 logo 对不上，切换时看得出跳变 |
+| 启动画面底色 `StartupSplash.background` 与 Android `values/colors.xml` 的 `launch_background` 必须同为 `#1E90FF` | 两处不同步时，冷启动会先闪一种蓝、再跳到另一种蓝 |
+| `preInit` 必须在**首帧之后**执行（`_BootstrapAppState` 的 postFrameCallback），不要挪回 `runApp` 之前 | 桌面端的窗口是在 `preInit` 的 `showFromTray` 里才显示的，但它同时包着 Rust 初始化 + 读设置；跑在 `runApp` 之前意味着这整段时间 Flutter 一帧没画，屏幕上是原生底色——就是「启动一片白」 |
 
 ## 为什么不做符号索引
 

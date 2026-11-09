@@ -11,7 +11,13 @@ import 'package:localchat_app/widget/rotating_widget.dart';
 /// along.
 const double _innerRadiusRatio = 0.320;
 
-const double _logoSize = 200;
+/// Side length of the artwork, in logical pixels.
+///
+/// Public because the launch splash pre-loads this exact image before the first
+/// frame (see `_precacheStartupLogo` in `main.dart`): the pre-load has to build
+/// the same [ImageConfiguration] the widget will use, `size` included, otherwise
+/// it fills a different [ImageCache] slot and the artwork still pops in late.
+const double kLogoSize = 200;
 
 class LocalChatLogo extends StatelessWidget {
   final bool withText;
@@ -23,27 +29,33 @@ class LocalChatLogo extends StatelessWidget {
   /// Time for one full turn of the ring.
   final Duration spinDuration;
 
+  /// Colour the artwork is tinted with. Defaults to the theme's primary, which
+  /// is what every in-app surface wants; the launch splash passes white because
+  /// it sits on a blue background instead.
+  final Color? color;
+
   const LocalChatLogo({
     required this.withText,
     this.spinning = false,
     this.spinDuration = const Duration(seconds: 15),
+    this.color,
   });
 
   @override
   Widget build(BuildContext context) {
     final ring = ClipPath(
       clipper: const _AnnulusClipper(innerRatio: _innerRadiusRatio),
-      child: Assets.img.logo512.image(width: _logoSize, height: _logoSize),
+      child: Assets.img.logo512.image(width: kLogoSize, height: kLogoSize),
     );
 
     final bubble = ClipPath(
       clipper: const _DiscClipper(radiusRatio: _innerRadiusRatio),
-      child: Assets.img.logo512.image(width: _logoSize, height: _logoSize),
+      child: Assets.img.logo512.image(width: kLogoSize, height: kLogoSize),
     );
 
     final logo = ColorFiltered(
       colorFilter: ColorFilter.mode(
-        Theme.of(context).colorScheme.primary,
+        color ?? Theme.of(context).colorScheme.primary,
         BlendMode.srcATop,
       ),
       child: Stack(
@@ -102,8 +114,7 @@ class _AnnulusClipper extends CustomClipper<Path> {
   }
 
   @override
-  bool shouldReclip(_AnnulusClipper oldClipper) =>
-      oldClipper.innerRatio != innerRatio;
+  bool shouldReclip(_AnnulusClipper oldClipper) => oldClipper.innerRatio != innerRatio;
 }
 
 /// Only the centred circle: the bubble with the ring removed.
@@ -115,16 +126,14 @@ class _DiscClipper extends CustomClipper<Path> {
   @override
   Path getClip(Size size) {
     final rect = Offset.zero & size;
-    return Path()
-      ..addOval(
-        Rect.fromCircle(
-          center: rect.center,
-          radius: size.shortestSide * radiusRatio,
-        ),
-      );
+    return Path()..addOval(
+      Rect.fromCircle(
+        center: rect.center,
+        radius: size.shortestSide * radiusRatio,
+      ),
+    );
   }
 
   @override
-  bool shouldReclip(_DiscClipper oldClipper) =>
-      oldClipper.radiusRatio != radiusRatio;
+  bool shouldReclip(_DiscClipper oldClipper) => oldClipper.radiusRatio != radiusRatio;
 }

@@ -24,6 +24,7 @@
 | 会话持久化 / 迁移 | `app/lib/provider/persistence_provider.dart`（`ls_conversations`）→ `app/lib/util/shared_preferences/settings_migration.dart`（改名迁移） | — | `flutter test test/unit/util/shared_preferences/` |
 | 侧边栏 / Tab 顺序 | `app/lib/pages/home_page.dart` → `app/lib/pages/home_page_controller.dart` | — | `flutter analyze` |
 | 主题色 / 气泡配色 | `app/lib/config/theme.dart` → `app/lib/widget/chat/message_bubble.dart` | — | 见 [不变量](invariants.md#ui) |
+| 启动白屏 / 启动动画 | `app/lib/main.dart`（`_BootstrapApp`：首帧 → `preInit` → 交叉淡出）→ `app/lib/widget/startup_splash.dart` → `app/lib/widget/local_chat_logo.dart` | — | 手动：冷启动应直接看到蓝底白 logo 转圈，中间不再有白屏；网络差时手动延长 `_minSplashDuration` 复看 |
 | Windows 标题栏颜色不跟主题 | `app/lib/util/native/title_bar_theme.dart`（`TitleBarTheme`，挂在 `MaterialApp.builder`）→ `app/windows/runner/title_bar_ext.cpp`（`DwmSetWindowAttribute`） | — | `flutter test test/unit/util/title_bar_theme_test.dart`；手动：系统开深色、App 切浅色，标题栏应变浅 |
 | 改自己的设备名称（接收页铅笔图标） | `app/lib/pages/tabs/receive_tab.dart`（`_editAlias`）→ `app/lib/widget/dialogs/device_name_dialog.dart` → `settingsProvider.setAlias` + `serverProvider.restartServerFromSettings` | [discovery](modules/discovery.md#改名的生效链) | 手动：接收页名字右边铅笔 → 改名 → 保存后名字应立刻变，设置页「设备名称」同步为同一个值 |
 | 界面文案 | `app/assets/i18n/en.json` + `zh-CN.json` → `fvm dart run slang` | — | `flutter analyze` |
@@ -69,11 +70,12 @@
 | `app/lib/util/conversation/conversation_recorder.dart` | 文件头注释即 fork 说明 |
 | `app/lib/pages/conversation_page.dart` | 顶部说明；聊天页背景 / 输入栏取 `ChatPalette`；气泡菜单（复制 / 取消传输 / 打开文件所在位置 / 删除该条记录）与移动端长按入口；`device` 参数 + `_draftConversation()`：从发送页发起会话时的草稿会话 |
 | `app/lib/widget/chat/delete_record_dialog.dart` | 整个文件为 fork 新增（删单条记录前的确认卡片，按文本 / 收到文件 / 发出文件分文案） |
+| `app/lib/widget/startup_splash.dart` | 整个文件为 fork 新增（启动动画：品牌蓝底 + 白色 logo 转圈，直接复用 `LocalChatLogo`，只改颜色与转速） |
 | `app/lib/config/theme.dart` | `kSeedColor`（Local Chat 种子色 `#1E90FF`，上游是 `Colors.teal`）、`extensions: [chatPaletteFor(...)]`：把聊天配色挂进 ThemeData |
 | `app/lib/config/chat_palette.dart` | 整个文件为 fork 新增（聊天页配色 `ChatPalette`，Local Chat + 浅色 → `#EBEBEB` 底 / `#FFFFFF` 对方气泡） |
 | `app/lib/widget/chat/message_bubble.dart` | 固定气泡色常量；对方气泡取 `ChatPalette.incomingBubble` |
 | `app/lib/widget/chat/top_toast.dart` | 顶部 Toast 说明 |
-| `app/lib/main.dart` | `MaterialApp.builder` 挂 `TitleBarTheme`：主题变化时把颜色推给 Windows 标题栏 |
+| `app/lib/main.dart` | `_BootstrapApp`：先画启动画面、首帧之后才跑 `preInit`（原来 `preInit` 在 `runApp` 之前，等待期间屏幕是原生白底）；`MaterialApp.builder` 挂 `TitleBarTheme`：主题变化时把颜色推给 Windows 标题栏 |
 | `app/lib/widget/chat/file_message_card.dart` | 发出方向前景色 |
 | `app/lib/pages/conversations_page.dart` | `_NotificationsOffBanner`：通知不可用时的提示条；标题改用 `PeerTitleText`，仅在重名时带指纹短码 |
 | `app/lib/util/conversation/peer_label.dart` | 整个文件为 fork 新增（重名消歧：指纹短码与名字分布统计） |
@@ -112,6 +114,7 @@ app/lib/widget/chat/message_bubble.dart               374 行
 app/lib/widget/chat/file_message_card.dart            198 行
 app/lib/widget/chat/top_toast.dart                    168 行
 app/lib/util/native/title_bar_theme.dart              117 行（标题栏跟随 App 主题，含 120ms debounce）
+app/lib/widget/startup_splash.dart                     44 行（蓝底白 logo 的启动动画，复用 LocalChatLogo）
 app/lib/widget/chat/drop_confirm_dialog.dart          128 行
 app/windows/runner/clipboard_image_win.cpp            217 行（纯 Win32/WIC，可单独编译验证）
 app/windows/runner/clipboard_files_win.cpp            74 行（CF_HDROP → 路径，shellapi）
@@ -126,4 +129,4 @@ app/test/unit/config/chat_palette_test.dart            41 行（3 用例，锁�
 app/test/unit/util/title_bar_theme_test.dart           44 行（3 用例：浅色 / 深色 / OLED 纯黑底的颜色映射）
 ```
 
-合计约 1,786 行新代码 + 上游文件内约 250 行钩子；相对 `v1.18.2` 全量为 28 文件、+2,763 / −101（含生成物）。
+合计约 1,830 行新代码 + 上游文件内约 340 行钩子；相对 `v1.18.2` 全量为 28 文件、+2,763 / −101（含生成物）。

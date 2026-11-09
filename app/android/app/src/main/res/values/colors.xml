@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- [FORK] 启动窗口底色。
+         必须与 app/lib/widget/startup_splash.dart 里的 StartupSplash.background
+         保持一致（同一个品牌蓝 #1E90FF），否则冷启动会先闪一种蓝、再跳到另一种。
+         这是 Flutter 画出第一帧之前唯一能显示的东西，改主题深浅色不影响它。 -->
+    <color name="launch_background">#1E90FF</color>
+</resources>
