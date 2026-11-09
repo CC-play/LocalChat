@@ -3,13 +3,17 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:localchat_app/gen/strings.g.dart';
 import 'package:localchat_app/model/conversation/conversation.dart';
+import 'package:localchat_app/model/cross_file.dart';
 import 'package:localchat_app/pages/conversation_page.dart';
 import 'package:localchat_app/provider/conversation_provider.dart';
+import 'package:localchat_app/provider/selection/selected_sending_files_provider.dart';
+import 'package:localchat_app/util/conversation/conversation_sender.dart';
 import 'package:localchat_app/util/conversation/peer_label.dart';
 import 'package:localchat_app/util/native/chat_notification.dart';
 import 'package:localchat_app/util/ui/avatar_color.dart';
 import 'package:localchat_app/widget/chat/peer_avatar.dart';
 import 'package:localchat_app/widget/chat/peer_title.dart';
+import 'package:localchat_isolates/util/file_size_helper.dart';
 import 'package:refena_flutter/refena_flutter.dart';
 import 'package:routerino/routerino.dart';
 
@@ -20,6 +24,9 @@ class ConversationsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final conversations = context.watch(conversationProvider);
+    // [FORK] 分享进来的待发文件：非空时列表顶部出现横幅，点会话改为「确认后发送」。
+    // 数据源与「发送」Tab 共用——用户切到发送页时原有选设备流程照常可用。
+    final pendingFiles = context.watch(selectedSendingFilesProvider);
 
     return Scaffold(
       // 这里不用 basicLocalChatAppbar：列表页需要 actions，而该 helper 目前只接受标题。
@@ -54,13 +61,14 @@ class ConversationsPage extends StatelessWidget {
           // [FORK] 通知被关时用户根本察觉不到 —— 对方发了消息，他这边一片安静。
           // vivo / 小米这类 ROM 默认就把第三方通知关掉了，所以值得占一条横幅。
           const _NotificationsOffBanner(),
-          Expanded(child: _buildList(context, conversations)),
+          if (pendingFiles.isNotEmpty) _ShareFilesBanner(files: pendingFiles),
+          Expanded(child: _buildList(context, conversations, pendingFiles)),
         ],
       ),
     );
   }
 
-  Widget _buildList(BuildContext context, List<Conversation> conversations) {
+  Widget _buildList(BuildContext context, List<Conversation> conversations, List<CrossFile> pendingFiles) {
     if (conversations.isEmpty) {
       return Center(
         child: Column(
@@ -91,6 +99,8 @@ class ConversationsPage extends StatelessWidget {
           conversation: conversation,
           // 同名才加指纹短码，否则标题保持原样。
           ambiguous: peerNameCollides(conversation, nameCounts),
+          // [FORK] 有待分享文件时，点会话先弹「发送给 X？」确认框，不再直接进入。
+          pendingFiles: pendingFiles,
         );
       },
     );
@@ -189,15 +199,76 @@ class _NotificationsOffBannerState extends State<_NotificationsOffBanner> {
   }
 }
 
+/// [FORK] 「待分享」横幅：其它 App 分享进来的文件落在会话页顶部。
+///
+/// 显示文件数量与总大小；点右侧关闭 = 放弃这次分享（清待发列表，
+/// 不清缓存目录）。发送动作由点按列表里的会话触发（见 _ConversationTile._open）。
+class _ShareFilesBanner extends StatelessWidget {
+  final List<CrossFile> files;
+
+  const _ShareFilesBanner({required this.files});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final foreground = theme.colorScheme.onSurfaceVariant;
+
+    return Container(
+      color: theme.colorScheme.surfaceContainerHighest,
+      padding: const EdgeInsets.fromLTRB(16, 8, 4, 8),
+      child: Row(
+        children: [
+          Icon(Icons.share_outlined, size: 20, color: foreground),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  t.conversation.sharePending(count: files.length, size: _totalSizeOf(files)),
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: foreground),
+                ),
+                Text(
+                  t.conversation.sharePendingHint,
+                  style: TextStyle(fontSize: 11, color: foreground.withValues(alpha: 0.75)),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close, size: 18),
+            tooltip: t.general.cancel,
+            // 放弃分享：只清待发列表，不动缓存（文件可能正被别的流程引用）。
+            onPressed: () => context.ref.redux(selectedSendingFilesProvider).dispatch(ConsumeSelectionAction()),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _totalSizeOf(List<CrossFile> files) {
+  var total = 0;
+  for (final f in files) {
+    total += f.size;
+  }
+  return total.asReadableFileSize;
+}
+
 class _ConversationTile extends StatelessWidget {
   final Conversation conversation;
 
   /// [FORK] 是否与列表里其它会话同名 —— 同名时标题后追加指纹短码。
   final bool ambiguous;
 
+  /// [FORK] 待分享的文件。非空时点按本会话会先弹「发送给 X？」确认框。
+  final List<CrossFile> pendingFiles;
+
   const _ConversationTile({
     required this.conversation,
     this.ambiguous = false,
+    this.pendingFiles = const [],
   });
 
   @override
@@ -207,7 +278,7 @@ class _ConversationTile extends StatelessWidget {
     final unread = conversation.unreadCount;
 
     return ListTile(
-      onTap: () => context.push(() => ConversationPage(peerFingerprint: conversation.peerFingerprint)),
+      onTap: () => unawaited(_open(context)),
       onLongPress: () => _confirmDelete(context),
       // [FORK] 未读数挂在头像右上角：44 的方框比头像大一圈，徽标锚 right/top，
       // 正好压在圆角方块的右上角外侧，不与标题行抢位置。
@@ -259,17 +330,67 @@ class _ConversationTile extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: TextStyle(fontSize: 12, color: theme.colorScheme.outline),
       ),
-      trailing: last != null && last.status == ChatMessageStatus.failed
-          ? Icon(Icons.error_outline, size: 16, color: theme.colorScheme.error)
-          : null,
+      trailing: last != null && last.status == ChatMessageStatus.failed ? Icon(Icons.error_outline, size: 16, color: theme.colorScheme.error) : null,
     );
   }
 
   String _previewOf(ChatMessage message) {
-    final body = message.preview ??
-        (message.kind == ChatMessageKind.text ? t.conversation.messagePlaceholder : t.conversation.filePlaceholder);
+    final body = message.preview ?? (message.kind == ChatMessageKind.text ? t.conversation.messagePlaceholder : t.conversation.filePlaceholder);
     final prefix = message.isOutgoing ? t.conversation.youPrefix : '';
     return '$prefix$body';
+  }
+
+  /// 点按会话：有待分享文件时先确认再发送，否则照常进入会话页。
+  Future<void> _open(BuildContext context) async {
+    if (pendingFiles.isEmpty) {
+      await context.push(() => ConversationPage(peerFingerprint: conversation.peerFingerprint));
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(t.conversation.sendToTitle(name: peerLabel(conversation, ambiguous: ambiguous))),
+        content: Text(t.conversation.sendToContent(count: pendingFiles.length, size: _totalSizeOf(pendingFiles))),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: Text(t.general.cancel)),
+          TextButton(onPressed: () => Navigator.pop(dialogContext, true), child: Text(t.sendTab.title)),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) {
+      return;
+    }
+
+    // 地址解析失败（会话既不在当前局域网、也没记录过 IP）只能放弃，
+    // 待分享列表原样保留，用户还能换别的会话或去「发送」页。
+    final target = resolveConversationTarget(context.ref, conversation);
+    if (target == null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.conversation.sendToNoAddress)));
+      }
+      return;
+    }
+
+    // 先消费掉待分享列表（见 ConsumeSelectionAction 的注释：不能走
+    // ClearSelectionAction，那会把缓存目录里正在上传的源文件删掉），
+    // 然后立刻进会话页看「发送中」气泡，投递全程在后台跑。
+    context.ref.redux(selectedSendingFilesProvider).dispatch(ConsumeSelectionAction());
+    final ref = context.ref;
+    unawaited(
+      deliverFilesInBackground(
+        ref: ref,
+        target: target,
+        files: pendingFiles,
+        onFailure: (message) {
+          // 失败原因已写进气泡；这里只负责用户退回列表时补一条可见的提示。
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+          }
+        },
+      ),
+    );
+    await context.push(() => ConversationPage(peerFingerprint: conversation.peerFingerprint));
   }
 
   static String _formatTime(DateTime time) {

@@ -87,6 +87,8 @@
 | 启动画面（`widget/startup_splash.dart`）必须复用 `LocalChatLogo` + `color: Colors.white`，不要另画一套图形 | 两处图形一旦分叉，启动动画和接收页的 logo 对不上，切换时看得出跳变 |
 | 启动画面底色 `StartupSplash.background` 与 Android `values/colors.xml` 的 `launch_background` 必须同为 `#1E90FF` | 两处不同步时，冷启动会先闪一种蓝、再跳到另一种蓝 |
 | `preInit` 必须在**首帧之后**执行（`_BootstrapAppState` 的 postFrameCallback），不要挪回 `runApp` 之前 | 桌面端的窗口是在 `preInit` 的 `showFromTray` 里才显示的，但它同时包着 Rust 初始化 + 读设置；跑在 `runApp` 之前意味着这整段时间 Flutter 一帧没画，屏幕上是原生底色——就是「启动一片白」 |
+| 系统分享落地后 Tab 切「会话」不切「发送」，文件留在 `selectedSendingFilesProvider` | 会话列表与发送页共享同一份待发列表，用户两条路（点会话确认发送 / 切发送页选设备）都可用；切走 Tab 会丢掉一条 |
+| 消费待分享列表只能用 `ConsumeSelectionAction`，禁止 `ClearSelectionAction` | 分享文件全躺在缓存目录里，`ClearSelectionAction` 的 after() 清空整个缓存目录，会把正在上传的源文件删掉 |
 
 ## 为什么不做符号索引
 

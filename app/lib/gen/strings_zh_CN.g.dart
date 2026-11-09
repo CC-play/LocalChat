@@ -466,6 +466,16 @@ class Translations$conversation$zh_CN extends Translations$conversation$en {
   String deleteSelectedPendingHint({required Object count}) => '其中 ${count} 条还在发送中，删除会先取消传输。';
   @override
   String deleteSelectedMore({required Object count}) => '…等 ${count} 条';
+  @override
+  String sharePending({required Object count, required Object size}) => '待分享 ${count} 个文件 · 共 ${size}';
+  @override
+  String get sharePendingHint => '点按一个会话直接发送，或切到「发送」标签页自选设备';
+  @override
+  String sendToTitle({required Object name}) => '发送给 ${name}？';
+  @override
+  String sendToContent({required Object count, required Object size}) => '将向该设备发送 ${count} 个文件（共 ${size}）。';
+  @override
+  String get sendToNoAddress => '该会话没有可用的设备地址，无法发送。';
 }
 
 // Path: receiveHistoryPage

@@ -580,6 +580,21 @@ class Translations$conversation$en {
 
   /// en: '…and {count} more'
   String deleteSelectedMore({required Object count}) => '…and ${count} more';
+
+  /// en: 'Share pending: {count} files, {size}'
+  String sharePending({required Object count, required Object size}) => 'Share pending: ${count} files, ${size}';
+
+  /// en: 'Tap a conversation to send, or switch to the Send tab to pick a device'
+  String get sharePendingHint => 'Tap a conversation to send, or switch to the Send tab to pick a device';
+
+  /// en: 'Send to {name}?'
+  String sendToTitle({required Object name}) => 'Send to ${name}?';
+
+  /// en: '{count} files ({size}) will be sent to this device.'
+  String sendToContent({required Object count, required Object size}) => '${count} files (${size}) will be sent to this device.';
+
+  /// en: 'This conversation has no reachable device address.'
+  String get sendToNoAddress => 'This conversation has no reachable device address.';
 }
 
 // Path: receiveHistoryPage

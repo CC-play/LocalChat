@@ -34,7 +34,7 @@
 | `app/lib/util/conversation/conversation_sender.dart` | 发送侧：`resolveConversationTarget` / `sendTextMessage` / `pickConversationFiles` + `deliverFiles`（含 2 分钟离线重试） |
 | `app/lib/util/conversation/send_failure.dart` | 失败原因（18 类）+ 三档分类器 + 文案，见「失败原因分类」 |
 | `app/lib/provider/conversation/chat_transfer_provider.dart` | 上传进度与**发送阶段**旁路（每条消息一个 `ValueNotifier`） |
-| `app/lib/pages/conversations_page.dart` | 列表 + 空态 + 全清 + 长按删除 |
+| `app/lib/pages/conversations_page.dart` | 列表 + 空态 + 全清 + 长按删除 + 待分享横幅（点会话确认后发送，见「系统分享落进会话」） |
 | `app/lib/pages/conversation_page.dart` | 详情 + 底部输入栏（[附件][输入][发送]）+ 文字选区/右键「复制」菜单 + Ctrl+V 粘贴（文件 / 图片 / 文本）+ 气泡多选删除 |
 | `app/lib/util/conversation/clipboard_image.dart` | 剪贴板文件与图片读取（原生通道）+ 落缓存目录 + 文件名消毒 |
 | `app/lib/util/conversation/chat_presence.dart` | 只记「App 是否在前台」，决定收到消息要不要弹通知 |
@@ -440,6 +440,16 @@ Windows 资源管理器 `/select` 选中该文件，macOS 访达、Linux 文件�
 - 落下后先 `CrossFileConverters.convertXFile` 拿到 name/size，再弹 `showDropConfirmDialog`（`widget/chat/drop_confirm_dialog.dart`）：数量 + 合计大小 + 文件清单；取消＝红字红框，确认＝蓝底白字（复用 `kOutgoingBubbleColor`）。
 - 确认后走 `deliverFilesInBackground`，与回形针**同一条**投递路径（2 分钟重试、预置「发送中」气泡、失败才提示）。
 - 目录不展开（可能是整个盘），只提示跳过；拖拽悬停时整页盖一层 `_DropOverlay` 提示「松手即发」。
+
+## 系统分享落进会话（Android share intent）
+
+其它 App「分享 → 选中本应用」后的落点。`_HandleShareIntentAction`（`config/init.dart`）把文件加进 `selectedSendingFilesProvider` 后，**Tab 切到「会话」而不是「发送」**，列表顶部出现 `_ShareFilesBanner`（数量 + 总大小 + 关闭按钮）。此时点任意会话 → `showDialog` 确认「发送给 X？」→ 确认后 `ConsumeSelectionAction` + `deliverFilesInBackground` + 进入会话页看进度。
+
+三个刻意的设计：
+
+- **文件继续留在 `selectedSendingFilesProvider`**（横幅也从它读）：用户不愿意在会话列表里选时，切到「发送」Tab，原有「选设备 → startSession」流程原样可用，两条路共享同一份待发列表。
+- **消费列表用 `ConsumeSelectionAction`，绝不用 `ClearSelectionAction`**。分享文件全在缓存目录里（`share_handler` 把共享内容拷成真实路径），`ClearSelectionAction` 的 after() 会清空整个缓存目录，把还在上传的源文件删掉。`Consume` 只清列表，缓存留给下次启动的 `ClearCacheAction` 兜底。
+- **确认后才解析目标地址**：`resolveConversationTarget` 返回 null（会话不在当前局域网也没记录过 IP）时保留待分享列表，用户可换会话或去发送页。
 
 ## 粘贴（Ctrl+V）：文件 / 图片 / 文本
 

@@ -335,7 +335,11 @@ class _HandleShareIntentAction extends AsyncGlobalAction {
           ),
         );
 
-    ref.redux(homePageControllerProvider).dispatch(ChangeTabAction(HomeTab.send));
+    // [FORK] 分享落地后落在「会话」Tab 而不是「发送」Tab：列表顶部会出现
+    // 待分享横幅（数量 + 总大小），点一个会话即弹确认框发送。
+    // 文件本身仍留在 selectedSendingFilesProvider——用户切到「发送」Tab
+    // 的话，原有「选设备发送」的流程照常可用。
+    ref.redux(homePageControllerProvider).dispatch(ChangeTabAction(HomeTab.conversations));
   }
 }
 

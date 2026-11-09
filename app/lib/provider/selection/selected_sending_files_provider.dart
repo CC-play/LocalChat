@@ -366,3 +366,17 @@ class ClearSelectionAction extends ReduxAction<SelectedSendingFilesNotifier, Lis
     global.dispatchAsync(ClearCacheAction()); // ignore: discarded_futures
   }
 }
+
+/// [FORK] 清空选中列表，但**不动缓存目录**。
+///
+/// 会话页「分享给设备」的确认流程用它。分享进来的文件全部躺在缓存目录里
+/// （share_handler 把共享内容拷成真实文件路径），而 [ClearSelectionAction]
+/// 的 after() 会整目录清缓存——把还在上传的源文件直接删掉，传输必失败。
+/// 这里只清列表；缓存文件留给下次 App 启动时的 [ClearCacheAction] 兜底
+/// （postInit 里「没收到分享就清缓存」的那条原有逻辑）。
+class ConsumeSelectionAction extends ReduxAction<SelectedSendingFilesNotifier, List<CrossFile>> {
+  @override
+  List<CrossFile> reduce() {
+    return const [];
+  }
+}

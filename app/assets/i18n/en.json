@@ -266,7 +266,12 @@
     "deleteSelectedContent": "They are only removed from the chat history on this device. The other side is not affected. This cannot be undone.",
     "deleteSelectedFileHint": "{count} of them are received files; the matching entries in the receive history will be deleted too. Files already saved on disk are not affected.",
     "deleteSelectedPendingHint": "{count} of them are still being sent. Deleting them will cancel the transfer first.",
-    "deleteSelectedMore": "…and {count} more"
+    "deleteSelectedMore": "…and {count} more",
+    "sharePending": "Share pending: {count} files, {size}",
+    "sharePendingHint": "Tap a conversation to send, or switch to the Send tab to pick a device",
+    "sendToTitle": "Send to {name}?",
+    "sendToContent": "{count} files ({size}) will be sent to this device.",
+    "sendToNoAddress": "This conversation has no reachable device address."
   },
   "receiveHistoryPage": {
     "title": "History",

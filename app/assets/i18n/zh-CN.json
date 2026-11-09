@@ -266,7 +266,12 @@
     "deleteSelectedContent": "只会从本机聊天记录里移除，对方那里不受影响。此操作不可撤销。",
     "deleteSelectedFileHint": "其中 {count} 条是收到的文件，接收历史里对应的条目也会一并删除。磁盘上的文件不受影响。",
     "deleteSelectedPendingHint": "其中 {count} 条还在发送中，删除会先取消传输。",
-    "deleteSelectedMore": "…等 {count} 条"
+    "deleteSelectedMore": "…等 {count} 条",
+    "sharePending": "待分享 {count} 个文件 · 共 {size}",
+    "sharePendingHint": "点按一个会话直接发送，或切到「发送」标签页自选设备",
+    "sendToTitle": "发送给 {name}？",
+    "sendToContent": "将向该设备发送 {count} 个文件（共 {size}）。",
+    "sendToNoAddress": "该会话没有可用的设备地址，无法发送。"
   },
   "receiveHistoryPage": {
     "title": "历史",
