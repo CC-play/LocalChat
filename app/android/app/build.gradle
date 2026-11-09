@@ -41,7 +41,13 @@ android {
     }
 
     defaultConfig {
-        applicationId "org.localsend.localsend_app"
+        // [FORK] 和上游 LocalSend 的 org.localsend.localsend_app 分开。
+        // 除了能跟官方版共存，还规避了 vivo 按包名把通知栏图标替换成官方
+        // 青色环形 logo 的行为 —— 那条路径完全绕过 APK 里的图标资源，
+        // 换资源、改版本号、卸载重装都没用，只有换包名才认。
+        // 顺带：OriginOS 还会按包名缓存一张「通知栏用的图标位图」，改图标后
+        // 必须换一次 applicationId 才能让它重新读，所以这里是最终形态，别再动。
+        applicationId "com.localchat.app"
         // You can update the following values to match your application needs.
         // For more information, see: https://docs.flutter.dev/deployment/android#reviewing-the-build-configuration.
         minSdkVersion flutter.minSdkVersion

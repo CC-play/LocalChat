@@ -2,6 +2,7 @@ package org.localsend.localsend_app
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -9,10 +10,21 @@ import android.content.ClipboardManager
 import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.database.Cursor
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
+import android.graphics.RectF
+import android.graphics.drawable.Icon
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.os.Environment
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
@@ -53,6 +65,12 @@ private const val MAX_CLIPBOARD_FILE_BYTES = 256L * 1024 * 1024
 private const val CHAT_CHANNEL_ID = "localchat_messages"
 private const val EXTRA_CHAT_PEER = "localchat.chatPeer"
 
+/// [FORK][DEBUG] 自测通知外观用的 intent extra，只在 debug 构建里生效。
+private const val EXTRA_DEBUG_NOTIFY = "localchat.debugNotify"
+
+/// [FORK][DEBUG] 选哪条测试通道：A 系统资源 / B 位图 / C 本项目资源。
+private const val EXTRA_DEBUG_ICON = "localchat.debugIcon"
+
 /// 通知 id 从 1000 起：1 被前台服务占用，两者不能互相覆盖。
 private const val CHAT_NOTIFICATION_ID_BASE = 1000
 
@@ -88,14 +106,86 @@ class MainActivity : FlutterActivity() {
     private val pendingShareIntents = mutableListOf<Intent>()
     private var shareIntentReady = false
 
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        handleDebugNotifyIntent(intent)
+    }
+
     override fun onNewIntent(intent: Intent) {
         // [FORK] 点通知进来时 Activity 是 singleTask，不会重建，只能在这里接。
+        handleDebugNotifyIntent(intent)
         handleChatTapIntent(intent)
         if (!shareIntentReady && (intent.action == Intent.ACTION_SEND || intent.action == Intent.ACTION_SEND_MULTIPLE)) {
             pendingShareIntents.add(intent)
             return
         }
         super.onNewIntent(intent)
+    }
+
+    /// [FORK][DEBUG] 自测通知外观：`adb shell am start ... --es localchat.debugNotify 文本`。
+    /// 只用来快速看通知栏图标长什么样，不必真的从桌面端发消息。debug 构建之外直接返回。
+    ///
+    /// 一次发三条，用来分辨系统到底从哪里取那个图标：
+    /// A 用系统内置资源，B 用运行时画出来的位图，C 用本项目的 ic_stat_chat 资源。
+    /// 谁变了就说明那条通道是活的。
+    private fun handleDebugNotifyIntent(intent: Intent?) {
+        if ((applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) == 0) return
+        val text = intent?.getStringExtra(EXTRA_DEBUG_NOTIFY) ?: return
+        intent.removeExtra(EXTRA_DEBUG_NOTIFY)
+        ensureChatChannel(DEFAULT_CHAT_CHANNEL_NAME)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        listOf(999997, 999998, 999999).forEach { manager.cancel(it) }
+
+        // vivo 会把同一个 App 的通知折叠成一摞，看不到各自的图标，所以一次只发一条。
+        // 用 --es localchat.debugIcon A|B|C 指定要发哪条。
+        when (intent.getStringExtra(EXTRA_DEBUG_ICON) ?: "C") {
+            // A：系统内置资源，跟本项目毫无关系，作为对照组。
+            "A" -> postDebugNotification(999997, "A 系统资源", text, Icon.createWithResource(this, android.R.drawable.ic_dialog_alert))
+            // B：运行时画出来的位图，完全绕开资源 id 和主题替换。
+            "B" -> postDebugNotification(999998, "B 位图气泡", text, Icon.createWithBitmap(debugBubbleBitmap(144)))
+            // C：本项目资源，也就是现在通知里实际用的那个。
+            else -> postDebugNotification(999999, "C 资源气泡", text, Icon.createWithResource(this, R.drawable.ic_stat_chat))
+        }
+    }
+
+    /// [FORK][DEBUG] 用原生 Notification.Builder 发一条，才能直接把 Icon 对象塞进 smallIcon。
+    @androidx.annotation.RequiresApi(Build.VERSION_CODES.O)
+    private fun postDebugNotification(id: Int, title: String, text: String, icon: Icon) {
+        val builder = Notification.Builder(this, CHAT_CHANNEL_ID)
+        builder.setSmallIcon(icon)
+        builder.setContentTitle(title)
+        builder.setContentText(text)
+        builder.setShowWhen(true)
+        builder.setAutoCancel(true)
+        builder.setCategory(Notification.CATEGORY_MESSAGE)
+        (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).notify(id, builder.build())
+    }
+
+    /// [FORK][DEBUG] 画一张白色气泡位图，三个点用 CLEAR 挖成透明。
+    /// smallIcon 只关心 alpha，颜色会被系统重新着色。
+    private fun debugBubbleBitmap(size: Int): Bitmap {
+        val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bmp)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
+        val body = RectF(size * 0.08f, size * 0.20f, size * 0.92f, size * 0.70f)
+        canvas.drawRoundRect(body, size * 0.26f, size * 0.26f, paint)
+        val tail = Path().apply {
+            moveTo(size * 0.22f, size * 0.60f)
+            lineTo(size * 0.14f, size * 0.86f)
+            lineTo(size * 0.40f, size * 0.68f)
+            close()
+        }
+        canvas.drawPath(tail, paint)
+
+        paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
+        val dotR = size * 0.065f
+        listOf(0.35f, 0.50f, 0.65f).forEach { cx ->
+            canvas.drawCircle(size * cx, size * 0.45f, dotR, paint)
+        }
+        paint.xfermode = null
+        return bmp
     }
 
     /// [FORK] 把通知里的对端指纹交给 Dart；Dart 还没就绪就先攒着。
@@ -298,6 +388,10 @@ class MainActivity : FlutterActivity() {
 
         val notification = NotificationCompat.Builder(this, CHAT_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_chat)
+            // [FORK] 左侧槽位由 OriginOS 自己画，取的是它缓存的图标位图：
+            // setSmallIcon / setLargeIcon / 当前 App 图标都不参与，改资源、换版本号、
+            // 卸载重装、清 com.vivo.simpleiconthemeres 都刷不掉（全部实测）。
+            // 唯一有效的刷新方式是换 applicationId，系统才会当成新应用重新读图标。
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(style)
