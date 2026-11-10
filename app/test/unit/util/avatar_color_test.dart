@@ -138,14 +138,12 @@ void main() {
     });
   });
 
-  group('selfAvatarColors', () {
-    test('跟随主题的 primaryContainer，与色板明度档位对齐', () {
+  group('发送方头像走同一套取色规则', () {
+    test('本机指纹也能在色板里取到颜色（没有为「自己」单独留一条色路）', () {
+      const selfFingerprint = 'A1B2C3D4E5F6A7B8';
       for (final brightness in Brightness.values) {
-        final scheme = ColorScheme.fromSeed(seedColor: const Color(0xFF1E90FF), brightness: brightness);
-        final colors = selfAvatarColors(scheme);
-
-        expect(colors.background, scheme.primaryContainer);
-        expect(colors.foreground, scheme.onPrimaryContainer);
+        final colors = avatarColorsFor(selfFingerprint, brightness);
+        expect(_collect(brightness).keys, contains(colors.background));
         expect(_contrast(colors.background, colors.foreground), greaterThanOrEqualTo(4.5));
       }
     });

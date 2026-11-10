@@ -63,15 +63,6 @@ AvatarColors avatarColorsFor(String fingerprint, Brightness brightness) {
       : AvatarColors(background: swatch.lightBackground, foreground: swatch.lightForeground);
 }
 
-/// 自己（发出方向）的头像配色。
-///
-/// 故意不用色板：自己的身份是唯一的，跟主题色走更有「这是我」的感觉；
-/// 而 `primaryContainer` 在 M3 里正好也是 tone 90 / tone 30 的档位，
-/// 与色板的明度带天然对齐，放在一排里不会显得突兀。
-AvatarColors selfAvatarColors(ColorScheme scheme) {
-  return AvatarColors(background: scheme.primaryContainer, foreground: scheme.onPrimaryContainer);
-}
-
 /// 稳定的字符串哈希。
 ///
 /// 不用 `String.hashCode`：Dart 只保证它在单次运行内一致，不保证跨版本、

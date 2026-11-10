@@ -7,8 +7,11 @@ import 'package:localchat_app/util/ui/avatar_color.dart';
 /// 圆角比例、字重完全一致（此前列表是圆形、气泡是圆角方块，同一台设备
 /// 在两个页面长得不一样）。
 ///
-/// 颜色不在这里推导，由调用方用 [avatarColorsFor] / [selfAvatarColors] 算好传进来，
+/// 颜色不在这里推导，由调用方用 [avatarColorsFor] 算好传进来，
 /// 这样部件本身不依赖任何身份信息，也方便单独预览。
+///
+/// 发送方与接收方走同一条取色规则（本机指纹 / 对端指纹），所以「我」的头像
+/// 与别人看到的我是同一个颜色，不再用主题色单独标记。
 class PeerAvatar extends StatelessWidget {
   final String initial;
   final AvatarColors colors;

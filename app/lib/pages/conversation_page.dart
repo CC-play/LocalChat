@@ -13,7 +13,10 @@ import 'package:localchat_app/gen/strings.g.dart';
 import 'package:localchat_app/model/conversation/conversation.dart';
 import 'package:localchat_app/model/cross_file.dart';
 import 'package:localchat_app/provider/conversation_provider.dart';
+import 'package:localchat_app/provider/network/server/server_provider.dart';
 import 'package:localchat_app/provider/receive_history_provider.dart';
+import 'package:localchat_app/provider/security_provider.dart';
+import 'package:localchat_app/provider/settings_provider.dart';
 import 'package:localchat_app/util/conversation/clipboard_image.dart';
 import 'package:localchat_app/util/conversation/conversation_media_picker.dart';
 import 'package:localchat_app/util/conversation/conversation_sender.dart';
@@ -927,6 +930,17 @@ class _ConversationPageState extends State<ConversationPage> {
 
     final messages = conversation.messages;
     final initial = conversation.initial;
+    // [FORK] 自己的头像不做特殊处理：与对端同一套规则——本机指纹取色、
+    // 本机别名取首字符，也就是「别的设备看到我时画出来的那个头像」。
+    //
+    // 别名优先用服务端实际广播的那个（对端收到的就是它，改名未重启服务时
+    // 两边的显示才一致），服务没起来时退回设置里保存的值，避免画成占位符。
+    final selfFingerprint = context.ref.watch(securityProvider).certificateHash;
+    final selfAlias =
+        context.ref.watch(serverProvider.select((state) => state?.alias)) ??
+        context.ref.watch(settingsProvider.select((state) => state.alias)) ??
+        '';
+    final selfInitial = selfAlias.runes.isEmpty ? '?' : String.fromCharCode(selfAlias.runes.first);
     // [FORK] 草稿会话还不在列表里，判重名时要把它自己算进去，
     // 否则「和已有会话同名的设备」开新会话时标题分不清是谁。
     final nameCounts = peerNameCounts(stored == null ? [...conversations, conversation] : conversations);
@@ -980,6 +994,8 @@ class _ConversationPageState extends State<ConversationPage> {
                                   MessageBubble(
                                     message: msg,
                                     peerInitial: initial,
+                                    selfInitial: selfInitial,
+                                    selfFingerprint: selfFingerprint,
                                     peerFingerprint: conversation.peerFingerprint,
                                     // [FORK] 多选态：整行点击切换选中，其余入口全部让位。
                                     selectionMode: _selecting,

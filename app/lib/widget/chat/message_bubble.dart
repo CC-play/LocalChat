@@ -27,6 +27,17 @@ class MessageBubble extends StatelessWidget {
   /// 只用于取色，不参与任何网络请求或身份校验。
   final String peerFingerprint;
 
+  /// [FORK] 本机（发送方）的头像占位字符。
+  ///
+  /// 取本机别名的首字符——也就是对端收到我们的设备信息后画出来的那个字。
+  final String selfInitial;
+
+  /// [FORK] 本机指纹，用于推导发送方头像的配色。
+  ///
+  /// 与对端走同一条规则（`avatarColorsFor`），所以「我在这台机器上看到的自己」
+  /// 和别人看到的我是同一个颜色，不再用主题色做特殊标记。
+  final String selfFingerprint;
+
   final VoidCallback? onFileTap;
 
   /// [FORK] 右键（桌面）点击气泡时回调，参数是全局坐标，用于在该点弹出菜单。
@@ -69,6 +80,8 @@ class MessageBubble extends StatelessWidget {
     required this.message,
     required this.peerInitial,
     required this.peerFingerprint,
+    required this.selfInitial,
+    required this.selfFingerprint,
     this.onFileTap,
     this.onSecondaryTap,
     this.onLongPress,
@@ -109,11 +122,11 @@ class MessageBubble extends StatelessWidget {
       );
     }
 
-    // [FORK] 头像：对端按指纹从 16 色板取固定色，自己跟主题色走。
-    // 颜色由 peer_avatar.dart 统一绘制，与会话列表复用同一个部件。
+    // [FORK] 头像两边同一套规则：指纹取固定色 + 别名首字符。
+    // 自己不再画成「我」+ 主题色——那等于给自己开小灶，对端看到的我不是这样。
     final avatar = PeerAvatar(
-      initial: isOutgoing ? t.conversation.you : peerInitial,
-      colors: isOutgoing ? selfAvatarColors(theme.colorScheme) : avatarColorsFor(peerFingerprint, theme.brightness),
+      initial: isOutgoing ? selfInitial : peerInitial,
+      colors: avatarColorsFor(isOutgoing ? selfFingerprint : peerFingerprint, theme.brightness),
       size: 36,
     );
 
