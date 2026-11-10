@@ -304,11 +304,7 @@
     "description": [
       "El LocalChat és una aplicació gratuïta i de codi obert que us permet compartir fitxers i missatges de manera segura amb dispositius propers a la vostra xarxa local sense necessitat de connexió a Internet.",
       "Aquesta aplicació està disponible per a Android, iOS, macOS, Windows i Linux. Podeu trobar totes les opcions de baixada a la pàgina d'inici oficial."
-    ],
-    "author": "Autor",
-    "contributors": "Col·laboradors",
-    "packagers": "Empaquetadors",
-    "translators": "Traductors"
+    ]
   },
   "donationPage": {
     "title": "Donació",

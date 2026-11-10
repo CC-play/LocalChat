@@ -701,16 +701,22 @@ class Translations$aboutPage$zh_CN extends Translations$aboutPage$en {
   @override
   List<String> get description => [
     'LocalChat 是一款免费的开源应用程序，可让您通过本地网络与附近的设备安全地分享文件和信息，而无需互联网连接。',
-    '本程序可在 Android、iOS、macOS、Windows 和 Linux 上使用。您可以在官方主页找到所有下载选项。',
+    '本程序可在 Android、iOS、macOS、Windows 和 Linux 上使用。',
   ];
   @override
-  String get author => '作者';
+  String version({required Object version}) => '版本 ${version}';
   @override
-  String get contributors => '贡献者';
+  String get forkNotice => 'LocalChat 是基于 LocalSend 的二次开发：沿用 LocalSend 的传输内核，并在其上增加会话（聊天）界面。本项目与 LocalSend 官方无隶属关系。';
   @override
-  String get packagers => '打包者';
+  String upstreamCredit({required Object year}) => 'LocalSend © ${year} Tien Do Nam 及贡献者，以 Apache-2.0 许可发布。';
   @override
-  String get translators => '翻译者';
+  String get localsendRepo => 'LocalSend 的 GitHub 仓库';
+  @override
+  String get license => 'Apache-2.0 许可';
+  @override
+  String get licenseNotices => '开源许可声明';
+  @override
+  String get debugging => '调试';
 }
 
 // Path: donationPage
@@ -899,6 +905,8 @@ class Translations$dialogs$zh_CN extends Translations$dialogs$en {
   late final Translations$dialogs$sendModeHelp$zh_CN sendModeHelp = Translations$dialogs$sendModeHelp$zh_CN.internal(_root);
   @override
   late final Translations$dialogs$zoom$zh_CN zoom = Translations$dialogs$zoom$zh_CN.internal(_root);
+  @override
+  late final Translations$dialogs$donateQr$zh_CN donateQr = Translations$dialogs$donateQr$zh_CN.internal(_root);
 }
 
 // Path: sanitization
@@ -1239,7 +1247,7 @@ class Translations$settingsTab$other$zh_CN extends Translations$settingsTab$othe
 
   // Translations
   @override
-  String get title => '其他';
+  String get title => '其他信息';
   @override
   String get support => '支持 LocalSend';
   @override
@@ -1743,6 +1751,19 @@ class Translations$dialogs$zoom$zh_CN extends Translations$dialogs$zoom$en {
   // Translations
   @override
   String get title => 'URL';
+}
+
+// Path: dialogs.donateQr
+class Translations$dialogs$donateQr$zh_CN extends Translations$dialogs$donateQr$en {
+  Translations$dialogs$donateQr$zh_CN.internal(TranslationsZhCn root) : this._root = root, super.internal(root);
+
+  final TranslationsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '支持 LocalChat';
+  @override
+  String get content => '用微信扫码赞赏，金额随意。感谢你的支持。';
 }
 
 // Path: settingsTab.general.brightnessOptions

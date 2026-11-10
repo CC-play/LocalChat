@@ -523,14 +523,6 @@ class _Translations$aboutPage$hu extends Translations$aboutPage$en {
     'A LocalChat egy ingyenes, nyílt forráskódú alkalmazás, amely lehetővé teszi a fájlok és üzenetek biztonságos megosztását a közeli eszközökkel a helyi hálózaton keresztül, internet kapcsolat nélkül.',
     'Ez az alkalmazás Android, iOS, macOS, Windows és Linux rendszereken érhető el. Az összes letöltési lehetőséget megtalálja a hivatalos honlapon.',
   ];
-  @override
-  String get author => 'Szerző';
-  @override
-  String get contributors => 'Közreműködők';
-  @override
-  String get packagers => 'Csomagolók';
-  @override
-  String get translators => 'Fordítók';
 }
 
 // Path: donationPage

@@ -525,14 +525,6 @@ class _Translations$aboutPage$ta extends Translations$aboutPage$en {
     'LocalChat என்பது ஒரு இலவச, திறந்த மூல செயலி ஆகும், இது உங்களுக்கு உங்களின் உள்ளூர் நெட்வொர்க்கின் மூலம் அருகிலுள்ள சாதனங்களுடன் இணையம் தேவையின்றி பாதுகாப்பாக கோப்புகள் மற்றும் செய்திகளை பகிர அனுமதிக்கிறது.',
     'இந்த செயலி Android, iOS, macOS, Windows மற்றும் Linux-ல் கிடைக்கிறது. அனைத்து பதிவிறக்கம் விருப்பங்களையும் உத்தியோகபூர்வ இணையதளத்தில் காணலாம்.',
   ];
-  @override
-  String get author => 'ஆசிரியர்';
-  @override
-  String get contributors => 'பங்களிப்பாளர்கள்';
-  @override
-  String get packagers => 'பேக்கேஜர்கள்';
-  @override
-  String get translators => 'மொழிபெயர்ப்பாளர்கள்';
 }
 
 // Path: donationPage

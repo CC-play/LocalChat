@@ -523,14 +523,6 @@ class _Translations$aboutPage$id extends Translations$aboutPage$en {
     'LocalChat adalah aplikasi gratis dan bersumber terbuka yang memungkinkan Anda untuk membagikan berkas dan pesan secara aman dengan perangkat lain yang terhubung pada jaringan lokal tanpa memerlukan koneksi internet atau paket data.',
     'Aplikasi ini tersedia untuk platform Android, iOS, macOS, Windows, dan Linux. Semua pilihan pengunduhan dapat ditemukan di laman situs resmi kami.',
   ];
-  @override
-  String get author => 'Pembuat';
-  @override
-  String get contributors => 'Daftar Kontributor';
-  @override
-  String get packagers => 'Pengemas';
-  @override
-  String get translators => 'Daftar Penerjemah';
 }
 
 // Path: donationPage

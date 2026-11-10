@@ -523,14 +523,6 @@ class _Translations$aboutPage$es_ES extends Translations$aboutPage$en {
     'LocalChat es una aplicación libre, de código abierto, que te permite compartir archivos y mensajes de forma segura con dispositivos cercanos a través de tu red local sin necesidad de conexión a Internet.',
     'Está disponible para Android, iOS, macOS, Windows y Linux. Puedes encontrar todas las opciones de descarga en la página web oficial.',
   ];
-  @override
-  String get author => 'Autor';
-  @override
-  String get contributors => 'Colaboradores';
-  @override
-  String get packagers => 'Empaquetadores';
-  @override
-  String get translators => 'Traductores';
 }
 
 // Path: donationPage

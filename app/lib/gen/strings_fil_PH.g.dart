@@ -525,14 +525,6 @@ class _Translations$aboutPage$fil_PH extends Translations$aboutPage$en {
     'Ang LocalChat ay isang libre at open-source na app na nagbibigay-daan sa secure na pagbabahagi ng mga file at mga message sa mga kalapit na device sa iyong local network nang hindi nangangailangan ng koneksyon sa internet.',
     'Available ang app na ito sa Android, iOS, macOS, Windows, at Linux. Maaari mong mahanap ang lahat ng mga pagpipilian sa pag-download sa opisyal na homepage.',
   ];
-  @override
-  String get author => 'Author';
-  @override
-  String get contributors => 'Mga Contributor';
-  @override
-  String get packagers => 'Mga Packagers';
-  @override
-  String get translators => 'Mga Translator';
 }
 
 // Path: donationPage

@@ -304,11 +304,7 @@
     "description": [
       "LocalChat põhineb avatud lähtekoodil, on kõikide jaoks vaba ning tasuta kasutatav. Rakenduse eesmärgiks on võimaldada failide ja tekstide jagamist kohtvõrgus asuvate arvutite vahel nii, et välist internetiühendust pole vaja kasutada.",
       "See rakendus on saadaval Androidi, iOSi, macOSi, Windowsi ja Linuxi jaoks. Kõik allalaaditavad paigaldusfailid leiad meie ametlikust veebisaidist."
-    ],
-    "author": "Autor",
-    "contributors": "Kaasautorid",
-    "packagers": "Pakendajad",
-    "translators": "Tõlkijad"
+    ]
   },
   "donationPage": {
     "title": "Toeta meid rahaliselt",

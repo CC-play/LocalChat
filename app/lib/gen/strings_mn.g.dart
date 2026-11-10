@@ -523,14 +523,6 @@ class _Translations$aboutPage$mn extends Translations$aboutPage$en {
     'LocalChat нь үнэгүй, нээлттэй эхийн програм бөгөөд танд интернет холболт шаардлагагүйгээр өөрийн дотоод сүлжээгээр ойролцоох төхөөрөмжүүдтэй файл, мессежийг аюулгүйгээр хуваалцах боломтой.',
     'Энэ програмыг Android, iOS, macOS, Windows болон Linux дээр ашиглах боломжтой. Та албан ёсны веб сайтнаас татах боломжтой.',
   ];
-  @override
-  String get author => 'Эзэмшигч';
-  @override
-  String get contributors => 'Хамт тусалсан';
-  @override
-  String get packagers => 'Багцлагчид';
-  @override
-  String get translators => 'Орчуулагч нар';
 }
 
 // Path: donationPage

@@ -304,11 +304,7 @@
     "description": [
       "LocalChat — bu bepul, ochiq manbali ilova boʻlib, u internet ulanishisiz mahalliy tarmoq orqali yaqin atrofdagi qurilmalar bilan fayllar va xabarlarni xavfsiz ulashish imkonini beradi.",
       "Ushbu ilova Android, iOS, macOS, Windows va Linuxda mavjud. Barcha yuklab olish variantlarini rasmiy sahifada topishingiz mumkin."
-    ],
-    "author": "Muallif",
-    "contributors": "Hissa qoʻshuvchilar",
-    "packagers": "Paketlovchilar",
-    "translators": "Tarjimonlar"
+    ]
   },
   "donationPage": {
     "title": "Xayriya",

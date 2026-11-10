@@ -523,14 +523,6 @@ class _Translations$aboutPage$eu extends Translations$aboutPage$en {
     'LocalChat doako eta kode irekiko aplikazio bat da, gertuko gailuekin fitxategiak eta mezuak modu seguruan partekatzeko aukera ematen dizuna zure sare lokalaren bidez, interneteko konexiorik behar izan gabe.',
     'Aplikazio hau Android, iOS, macOS, Windows eta Linux sistemetan dago eskuragarri. Deskarga-aukera guztiak webgune ofizialean aurki ditzakezu.',
   ];
-  @override
-  String get author => 'Egilea';
-  @override
-  String get contributors => 'Laguntzaileak';
-  @override
-  String get packagers => 'Paketatzaileak';
-  @override
-  String get translators => 'Itzultzaileak';
 }
 
 // Path: donationPage

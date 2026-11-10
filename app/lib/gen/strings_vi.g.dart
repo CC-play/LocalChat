@@ -523,14 +523,6 @@ class _Translations$aboutPage$vi extends Translations$aboutPage$en {
     'LocalChat là một phần mềm miễn phí mã nguồn mở, giúp bạn chia sẻ tập tin cũng như tin nhắn đến các thiết bị phụ cận một cách bảo mật thông qua mạng nội bộ mà không cần kết nối mạng đến bên ngoài.',
     'Ứng dụng có trên Android, iOS, macOS, Windows và Linux. Bạn có thể tìm thấy các tuỳ chọn tải ở trang chủ.',
   ];
-  @override
-  String get author => 'Tác giả';
-  @override
-  String get contributors => 'Người đóng góp';
-  @override
-  String get packagers => 'Người đóng gói';
-  @override
-  String get translators => 'Người dịch';
 }
 
 // Path: donationPage

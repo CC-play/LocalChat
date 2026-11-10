@@ -525,14 +525,6 @@ class _Translations$aboutPage$bn extends Translations$aboutPage$en {
     'LocalChat হল একটি ফ্রী, ওপেন সোর্স অ্যাপ যা ইন্টারনেট ছাড়াই আপনার লোকাল নেটওয়ার্কের ডিভাইসগুলির সাথে ফাইল এবং মেসেজ নিরাপদে শেয়ার করতে দেয়৷',
     'এই অ্যাপটি Android, iOS, macOS, Windows এবং Linux-এ অ্যাভেলেবেল। আপনি অফিসিয়াল হোমপেজে সব ডাউনলোড অপশন খুঁজে পাবেন।',
   ];
-  @override
-  String get author => 'লেখক';
-  @override
-  String get contributors => 'অবদানকারী';
-  @override
-  String get packagers => 'প্যাকেজেস';
-  @override
-  String get translators => 'অনুবাদক';
 }
 
 // Path: donationPage

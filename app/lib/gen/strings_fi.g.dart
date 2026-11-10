@@ -525,14 +525,6 @@ class _Translations$aboutPage$fi extends Translations$aboutPage$en {
     'LocalChat on ilmainen, avoimen lähdekoodin sovellus, jonka avulla voit turvallisesti jakaa tiedostoja ja lähettää viestejä läheisten laitteiden kanssa paikallisessa verkossasi ilman internet-yhteyttä.',
     'LocalChat on saatavilla Androidille, iOS:lle, Linuxille, macOS:lle ja Windowsille. Kaikki latausvaihtoehdot löytyvät virallisilta kotisivuilta.',
   ];
-  @override
-  String get author => 'Tekijä';
-  @override
-  String get contributors => 'Avustajat';
-  @override
-  String get packagers => 'Pakkaajat';
-  @override
-  String get translators => 'Kääntäjät';
 }
 
 // Path: donationPage

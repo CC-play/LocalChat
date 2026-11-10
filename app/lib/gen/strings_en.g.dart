@@ -866,20 +866,30 @@ class Translations$aboutPage$en {
 
   List<String> get description => [
     'LocalChat is a free, open-source app that allows you to securely share files and messages with nearby devices over your local network without needing an internet connection.',
-    'This app is available on Android, iOS, macOS, Windows and Linux. You can find all download options on the official homepage.',
+    'This app is available on Android, iOS, macOS, Windows and Linux.',
   ];
 
-  /// en: 'Author'
-  String get author => 'Author';
+  /// en: 'Version {version}'
+  String version({required Object version}) => 'Version ${version}';
 
-  /// en: 'Contributors'
-  String get contributors => 'Contributors';
+  /// en: 'LocalChat is an unofficial fork of LocalSend. It reuses the LocalSend transfer core and adds a conversation (chat) UI on top. This project is not affiliated with the official LocalSend project.'
+  String get forkNotice =>
+      'LocalChat is an unofficial fork of LocalSend. It reuses the LocalSend transfer core and adds a conversation (chat) UI on top. This project is not affiliated with the official LocalSend project.';
 
-  /// en: 'Packagers'
-  String get packagers => 'Packagers';
+  /// en: 'LocalSend © {year} Tien Do Nam and contributors, released under the Apache-2.0 license.'
+  String upstreamCredit({required Object year}) => 'LocalSend © ${year} Tien Do Nam and contributors, released under the Apache-2.0 license.';
 
-  /// en: 'Translators'
-  String get translators => 'Translators';
+  /// en: 'LocalSend on GitHub'
+  String get localsendRepo => 'LocalSend on GitHub';
+
+  /// en: 'Apache-2.0 License'
+  String get license => 'Apache-2.0 License';
+
+  /// en: 'Open source licenses'
+  String get licenseNotices => 'Open source licenses';
+
+  /// en: 'Debugging'
+  String get debugging => 'Debugging';
 }
 
 // Path: donationPage
@@ -1051,6 +1061,7 @@ class Translations$dialogs$en {
   late final Translations$dialogs$pin$en pin = Translations$dialogs$pin$en.internal(_root);
   late final Translations$dialogs$sendModeHelp$en sendModeHelp = Translations$dialogs$sendModeHelp$en.internal(_root);
   late final Translations$dialogs$zoom$en zoom = Translations$dialogs$zoom$en.internal(_root);
+  late final Translations$dialogs$donateQr$en donateQr = Translations$dialogs$donateQr$en.internal(_root);
 }
 
 // Path: sanitization
@@ -1493,8 +1504,8 @@ class Translations$settingsTab$other$en {
 
   // Translations
 
-  /// en: 'Other'
-  String get title => 'Other';
+  /// en: 'Other information'
+  String get title => 'Other information';
 
   /// en: 'Support LocalSend'
   String get support => 'Support LocalSend';
@@ -2092,6 +2103,21 @@ class Translations$dialogs$zoom$en {
 
   /// en: 'URL'
   String get title => 'URL';
+}
+
+// Path: dialogs.donateQr
+class Translations$dialogs$donateQr$en {
+  Translations$dialogs$donateQr$en.internal(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+
+  /// en: 'Support LocalChat'
+  String get title => 'Support LocalChat';
+
+  /// en: 'Scan the code with WeChat to send any amount. Thank you for supporting development.'
+  String get content => 'Scan the code with WeChat to send any amount. Thank you for supporting development.';
 }
 
 // Path: settingsTab.general.brightnessOptions

@@ -155,7 +155,7 @@
       "multicastGroupWarning": "由于正在使用自定义多播地址，你可能不会被其他设备检测到。（默认地址：{defaultMulticast}）"
     },
     "other": {
-      "title": "其他",
+      "title": "其他信息",
       "support": "支持 LocalSend",
       "donate": "捐赠",
       "privacyPolicy": "隐私政策",
@@ -391,12 +391,15 @@
     "title": "关于 LocalChat",
     "description": [
       "LocalChat 是一款免费的开源应用程序，可让您通过本地网络与附近的设备安全地分享文件和信息，而无需互联网连接。",
-      "本程序可在 Android、iOS、macOS、Windows 和 Linux 上使用。您可以在官方主页找到所有下载选项。"
+      "本程序可在 Android、iOS、macOS、Windows 和 Linux 上使用。"
     ],
-    "author": "作者",
-    "contributors": "贡献者",
-    "packagers": "打包者",
-    "translators": "翻译者"
+    "version": "版本 {version}",
+    "forkNotice": "LocalChat 是基于 LocalSend 的二次开发：沿用 LocalSend 的传输内核，并在其上增加会话（聊天）界面。本项目与 LocalSend 官方无隶属关系。",
+    "upstreamCredit": "LocalSend © {year} Tien Do Nam 及贡献者，以 Apache-2.0 许可发布。",
+    "localsendRepo": "LocalSend 的 GitHub 仓库",
+    "license": "Apache-2.0 许可",
+    "licenseNotices": "开源许可声明",
+    "debugging": "调试"
   },
   "donationPage": {
     "title": "捐赠",
@@ -606,6 +609,10 @@
     },
     "zoom": {
       "title": "URL"
+    },
+    "donateQr": {
+      "title": "支持 LocalChat",
+      "content": "用微信扫码赞赏，金额随意。感谢你的支持。"
     }
   },
   "sanitization": {

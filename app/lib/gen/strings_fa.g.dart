@@ -525,14 +525,6 @@ class _Translations$aboutPage$fa extends Translations$aboutPage$en {
     'لوکال‌سند یک برنامه رایگان و متن‌باز است که به شما امکان می‌دهد فایل‌ها و پیام‌ها را به‌طور امن با دستگاه‌های اطراف از طریق شبکه محلی و بدون نیاز به اینترنت به اشتراک بگذارید.',
     'این برنامه برای سیستم‌عامل‌های اندروید، آی او اس، مک او اس، ویندوز و لینوکس در دسترس است. می‌توانید با مراجعه به وب‌سایت رسمی برنامه، تمامی روش‌های دانلود را مشاهده کنید.',
   ];
-  @override
-  String get author => 'توسعه‌دهنده';
-  @override
-  String get contributors => 'مشارکت کنندگان';
-  @override
-  String get packagers => 'بسته‌بندها';
-  @override
-  String get translators => 'مترجمان';
 }
 
 // Path: donationPage

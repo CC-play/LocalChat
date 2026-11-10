@@ -525,14 +525,6 @@ class _Translations$aboutPage$hy extends Translations$aboutPage$en {
     'LocalChat-ը անվճար, բաց կոդով ծրագիր է, որը թույլ է տալիս անվտանգ կերպով կիսվել ֆայլերով և նամակներով մոտակա սարքերի հետ ձեր տեղական ցանցի միջոցով՝ առանց ինտերնետ կապի անհրաժեշտության:',
     'Ծրագիրը հասանելի է Android, iOS, macOS, Windows և Linux օպերացիոն համակարգերում: Դուք կարող եք գտնել բոլոր ներբեռնման տարբերակները պաշտոնական գլխավոր էջում:',
   ];
-  @override
-  String get author => 'Հեղինակ';
-  @override
-  String get contributors => 'Աջակցողներ';
-  @override
-  String get packagers => 'Փաթեթավորողներ';
-  @override
-  String get translators => 'Թարգմանիչներ';
 }
 
 // Path: donationPage

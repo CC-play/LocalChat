@@ -523,13 +523,19 @@ class Translations$aboutPage$zh_TW extends Translations$aboutPage$en {
     '此應用程式可在 Android、iOS、macOS、Windows 和 Linux 上使用。 您可以在官網首頁上找到所有下載選項。',
   ];
   @override
-  String get author => '作者';
+  String version({required Object version}) => '版本 ${version}';
   @override
-  String get contributors => '貢獻者';
+  String get forkNotice => 'LocalChat 是基於 LocalSend 的二次開發：沿用 LocalSend 的傳輸核心，並在其上加入會話（聊天）介面。本專案與 LocalSend 官方無隸屬關係。';
   @override
-  String get packagers => '封裝人員';
+  String upstreamCredit({required Object year}) => 'LocalSend © ${year} Tien Do Nam 及貢獻者，以 Apache-2.0 授權釋出。';
   @override
-  String get translators => '翻譯人員';
+  String get localsendRepo => 'LocalSend 的 GitHub 儲存庫';
+  @override
+  String get license => 'Apache-2.0 授權';
+  @override
+  String get licenseNotices => '開源授權聲明';
+  @override
+  String get debugging => '偵錯';
 }
 
 // Path: donationPage
@@ -637,6 +643,8 @@ class Translations$dialogs$zh_TW extends Translations$dialogs$en {
   late final Translations$dialogs$sendModeHelp$zh_TW sendModeHelp = Translations$dialogs$sendModeHelp$zh_TW.internal(_root);
   @override
   late final Translations$dialogs$zoom$zh_TW zoom = Translations$dialogs$zoom$zh_TW.internal(_root);
+  @override
+  late final Translations$dialogs$donateQr$zh_TW donateQr = Translations$dialogs$donateQr$zh_TW.internal(_root);
 }
 
 // Path: sanitization
@@ -973,7 +981,7 @@ class Translations$settingsTab$other$zh_TW extends Translations$settingsTab$othe
 
   // Translations
   @override
-  String get title => '其他';
+  String get title => '其他資訊';
   @override
   String get support => '支持 LocalSend';
   @override
@@ -1477,6 +1485,19 @@ class Translations$dialogs$zoom$zh_TW extends Translations$dialogs$zoom$en {
   // Translations
   @override
   String get title => '網址';
+}
+
+// Path: dialogs.donateQr
+class Translations$dialogs$donateQr$zh_TW extends Translations$dialogs$donateQr$en {
+  Translations$dialogs$donateQr$zh_TW.internal(TranslationsZhTw root) : this._root = root, super.internal(root);
+
+  final TranslationsZhTw _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '支持 LocalChat';
+  @override
+  String get content => '用微信掃碼贊助，金額隨意。感謝你的支持。';
 }
 
 // Path: settingsTab.general.brightnessOptions

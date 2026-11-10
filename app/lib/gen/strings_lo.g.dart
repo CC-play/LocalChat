@@ -525,14 +525,6 @@ class _Translations$aboutPage$lo extends Translations$aboutPage$en {
     'LocalChat ເປັນແອັບຟຣີແບບໂອເພັນຊອດ ທີ່ໃຫ້ທ່ານແບ່ງປັນໄຟລ໌ ແລະ ຂໍ້ຄວາມກັບອຸປະກອນໃກ້ຄຽງຜ່ານເຄືອຂ່າຍທ້ອງຖິ່ນຂອງທ່ານໄດ້ຢ່າງປອດໄພ ໂດຍບໍ່ຈຳເປັນຕ້ອງມີການເຊື່ອມຕໍ່ອິນເຕີເນັດ.',
     'ແອັບນີ້ມີໃຫ້ໃຊ້ໃນ Android, iOS, macOS, Windows ແລະ Linux. ທ່ານສາມາດຊອກຫາທາງເລືອກການດາວໂຫຼດທັງໝົດໄດ້ຢູ່ໜ້າຫຼັກຢ່າງເປັນທາງການ.',
   ];
-  @override
-  String get author => 'ຜູ້ຂຽນ';
-  @override
-  String get contributors => 'ຜູ້ປະກອບສ່ວນ';
-  @override
-  String get packagers => 'ຜູ້ຈັດແພັກເກັດ';
-  @override
-  String get translators => 'ຜູ້ແປພາສາ';
 }
 
 // Path: donationPage

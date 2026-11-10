@@ -523,14 +523,6 @@ class _Translations$aboutPage$tr extends Translations$aboutPage$en {
     'LocalChat, internet bağlantısına ihtiyaç duymadan yerel ağınız üzerinden yakınınızdaki cihazlarla dosya ve mesajlarınızı güvenli bir şekilde paylaşmanıza olanak tanıyan özgür ve açık kaynaklı bir uygulamadır.',
     'Bu uygulama Android, iOS, macOS, Windows ve Linux\'ta mevcuttur. Tüm indirme seçeneklerini resmi ana sayfada bulabilirsiniz.',
   ];
-  @override
-  String get author => 'Yazar';
-  @override
-  String get contributors => 'Katkıda bulunanlar';
-  @override
-  String get packagers => 'Paketleyiciler';
-  @override
-  String get translators => 'Çevirmenler';
 }
 
 // Path: donationPage

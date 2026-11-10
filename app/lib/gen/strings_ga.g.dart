@@ -466,14 +466,6 @@ class _Translations$aboutPage$ga extends Translations$aboutPage$en {
     'Is aip foinse oscailte saor in aisce é LocalChat a ligeann duit comhaid agus teachtaireachtaí a roinnt go slán le gléasanna in aice láimhe thar do líonra áitiúil gan nasc idirlín a bheith ag teastáil.',
     'Tá an aip seo ar fáil ar Android, iOS, macOS, Windows agus Linux. Is féidir leat na roghanna íoslódála go léir a fháil ar an leathanach baile oifigiúil.',
   ];
-  @override
-  String get author => 'Údar';
-  @override
-  String get contributors => 'Rannpháirtithe';
-  @override
-  String get packagers => 'Pacálaithe';
-  @override
-  String get translators => 'Aistritheoirí';
 }
 
 // Path: donationPage

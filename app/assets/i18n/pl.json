@@ -304,11 +304,7 @@
     "description": [
       "LocalChat jest darmową, otwartoźródłową aplikacją, która pozwala na bezpieczne udostępnianie plików i wiadomości urządzeniom w pobliżu poprzez Twoją sieć lokalną, bez konieczności połączenia z internetem.",
       "Ta aplikacja jest dostępna na systemach Android, iOS, macOS, Windows i Linux. Możesz znaleźć wszystkie opcje pobierania na oficjalnej stronie głównej."
-    ],
-    "author": "Autor",
-    "contributors": "Współautorzy",
-    "packagers": "Pakujący",
-    "translators": "Tłumacze"
+    ]
   },
   "donationPage": {
     "title": "Przekaż darowiznę",

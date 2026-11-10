@@ -526,14 +526,6 @@ class _Translations$aboutPage$el extends Translations$aboutPage$en {
     'Το LocalChat είναι μια δωρεάν εφαρμογή ανοιχτού κώδικα που σας επιτρέπει να μοιράζεστε με ασφάλεια αρχεία και μηνύματα με κοντινές συσκευές μέσω του τοπικού σας δικτύου χωρίς να χρειάζεστε σύνδεση στο διαδίκτυο.',
     'Αυτή η εφαρμογή είναι διαθέσιμη σε Android, iOS, macOS, Windows και Linux. Μπορείτε να βρείτε όλες τις επιλογές λήψης στην επίσημη αρχική σελίδα.',
   ];
-  @override
-  String get author => 'Δημιουργός';
-  @override
-  String get contributors => 'Συντελεστές';
-  @override
-  String get packagers => 'Συσκευαστές';
-  @override
-  String get translators => 'Μεταφραστές';
 }
 
 // Path: donationPage

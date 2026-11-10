@@ -304,11 +304,7 @@
     "description": [
       "LocalChat internet bağlantısına ehtiyac olmadan lokal şəbəkə üzərindən yaxınlıqdakı cihazlarla faylları və mesajları təhlükəsiz paylaşmağa imkan verən pulsuz, açıq mənbəli proqramdır.",
       "Bu proqram Android, iOS, macOS, Windows və Linux sistemlərində mövcuddur. Bütün yükləmə variantlarını rəsmi saytda tapa bilərsiniz."
-    ],
-    "author": "Müəllif",
-    "contributors": "Töhfə verənlər",
-    "packagers": "Paketləyənlər",
-    "translators": "Tərcüməçilər"
+    ]
   },
   "donationPage": {
     "title": "İanə et",

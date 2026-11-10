@@ -152,7 +152,7 @@
       "multicastGroupWarning": "用自訂多播地址嘅話其他裝置有機會偵測唔到你。（預設：{defaultMulticast}）"
     },
     "other": {
-      "title": "其他",
+      "title": "其他資訊",
       "support": "支援 LocalSend",
       "donate": "捐款",
       "privacyPolicy": "私隱權政策",
@@ -306,10 +306,13 @@
       "LocalChat 係一款免費嘅開源應用程式，佢可以透過區域網絡幫你安全噉將檔案同訊息分享畀附近嘅裝置，全程無需互聯網連線。",
       "呢個 app 喺 Android、iOS、macOS、Windows 同 Linux 都用得㗎。你可以喺我哋嘅網站揾到呢個 app 所有平台嘅版本同其他下載方式。"
     ],
-    "author": "作者",
-    "contributors": "貢獻者",
-    "packagers": "封裝人員",
-    "translators": "翻譯人員"
+    "version": "版本 {version}",
+    "forkNotice": "LocalChat 是基於 LocalSend 的二次開發：沿用 LocalSend 的傳輸核心，並在其上加入會話（聊天）介面。本項目與 LocalSend 官方並無隸屬關係。",
+    "upstreamCredit": "LocalSend © {year} Tien Do Nam 及貢獻者，以 Apache-2.0 授權發佈。",
+    "localsendRepo": "LocalSend 的 GitHub 儲存庫",
+    "license": "Apache-2.0 授權",
+    "licenseNotices": "開源授權聲明",
+    "debugging": "偵錯"
   },
   "donationPage": {
     "title": "@:settingsTab.other.donate",
@@ -452,6 +455,10 @@
     },
     "zoom": {
       "title": "網址"
+    },
+    "donateQr": {
+      "title": "支持 LocalChat",
+      "content": "用微信掃碼贊助，金額隨意。感謝你的支持。"
     }
   },
   "sanitization": {

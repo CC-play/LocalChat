@@ -6,13 +6,10 @@ import 'package:localchat_app/config/theme.dart';
 import 'package:localchat_app/gen/strings.g.dart';
 import 'package:localchat_app/model/persistence/color_mode.dart';
 import 'package:localchat_app/pages/about/about_page.dart';
-import 'package:localchat_app/pages/changelog_page.dart';
-import 'package:localchat_app/pages/donation/donation_page.dart';
 import 'package:localchat_app/pages/settings/network_interfaces_page.dart';
 import 'package:localchat_app/pages/tabs/settings_tab_controller.dart';
 import 'package:localchat_app/provider/network/server/server_provider.dart';
 import 'package:localchat_app/provider/settings_provider.dart';
-import 'package:localchat_app/provider/version_provider.dart';
 import 'package:localchat_app/util/alias_generator.dart';
 import 'package:localchat_app/util/device_type_ext.dart';
 import 'package:localchat_app/util/i18n.dart';
@@ -21,6 +18,7 @@ import 'package:localchat_app/util/native/notification_sound.dart';
 import 'package:localchat_app/util/native/pick_directory_path.dart';
 import 'package:localchat_app/util/native/platform_check.dart';
 import 'package:localchat_app/widget/custom_dropdown_button.dart';
+import 'package:localchat_app/widget/dialogs/donation_qr_dialog.dart';
 import 'package:localchat_app/widget/dialogs/encryption_disabled_notice.dart';
 import 'package:localchat_app/widget/dialogs/pin_dialog.dart';
 import 'package:localchat_app/widget/dialogs/quick_save_from_favorites_notice.dart';
@@ -28,7 +26,6 @@ import 'package:localchat_app/widget/dialogs/quick_save_notice.dart';
 import 'package:localchat_app/widget/dialogs/text_field_tv.dart';
 import 'package:localchat_app/widget/dialogs/text_field_with_actions.dart';
 import 'package:localchat_app/widget/labeled_checkbox.dart';
-import 'package:localchat_app/widget/local_chat_logo.dart';
 import 'package:localchat_app/widget/responsive_list_view.dart';
 import 'package:localchat_isolates/constants.dart';
 import 'package:localchat_isolates/model/device.dart';
@@ -539,24 +536,22 @@ class SettingsTab extends StatelessWidget {
             _SettingsSection(
               title: t.settingsTab.other.title,
               padding: const EdgeInsets.only(bottom: 0),
+              rowBleed: _kLinkRowInset,
               children: [
-                _ButtonEntry(
+                _LinkEntry(
                   label: t.aboutPage.title,
-                  buttonLabel: t.general.open,
                   onTap: () async {
                     await context.push(() => const AboutPage());
                   },
                 ),
-                _ButtonEntry(
-                  label: t.settingsTab.other.support,
-                  buttonLabel: t.settingsTab.other.donate,
+                _LinkEntry(
+                  label: t.settingsTab.other.donate,
                   onTap: () async {
-                    await context.push(() => const DonationPage());
+                    await DonationQrDialog.open(context);
                   },
                 ),
-                _ButtonEntry(
+                _LinkEntry(
                   label: t.settingsTab.other.privacyPolicy,
-                  buttonLabel: t.general.open,
                   onTap: () async {
                     await launchUrl(
                       Uri.parse('https://localsend.org/privacy'),
@@ -565,9 +560,8 @@ class SettingsTab extends StatelessWidget {
                   },
                 ),
                 if (checkPlatform([TargetPlatform.iOS, TargetPlatform.macOS]))
-                  _ButtonEntry(
+                  _LinkEntry(
                     label: t.settingsTab.other.termsOfUse,
-                    buttonLabel: t.general.open,
                     onTap: () async {
                       await launchUrl(
                         Uri.parse('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/'),
@@ -591,34 +585,6 @@ class SettingsTab extends StatelessWidget {
                 ),
                 const SizedBox(width: 10),
               ],
-            ),
-            const SizedBox(height: 20),
-            const LocalChatLogo(withText: true),
-            const SizedBox(height: 5),
-            ref
-                .watch(versionProvider)
-                .maybeWhen(
-                  data: (version) => Text(
-                    'Version: ${version.combinedString}',
-                    textAlign: TextAlign.center,
-                  ),
-                  orElse: () => Container(),
-                ),
-            Text(
-              '© ${DateTime.now().year} Tien Do Nam',
-              textAlign: TextAlign.center,
-            ),
-            Center(
-              child: TextButton.icon(
-                style: TextButton.styleFrom(
-                  foregroundColor: Theme.of(context).colorScheme.onSurface,
-                ),
-                onPressed: () async {
-                  await context.push(() => const ChangelogPage());
-                },
-                icon: const Icon(Icons.history),
-                label: Text(t.changelogPage.title),
-              ),
             ),
             const SizedBox(height: 80),
           ],
@@ -735,15 +701,69 @@ class _ButtonEntry extends StatelessWidget {
   }
 }
 
+/// Horizontal inset of a link row's content inside its highlight pill.
+///
+/// The pill itself bleeds outwards by the same amount (see
+/// [_SettingsSection.rowBleed]) so that the label stays left-aligned with the
+/// section title while the highlight keeps some breathing room.
+const double _kLinkRowInset = 10;
+
+/// A specialized version of [_SettingsEntry].
+///
+/// Opens another page: label on the left, a chevron hinting navigation on the
+/// right. The whole row is tappable, not just a small button.
+class _LinkEntry extends StatelessWidget {
+  final String label;
+  final void Function() onTap;
+
+  const _LinkEntry({required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    // The row spacing must stay *outside* the InkWell: otherwise the hover
+    // highlight covers the 15px gap as well, and the label ends up visually
+    // 7.5px above the center of its own highlight.
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 15),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: theme.inputDecorationTheme.borderRadius,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 30),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: _kLinkRowInset),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(label),
+                ),
+                const SizedBox(width: 10),
+                Icon(Icons.chevron_right, size: 22, color: theme.colorScheme.onSurfaceVariant),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _SettingsSection extends StatelessWidget {
   final String title;
   final List<Widget> children;
   final EdgeInsets padding;
 
+  /// Outward bleed of the child rows' highlight pill. The card content box is
+  /// narrowed by the same amount and the title is inset by it, so that row
+  /// labels line up with the title while the pill gets extra width.
+  final double rowBleed;
+
   const _SettingsSection({
     required this.title,
     required this.children,
     this.padding = const EdgeInsets.only(bottom: 15),
+    this.rowBleed = 0,
   });
 
   @override
@@ -752,11 +772,14 @@ class _SettingsSection extends StatelessWidget {
       padding: padding,
       child: Card(
         child: Padding(
-          padding: const EdgeInsets.only(left: 15, right: 15, top: 15),
+          padding: EdgeInsets.only(left: 15 - rowBleed, right: 15 - rowBleed, top: 15),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: Theme.of(context).textTheme.titleMedium),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: rowBleed),
+                child: Text(title, style: Theme.of(context).textTheme.titleMedium),
+              ),
               const SizedBox(height: 10),
               ...children,
             ],

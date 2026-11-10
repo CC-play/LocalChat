@@ -155,7 +155,7 @@
       "multicastGroupWarning": "You might not be detected by other devices because you are using a custom multicast address. (default: {defaultMulticast})"
     },
     "other": {
-      "title": "Other",
+      "title": "Other information",
       "support": "Support LocalSend",
       "donate": "Donate",
       "privacyPolicy": "Privacy Policy",
@@ -391,12 +391,15 @@
     "title": "About LocalChat",
     "description": [
       "LocalChat is a free, open-source app that allows you to securely share files and messages with nearby devices over your local network without needing an internet connection.",
-      "This app is available on Android, iOS, macOS, Windows and Linux. You can find all download options on the official homepage."
+      "This app is available on Android, iOS, macOS, Windows and Linux."
     ],
-    "author": "Author",
-    "contributors": "Contributors",
-    "packagers": "Packagers",
-    "translators": "Translators"
+    "version": "Version {version}",
+    "forkNotice": "LocalChat is an unofficial fork of LocalSend. It reuses the LocalSend transfer core and adds a conversation (chat) UI on top. This project is not affiliated with the official LocalSend project.",
+    "upstreamCredit": "LocalSend © {year} Tien Do Nam and contributors, released under the Apache-2.0 license.",
+    "localsendRepo": "LocalSend on GitHub",
+    "license": "Apache-2.0 License",
+    "licenseNotices": "Open source licenses",
+    "debugging": "Debugging"
   },
   "donationPage": {
     "title": "Donate",
@@ -607,6 +610,10 @@
     },
     "zoom": {
       "title": "URL"
+    },
+    "donateQr": {
+      "title": "Support LocalChat",
+      "content": "Scan the code with WeChat to send any amount. Thank you for supporting development."
     }
   },
   "sanitization": {

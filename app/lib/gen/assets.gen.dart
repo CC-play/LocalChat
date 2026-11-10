@@ -27,6 +27,9 @@ class $AssetsAudioGen {
 class $AssetsImgGen {
   const $AssetsImgGen();
 
+  /// File path: assets/img/donate_qrcode.png
+  AssetGenImage get donateQrcode => const AssetGenImage('assets/img/donate_qrcode.png');
+
   /// File path: assets/img/logo-128.png
   AssetGenImage get logo128 => const AssetGenImage('assets/img/logo-128.png');
 
@@ -35,6 +38,9 @@ class $AssetsImgGen {
 
   /// File path: assets/img/logo-32-black.png
   AssetGenImage get logo32Black => const AssetGenImage('assets/img/logo-32-black.png');
+
+  /// File path: assets/img/logo-32-white-blank.png
+  AssetGenImage get logo32WhiteBlank => const AssetGenImage('assets/img/logo-32-white-blank.png');
 
   /// File path: assets/img/logo-32-white.png
   AssetGenImage get logo32White => const AssetGenImage('assets/img/logo-32-white.png');
@@ -48,11 +54,26 @@ class $AssetsImgGen {
   /// File path: assets/img/logo-512.png
   AssetGenImage get logo512 => const AssetGenImage('assets/img/logo-512.png');
 
+  /// File path: assets/img/logo-blank.ico
+  String get logoBlank => 'assets/img/logo-blank.ico';
+
   /// File path: assets/img/logo.ico
   String get logo => 'assets/img/logo.ico';
 
   /// List of all assets
-  List<dynamic> get values => [logo128, logo256, logo32Black, logo32White, logo32, logo512White, logo512, logo];
+  List<dynamic> get values => [
+    donateQrcode,
+    logo128,
+    logo256,
+    logo32Black,
+    logo32WhiteBlank,
+    logo32White,
+    logo32,
+    logo512White,
+    logo512,
+    logoBlank,
+    logo,
+  ];
 }
 
 abstract final class Assets {

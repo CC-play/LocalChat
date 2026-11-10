@@ -304,11 +304,7 @@
     "description": [
       "LocalChatは無料のオープンソースアプリで、インターネットに接続することなく、ローカルネットワーク経由で近くにあるデバイスとファイルやメッセージを安全に共有することができます。",
       "本アプリはAndroid、iOS、macOS、Windows、Linuxで利用でき、公式ホームページからダウンロードすることができます。"
-    ],
-    "author": "制作者",
-    "contributors": "貢献者",
-    "packagers": "パッケージ協力者",
-    "translators": "翻訳者"
+    ]
   },
   "donationPage": {
     "title": "寄付",

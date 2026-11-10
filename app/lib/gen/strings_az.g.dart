@@ -523,14 +523,6 @@ class _Translations$aboutPage$az extends Translations$aboutPage$en {
     'LocalChat internet bağlantısına ehtiyac olmadan lokal şəbəkə üzərindən yaxınlıqdakı cihazlarla faylları və mesajları təhlükəsiz paylaşmağa imkan verən pulsuz, açıq mənbəli proqramdır.',
     'Bu proqram Android, iOS, macOS, Windows və Linux sistemlərində mövcuddur. Bütün yükləmə variantlarını rəsmi saytda tapa bilərsiniz.',
   ];
-  @override
-  String get author => 'Müəllif';
-  @override
-  String get contributors => 'Töhfə verənlər';
-  @override
-  String get packagers => 'Paketləyənlər';
-  @override
-  String get translators => 'Tərcüməçilər';
 }
 
 // Path: donationPage

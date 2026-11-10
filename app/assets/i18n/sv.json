@@ -304,11 +304,7 @@
     "description": [
       "LocalChat är en fri app med öppen källkod som gör det möjligt att säkert dela filer och meddelanden med enheter i närheten via det lokala nätverket, utan internetanslutning.",
       "Appen finns för Android, iOS, macOS, Windows och Linux. Alla nedladdningsalternativ finns på den officiella webbplatsen."
-    ],
-    "author": "Upphovsperson",
-    "contributors": "Bidragsgivare",
-    "packagers": "Paketerare",
-    "translators": "Översättare"
+    ]
   },
   "donationPage": {
     "title": "Donera",

@@ -304,11 +304,7 @@
     "description": [
       "LocalChat adalah aplikasi gratis dan bersumber terbuka yang memungkinkan Anda untuk membagikan berkas dan pesan secara aman dengan perangkat lain yang terhubung pada jaringan lokal tanpa memerlukan koneksi internet atau paket data.",
       "Aplikasi ini tersedia untuk platform Android, iOS, macOS, Windows, dan Linux. Semua pilihan pengunduhan dapat ditemukan di laman situs resmi kami."
-    ],
-    "author": "Pembuat",
-    "contributors": "Daftar Kontributor",
-    "packagers": "Pengemas",
-    "translators": "Daftar Penerjemah"
+    ]
   },
   "donationPage": {
     "title": "Donasi",

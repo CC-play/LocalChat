@@ -523,14 +523,6 @@ class _Translations$aboutPage$cs extends Translations$aboutPage$en {
     'LocalChat je bezplatná aplikace s otevřeným zdrojovým kódem, která vám umožňuje bezpečně sdílet soubory a zprávy s okolními zařízeními přes vaši místní síť, aniž byste potřebovali připojení k internetu.',
     'Tato aplikace je dostupná pro Android, iOS, macOS, Windows a Linux. Všechny možnosti stahování najdete na oficiální domovské stránce.',
   ];
-  @override
-  String get author => 'Autor';
-  @override
-  String get contributors => 'Přispěvatelé';
-  @override
-  String get packagers => 'Baliči';
-  @override
-  String get translators => 'Překladatelé';
 }
 
 // Path: donationPage

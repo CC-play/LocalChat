@@ -523,14 +523,6 @@ class _Translations$aboutPage$ur extends Translations$aboutPage$en {
     'LocalChat ایک مفت، اوپن سورس ایپ ہے جو آپ کو انٹرنیٹ کنکشن کی ضرورت کے بغیر اپنے مقامی نیٹ ورک کے ذریعے قریبی آلات کے ساتھ فائلیں اور پیغامات محفوظ طریقے سے شیئر کرنے کی اجازت دیتی ہے۔',
     'یہ ایپ اینڈرائیڈ، iOS، macOS، ونڈوز، اور لینکس پر دستیاب ہے۔ آپ تمام ڈاؤن لوڈ کے اختیارات سرکاری ویب سائٹ پر تلاش کر سکتے ہیں۔',
   ];
-  @override
-  String get author => 'مصنف';
-  @override
-  String get contributors => 'تعاون کنندگان';
-  @override
-  String get packagers => 'پیکجرز';
-  @override
-  String get translators => 'مترجمین';
 }
 
 // Path: donationPage

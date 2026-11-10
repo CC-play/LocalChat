@@ -525,14 +525,6 @@ class _Translations$aboutPage$gu extends Translations$aboutPage$en {
     'લોકલસેન્ડ એક મફત, ઓપન-સોર્સ એપ છે જે તમને તમારા સ્થાનિક નેટવર્ક પર નજીકના ઉપકરણો સાથે સુરક્ષિત રીતે ફાઈલો અને સંદેશાઓ શેર કરવાની મંજૂરી આપે છે અને તે માટે ઈન્ટરનેટ કનેક્શનની જરૂર નથી.',
     'આ એપ એન્ડ્રોઇડ, ios, મેકઓએસ, વિન્ડોઝ અને લિનક્સ પર ઉપલબ્ધ છે. તમે તમામ ડાઉનલોડ વિકલ્પો આધિકારીક હોમપેજ પર શોધી શકો છો.',
   ];
-  @override
-  String get author => 'લેખક';
-  @override
-  String get contributors => 'યોગદાનકર્તાઓ';
-  @override
-  String get packagers => 'પૅકેજકરતાં';
-  @override
-  String get translators => 'અનુવાદકો';
 }
 
 // Path: donationPage

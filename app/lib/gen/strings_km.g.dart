@@ -525,14 +525,6 @@ class _Translations$aboutPage$km extends Translations$aboutPage$en {
     'LocalChat គឺជាកម្មវិធីដែលប្រើដោយឥតគិតថ្លៃ និងបើកចំហនូវប្រភពកូដ ដែលអនុញ្ញាតឱ្យអ្នកអាចចែករំលែកឯកសារ និងសារដោយសុវត្ថិភាពជាមួយនឹងឧបករណ៍ដែលនៅជិតៗដែលនៅលើបណ្តាញមូលដ្ឋានរួមគ្នាដោយមិនចាំបាច់ភ្ជាប់អ៊ីនធឺណិត។',
     'កម្មវិធីនេះគឺអាចដំណើរការនៅលើគ្រប់ប្រព័ន្ធប្រតិបត្តិការទាំងអស់រួមមានដូចជា Android, iOS, macOS, Windows និង Linux ។ អ្នកអាចស្វែងរក និងទាញយកបានច្រើនវិធីសាស្ត្រតាមរយៈគេហទំព័រផ្លូវការរបស់ LocalChat ។',
   ];
-  @override
-  String get author => 'ម្ចាស់កម្មសិទ្ធ';
-  @override
-  String get contributors => 'អ្នកចូលរួមចំណែក';
-  @override
-  String get packagers => 'អ្នកបង្កើតកញ្ចប់កម្មវិធី Package';
-  @override
-  String get translators => 'អ្នកបកប្រែ';
 }
 
 // Path: donationPage

@@ -523,14 +523,6 @@ class _Translations$aboutPage$he extends Translations$aboutPage$en {
     'LocalChat היא אפליקציית קוד פתוח חינמית המאפשרת לשתף קבצים והודעות בצורה מאובטחת עם מכשירים קרובים דרך הרשת המקומית מבלי להזדקק לחיבור לאינטרנט.',
     'אפליקציה זו זמינה באנדרואיד, iOS, macOS, Windows ו-Linux. אתה יכול למצוא את כל אפשרויות ההורדה בדף הבית הרשמי.',
   ];
-  @override
-  String get author => 'יוצר';
-  @override
-  String get contributors => 'תורמים';
-  @override
-  String get packagers => 'אורזים';
-  @override
-  String get translators => 'מתרגמים';
 }
 
 // Path: donationPage

@@ -523,14 +523,6 @@ class _Translations$aboutPage$et extends Translations$aboutPage$en {
     'LocalChat põhineb avatud lähtekoodil, on kõikide jaoks vaba ning tasuta kasutatav. Rakenduse eesmärgiks on võimaldada failide ja tekstide jagamist kohtvõrgus asuvate arvutite vahel nii, et välist internetiühendust pole vaja kasutada.',
     'See rakendus on saadaval Androidi, iOSi, macOSi, Windowsi ja Linuxi jaoks. Kõik allalaaditavad paigaldusfailid leiad meie ametlikust veebisaidist.',
   ];
-  @override
-  String get author => 'Autor';
-  @override
-  String get contributors => 'Kaasautorid';
-  @override
-  String get packagers => 'Pakendajad';
-  @override
-  String get translators => 'Tõlkijad';
 }
 
 // Path: donationPage

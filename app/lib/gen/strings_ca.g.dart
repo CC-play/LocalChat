@@ -526,14 +526,6 @@ class _Translations$aboutPage$ca extends Translations$aboutPage$en {
     'El LocalChat és una aplicació gratuïta i de codi obert que us permet compartir fitxers i missatges de manera segura amb dispositius propers a la vostra xarxa local sense necessitat de connexió a Internet.',
     'Aquesta aplicació està disponible per a Android, iOS, macOS, Windows i Linux. Podeu trobar totes les opcions de baixada a la pàgina d\'inici oficial.',
   ];
-  @override
-  String get author => 'Autor';
-  @override
-  String get contributors => 'Col·laboradors';
-  @override
-  String get packagers => 'Empaquetadors';
-  @override
-  String get translators => 'Traductors';
 }
 
 // Path: donationPage

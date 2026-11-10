@@ -523,14 +523,6 @@ class _Translations$aboutPage$uz extends Translations$aboutPage$en {
     'LocalChat — bu bepul, ochiq manbali ilova boʻlib, u internet ulanishisiz mahalliy tarmoq orqali yaqin atrofdagi qurilmalar bilan fayllar va xabarlarni xavfsiz ulashish imkonini beradi.',
     'Ushbu ilova Android, iOS, macOS, Windows va Linuxda mavjud. Barcha yuklab olish variantlarini rasmiy sahifada topishingiz mumkin.',
   ];
-  @override
-  String get author => 'Muallif';
-  @override
-  String get contributors => 'Hissa qoʻshuvchilar';
-  @override
-  String get packagers => 'Paketlovchilar';
-  @override
-  String get translators => 'Tarjimonlar';
 }
 
 // Path: donationPage

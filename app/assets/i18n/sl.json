@@ -304,11 +304,7 @@
     "description": [
       "LocalChat je brezplačna, odprtokodna aplikacija, ki vam omogoča varno deljenje datotek in sporočil z napravami v bližini prek lokalnega omrežja brez potrebe po internetni povezavi.",
       "Aplikacija je na voljo za Android, iOS, macOS, Windows in Linux. Vse možnosti prenosa lahko najdete na uradni spletni strani."
-    ],
-    "author": "Avtor",
-    "contributors": "Sodelavci",
-    "packagers": "Paketniki",
-    "translators": "Prevajalci"
+    ]
   },
   "donationPage": {
     "title": "Doniraj",

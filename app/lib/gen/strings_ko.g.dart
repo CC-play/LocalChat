@@ -522,14 +522,6 @@ class _Translations$aboutPage$ko extends Translations$aboutPage$en {
     'LocalChat는 인터넷에 연결하지 않고도 로컬 네트워크를 통해 주변 기기들과 파일 및 메시지를 안전하게 공유할 수 있는 무료 오픈소스 애플리케이션입니다.',
     '이 앱은 Android, iOS, macOS, Windows 및 Linux에서 사용할 수 있습니다. 모든 다운로드 옵션은 공식 홈페이지에서 확인할 수 있습니다.',
   ];
-  @override
-  String get author => '작성자';
-  @override
-  String get contributors => '기여자';
-  @override
-  String get packagers => '패키지 관리자';
-  @override
-  String get translators => '번역가';
 }
 
 // Path: donationPage

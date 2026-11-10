@@ -1,28 +1,31 @@
-import 'package:collection/collection.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:localchat_app/config/theme.dart';
 import 'package:localchat_app/gen/strings.g.dart';
+import 'package:localchat_app/pages/changelog_page.dart';
 import 'package:localchat_app/pages/debug/debug_page.dart';
-import 'package:localchat_app/util/i18n.dart';
+import 'package:localchat_app/provider/settings_provider.dart';
+import 'package:localchat_app/provider/version_provider.dart';
 import 'package:localchat_app/widget/local_chat_logo.dart';
 import 'package:localchat_app/widget/responsive_list_view.dart';
+import 'package:refena_flutter/refena_flutter.dart';
 import 'package:routerino/routerino.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-part 'contributors.dart';
+/// Upstream project this app is built on.
+const String _localsendRepoUrl = 'https://github.com/localsend/localsend';
 
-part 'packagers.dart';
-
-part 'translators.dart';
-
-final _translatorWithGithubRegex = RegExp(r'(.+) \(@([\w\-_]+)\)');
+/// Licence inherited from LocalSend.
+const String _licenseUrl = 'https://www.apache.org/licenses/LICENSE-2.0';
 
 class AboutPage extends StatelessWidget {
   const AboutPage();
 
   @override
   Widget build(BuildContext context) {
-    final primaryColor = Theme.of(context).colorScheme.primary;
+    final theme = Theme.of(context);
+    final advanced = context.ref.watch(settingsProvider.select((s) => s.advancedSettings));
+    final version = context.ref.watch(versionProvider);
+
     return Scaffold(
       appBar: AppBar(
         title: Text(t.aboutPage.title),
@@ -30,152 +33,86 @@ class AboutPage extends StatelessWidget {
       body: ResponsiveListView(
         padding: const EdgeInsets.symmetric(horizontal: 15),
         children: [
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
           const LocalChatLogo(withText: true),
+          const SizedBox(height: 10),
+          version.maybeWhen(
+            data: (version) => Text(
+              t.aboutPage.version(version: version.combinedString),
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+            orElse: () => const SizedBox(height: 16),
+          ),
+          const SizedBox(height: 28),
           Text(
-            '© ${DateTime.now().year} Tien Do Nam',
-            textAlign: TextAlign.center,
+            t.aboutPage.description.join('\n\n'),
+            style: theme.textTheme.bodyMedium?.copyWith(height: 1.6),
           ),
-          const Text(
-            'LocalChat is an unofficial fork of LocalSend, extended with a conversation UI.',
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 10),
-          Center(
-            child: TextButton(
-              onPressed: () async {
-                await launchUrl(Uri.parse('https://localsend.org'));
-              },
-              child: const Text('localsend.org'),
+          const SizedBox(height: 24),
+          Container(
+            padding: const EdgeInsets.all(15),
+            decoration: BoxDecoration(
+              color: theme.inputDecorationTheme.fillColor,
+              borderRadius: theme.inputDecorationTheme.borderRadius,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  t.aboutPage.forkNotice,
+                  style: theme.textTheme.bodyMedium?.copyWith(height: 1.6, fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  t.aboutPage.upstreamCredit(year: '${DateTime.now().year}'),
+                  style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant, height: 1.5),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 10),
-          Text(t.aboutPage.description.join('\n\n')),
           const SizedBox(height: 20),
-          Text(t.aboutPage.author, style: const TextStyle(fontWeight: FontWeight.bold)),
-          Text.rich(
-            _buildContributor(
-              label: 'Tien Do Nam (@Tienisto)',
-              primaryColor: primaryColor,
+          Card(
+            child: Padding(
+              // 15 - 10: the link rows' highlight bleeds 10px outwards so their
+              // labels stay aligned with the rest of the page.
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 6),
+              child: Column(
+                children: [
+                  _LinkEntry(
+                    label: t.aboutPage.localsendRepo,
+                    onTap: () async {
+                      await launchUrl(Uri.parse(_localsendRepoUrl), mode: LaunchMode.externalApplication);
+                    },
+                  ),
+                  _LinkEntry(
+                    label: t.aboutPage.license,
+                    onTap: () async {
+                      await launchUrl(Uri.parse(_licenseUrl), mode: LaunchMode.externalApplication);
+                    },
+                  ),
+                  _LinkEntry(
+                    label: t.aboutPage.licenseNotices,
+                    onTap: () async {
+                      await context.push(() => const LicensePage());
+                    },
+                  ),
+                  _LinkEntry(
+                    label: t.changelogPage.title,
+                    onTap: () async {
+                      await context.push(() => const ChangelogPage());
+                    },
+                  ),
+                  if (advanced)
+                    _LinkEntry(
+                      label: t.aboutPage.debugging,
+                      onTap: () async {
+                        await context.push(() => const DebugPage());
+                      },
+                    ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 20),
-          Text(t.aboutPage.contributors, style: const TextStyle(fontWeight: FontWeight.bold)),
-          ..._contributors.map((contributor) {
-            return Text.rich(
-              _buildContributor(
-                label: contributor,
-                primaryColor: primaryColor,
-              ),
-            );
-          }),
-          const SizedBox(height: 20),
-          Text(t.aboutPage.packagers, style: const TextStyle(fontWeight: FontWeight.bold)),
-          Table(
-            columnWidths: const {
-              0: IntrinsicColumnWidth(),
-              1: FlexColumnWidth(),
-            },
-            children: [
-              ..._packagers.entries.map(
-                (e) => TableRow(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.only(right: 10),
-                      child: Text(e.key),
-                    ),
-                    Text.rich(
-                      TextSpan(
-                        children: e.value.mapIndexed(
-                          (index, translator) {
-                            return _buildContributor(
-                              label: translator,
-                              primaryColor: primaryColor,
-                              newLine: index != 0,
-                            );
-                          },
-                        ).toList(),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Text(t.aboutPage.translators, style: const TextStyle(fontWeight: FontWeight.bold)),
-          Table(
-            columnWidths: const {
-              0: IntrinsicColumnWidth(),
-              1: FlexColumnWidth(),
-            },
-            children: [
-              ..._translators.entries.map(
-                (e) => TableRow(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.only(right: 10),
-                      child: Text(e.key.getLocaleName()),
-                    ),
-                    Text.rich(
-                      TextSpan(
-                        children: e.value.mapIndexed(
-                          (index, translator) {
-                            return _buildContributor(
-                              label: translator,
-                              primaryColor: primaryColor,
-                              newLine: index != 0,
-                            );
-                          },
-                        ).toList(),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TextButton(
-                onPressed: () async {
-                  await launchUrl(Uri.parse('https://localsend.org'));
-                },
-                child: const Text('Homepage'),
-              ),
-              TextButton(
-                onPressed: () async {
-                  await launchUrl(Uri.parse('https://github.com/localsend/localsend'), mode: LaunchMode.externalApplication);
-                },
-                child: const Text('Source Code (Github)'),
-              ),
-              TextButton(
-                onPressed: () async {
-                  await launchUrl(Uri.parse('https://codeberg.org/localsend/localsend'), mode: LaunchMode.externalApplication);
-                },
-                child: const Text('Source Code (Codeberg)'),
-              ),
-              TextButton(
-                onPressed: () async {
-                  await launchUrl(Uri.parse('https://www.apache.org/licenses/LICENSE-2.0'));
-                },
-                child: const Text('Apache License 2.0'),
-              ),
-              TextButton(
-                onPressed: () async {
-                  await context.push(() => const LicensePage());
-                },
-                child: const Text('License Notices'),
-              ),
-              TextButton(
-                onPressed: () async {
-                  await context.push(() => const DebugPage());
-                },
-                child: const Text('Debugging'),
-              ),
-            ],
           ),
           const SizedBox(height: 50),
         ],
@@ -184,43 +121,38 @@ class AboutPage extends StatelessWidget {
   }
 }
 
-/// Displays the contributor name and links to their github profile.
-InlineSpan _buildContributor({required String label, required Color primaryColor, bool newLine = false}) {
-  final newLineStr = newLine ? '\n' : '';
+/// A tappable row that opens another page: label on the left, chevron on the right.
+///
+/// The highlight pill bleeds 10px outwards (the enclosing [Card] is inset by
+/// 15 - 10 = 5), so the label stays aligned with the rest of the page while the
+/// highlight keeps horizontal breathing room.
+class _LinkEntry extends StatelessWidget {
+  final String label;
+  final void Function() onTap;
 
-  if (label.startsWith('@')) {
-    // Only github name
-    return TextSpan(
-      text: '$newLineStr$label',
-      style: TextStyle(color: primaryColor),
-      recognizer: TapGestureRecognizer()
-        ..onTap = () async {
-          await launchUrl(Uri.parse('https://github.com/${label.substring(1)}'), mode: LaunchMode.externalApplication);
-        },
-    );
-  }
+  const _LinkEntry({required this.label, required this.onTap});
 
-  final match = _translatorWithGithubRegex.firstMatch(label);
-  if (match != null) {
-    // Full name and github name
-    final fullName = match.group(1)!;
-    final githubName = match.group(2)!;
-    return TextSpan(
-      children: [
-        TextSpan(text: '$newLineStr$fullName'),
-        const TextSpan(text: ' '),
-        TextSpan(
-          text: '@$githubName',
-          style: TextStyle(color: primaryColor),
-          recognizer: TapGestureRecognizer()
-            ..onTap = () async {
-              await launchUrl(Uri.parse('https://github.com/$githubName'), mode: LaunchMode.externalApplication);
-            },
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: theme.inputDecorationTheme.borderRadius,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 44),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(label, style: theme.textTheme.bodyMedium),
+              ),
+              const SizedBox(width: 10),
+              Icon(Icons.chevron_right, size: 22, color: theme.colorScheme.onSurfaceVariant),
+            ],
+          ),
         ),
-      ],
+      ),
     );
   }
-
-  // Only full name
-  return TextSpan(text: '$newLineStr$label');
 }

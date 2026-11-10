@@ -524,14 +524,6 @@ class _Translations$aboutPage$si extends Translations$aboutPage$en {
     'LocalChat යනු ඔබට අන්තර්ජාල සම්බන්ධතාවයක අවශ්‍යතාවයකින් තොරව, local ජාලයක් තුළ, සමීප උපාංග සමඟ ගොනු සහ පණිවිඩ ආරක්ෂිතව බෙදා ගත හැකි නිදහස්, විවෘත-මූලාශ්‍රය (Free and open-source) ඇප් එකකි.',
     'මෙම ඇප් එක Android, iOS, macOS, Windows සහ Linux සඳහා පවතියි. එය ඩවුන්ලෝඩ් (Download) කරගත හැකි ආකාර අපේ අඩවියේ මුල් පිටුවෙන් සොයාගත හැක.',
   ];
-  @override
-  String get author => 'කතෲ';
-  @override
-  String get contributors => 'සහය දැක්වූවන්';
-  @override
-  String get packagers => 'පැකේජ්ර්ස්';
-  @override
-  String get translators => 'පරිවර්තකයන්';
 }
 
 // Path: donationPage

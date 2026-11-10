@@ -523,14 +523,6 @@ class _Translations$aboutPage$da extends Translations$aboutPage$en {
     'LocalChat er en gratis, open source-app, der lader dig dele filer og beskeder sikkert med enheder i nærheden over dit lokale netværk uden behov for en internetforbindelse.',
     'Appen er tilgængelig på Android, iOS, macOS, Windows og Linux. Du finder alle downloadmuligheder på den officielle hjemmeside.',
   ];
-  @override
-  String get author => 'Skaber';
-  @override
-  String get contributors => 'Bidragydere';
-  @override
-  String get packagers => 'Pakkere';
-  @override
-  String get translators => 'Oversættere';
 }
 
 // Path: donationPage
