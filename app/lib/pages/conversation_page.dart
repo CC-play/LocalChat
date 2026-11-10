@@ -162,7 +162,12 @@ class _ConversationPageState extends State<ConversationPage> {
       return;
     }
 
-    if (first || keyboardOpened || (grew && _isNearBottom)) {
+    if (first) {
+      // 首帧：历史多时直接跳到底，否则用户会从最早一条开始看。
+      // 用 [_pinToBottomOnEntry] 而不是跳一次——懒构建的 extent 是估算值，
+      // 一次 jump 会落在半路（见该方法注释）。
+      _pinToBottomOnEntry();
+    } else if (keyboardOpened || (grew && _isNearBottom)) {
       _stickToBottomSoon();
     }
   }
@@ -180,6 +185,53 @@ class _ConversationPageState extends State<ConversationPage> {
   void _stickToBottomSoon() {
     WidgetsBinding.instance.addPostFrameCallback((_) => _stickToBottom());
   }
+
+  /// [FORK] 进入会话时把列表贴到真正的底部。
+  ///
+  /// 不能只 jump 一次：`ListView.builder` 是懒构建的，首帧的
+  /// `maxScrollExtent` 只是按「已构建的这几条」外推出来的估算值。
+  /// 历史一多，一次 jump 会落在半路——落点附近的子项真正布局出来之后，
+  /// 真实 extent 才变大，于是停在中间（最后一条还被输入框盖住一半）。
+  /// 气泡高度不均（文件卡片 / 长文本 / 图片）时估算误差更大，实测能差好几屏。
+  ///
+  /// 所以连续几帧反复贴：extent 连续 [_kPinQuietFrames] 帧不再变化才算真到底。
+  /// 有总时长上限，避免极端情况下一直抢滚动位置。
+  void _pinToBottomOnEntry() {
+    final deadline = DateTime.now().add(_kPinMaxDuration);
+    var lastMax = double.negativeInfinity;
+    var quietFrames = 0;
+
+    void step() {
+      if (!mounted || !_scrollController.hasClients) {
+        return;
+      }
+      final position = _scrollController.position;
+      final max = position.maxScrollExtent;
+      if (max > 0 && position.pixels < max) {
+        position.jumpTo(max);
+      }
+      if (max == lastMax) {
+        quietFrames++;
+      } else {
+        quietFrames = 0;
+        lastMax = max;
+      }
+      if (quietFrames >= _kPinQuietFrames || DateTime.now().isAfter(deadline)) {
+        return;
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) => step());
+      // 自己排帧：jumpTo 不一定会申请新帧，靠外部事件驱动会卡在半路。
+      WidgetsBinding.instance.scheduleFrame();
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) => step());
+  }
+
+  /// extent 连续这么多帧不变，认为列表已经布局完。
+  static const _kPinQuietFrames = 3;
+
+  /// 贴底循环的总时长上限。
+  static const _kPinMaxDuration = Duration(milliseconds: 800);
 
   void _stickToBottom() {
     if (!mounted || !_scrollController.hasClients) {
