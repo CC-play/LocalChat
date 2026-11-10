@@ -89,6 +89,10 @@
 | `preInit` 必须在**首帧之后**执行（`_BootstrapAppState` 的 postFrameCallback），不要挪回 `runApp` 之前 | 桌面端的窗口是在 `preInit` 的 `showFromTray` 里才显示的，但它同时包着 Rust 初始化 + 读设置；跑在 `runApp` 之前意味着这整段时间 Flutter 一帧没画，屏幕上是原生底色——就是「启动一片白」 |
 | 系统分享落地后 Tab 切「会话」不切「发送」，文件留在 `selectedSendingFilesProvider` | 会话列表与发送页共享同一份待发列表，用户两条路（点会话确认发送 / 切发送页选设备）都可用；切走 Tab 会丢掉一条 |
 | 消费待分享列表只能用 `ConsumeSelectionAction`，禁止 `ClearSelectionAction` | 分享文件全躺在缓存目录里，`ClearSelectionAction` 的 after() 清空整个缓存目录，会把正在上传的源文件删掉 |
+| 托盘「有未读」一律由 `TrayUnreadIndicator` 驱动，未读数的唯一真相是 `unreadConversationCountProvider`；不要在接收回调里自己 `setUnread(true)` | 已读 / 删消息 / 清空会话不会复位图标，托盘会一直闪到应用退出 |
+| macOS 的菜单栏图标必须走 `main-delegate-channel` 的 `setStatusBarAlpha`，**不要**用 `tray_manager.setIcon` | 插件会自己新建一个 `NSStatusItem`，菜单栏上出现两个图标 |
+| 托盘闪烁用「原生图标 ↔ 全透明占位图」（`assets/img/logo-blank.ico` / `logo-32-white-blank.png`，由 `support/scripts/gen_tray_blank_icon.py` 生成），不要加角标、也不要删图标来「隐藏」 | 用户要的是原图标自己消失 / 出现；删掉图标会让任务栏托盘格子挪位，看起来像图标在跳 |
+| 停闪（窗口回前台 / 未读清零）时要把图标推回「显示」 | 上一次可能停在「隐藏」那一拍上，不推回去托盘就一直空着 |
 
 ## 为什么不做符号索引
 

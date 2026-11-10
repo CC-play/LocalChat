@@ -6,6 +6,7 @@ import 'package:localchat_app/provider/settings_provider.dart';
 import 'package:localchat_app/provider/window_dimensions_provider.dart';
 import 'package:localchat_app/util/native/platform_check.dart';
 import 'package:localchat_app/util/native/tray_helper.dart';
+import 'package:localchat_app/util/native/tray_unread.dart';
 import 'package:logging/logging.dart';
 import 'package:refena_flutter/refena_flutter.dart';
 import 'package:window_manager/window_manager.dart';
@@ -113,15 +114,27 @@ class _WindowWatcherState extends State<WindowWatcher> with WindowListener, Refe
   void onWindowFocus() {
     // call set state according to window_manager README
     setState(() {});
+    // [FORK] 回到前台就不再闪托盘图标。
+    unawaited(TrayUnreadIndicator.setWindowActive(true));
+  }
+
+  @override
+  void onWindowBlur() {
+    // [FORK] 切到别的窗口：有未读时托盘开始闪，这是唯一还能提醒用户的地方。
+    unawaited(TrayUnreadIndicator.setWindowActive(false));
   }
 
   @override
   void onWindowMinimize() {
     ref.notifier(sleepProvider).setState((_) => true);
+    // [FORK] 最小化等同离开前台。
+    unawaited(TrayUnreadIndicator.setWindowActive(false));
   }
 
   @override
   void onWindowRestore() {
     ref.notifier(sleepProvider).setState((_) => false);
+    // [FORK] 这里**不**恢复「窗口活跃」：还原不等于回到前台，Windows 上还原后
+    // 窗口可能仍被别的窗口盖住。真的获得焦点会走 onWindowFocus。
   }
 }

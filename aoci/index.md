@@ -25,6 +25,7 @@
 | 侧边栏 / Tab 顺序 | `app/lib/pages/home_page.dart` → `app/lib/pages/home_page_controller.dart` | — | `flutter analyze` |
 | 主题色 / 气泡配色 | `app/lib/config/theme.dart` → `app/lib/widget/chat/message_bubble.dart` | — | 见 [不变量](invariants.md#ui) |
 | 启动白屏 / 启动动画 | `app/lib/main.dart`（`_BootstrapApp`：首帧 → `preInit` → 交叉淡出）→ `app/lib/widget/startup_splash.dart` → `app/lib/widget/local_chat_logo.dart` | — | 手动：冷启动应直接看到蓝底白 logo 转圈，中间不再有白屏；网络差时手动延长 `_minSplashDuration` 复看 |
+| 托盘图标不闪 / 想改闪烁节奏 | `app/lib/util/native/tray_unread.dart`（`TrayUnreadIndicator`，`_blinkInterval` 定快慢）→ `app/lib/widget/watcher/tray_watcher.dart`（订阅 `unreadConversationCountProvider`）→ `app/lib/widget/watcher/window_watcher.dart`（焦点 / 最小化 → 窗口活跃态）→ `app/macos/Runner/AppDelegate.swift`（`setStatusBarAlpha`） | — | 手动：最小化窗口后让另一台设备发一条文本，托盘图标应每 350ms 在「显示 / 完全消失」之间切换；点开窗口即停，恢复常显 |
 | Windows 标题栏颜色不跟主题 | `app/lib/util/native/title_bar_theme.dart`（`TitleBarTheme`，挂在 `MaterialApp.builder`）→ `app/windows/runner/title_bar_ext.cpp`（`DwmSetWindowAttribute`） | — | `flutter test test/unit/util/title_bar_theme_test.dart`；手动：系统开深色、App 切浅色，标题栏应变浅 |
 | 改自己的设备名称（接收页铅笔图标） | `app/lib/pages/tabs/receive_tab.dart`（`_editAlias`）→ `app/lib/widget/dialogs/device_name_dialog.dart` → `settingsProvider.setAlias` + `serverProvider.restartServerFromSettings` | [discovery](modules/discovery.md#改名的生效链) | 手动：接收页名字右边铅笔 → 改名 → 保存后名字应立刻变，设置页「设备名称」同步为同一个值 |
 | 界面文案 | `app/assets/i18n/en.json` + `zh-CN.json` → `fvm dart run slang` | — | `flutter analyze` |
@@ -46,6 +47,7 @@
 | `describeSendFailure` / `failureForStatusCode` | `util/conversation/send_failure.dart` | 失败原因 → 气泡文案的唯一入口 |
 | `recordReceivedText` / `recordReceivedFile` | `util/conversation/conversation_recorder.dart` | 接收侧写会话的唯一入口 |
 | `NotificationSound` | `util/native/notification_sound.dart` | 收到消息 / 文件时的提示音（含节流与会话去重） |
+| `TrayUnreadIndicator` | `util/native/tray_unread.dart` | 桌面托盘的未读指示：未读 + 窗口不在前台时图标每 350ms 显示 / 隐藏切换一次，回归前台恢复常显 |
 | `HomeTab` | `pages/home_page.dart` | 枚举顺序 == `PageView.children` 顺序 |
 | `ReceiveController` | `provider/network/server/controller/receive_controller.dart` | 服务端事件处理器（非路由） |
 
@@ -84,6 +86,11 @@
 | `app/lib/widget/dialogs/device_name_dialog.dart` | 整个文件为 fork 新增（接收页改设备名称的输入框，取消返回 null） |
 | `app/lib/util/conversation/chat_presence.dart` | 整个文件为 fork 新增（前台判断，决定要不要弹通知） |
 | `app/lib/util/native/chat_notification.dart` | 整个文件为 fork 新增（通知发送 / 状态查询 / 点击回传） |
+| `app/lib/util/native/tray_unread.dart` | 整个文件为 fork 新增（托盘未读指示：未读 + 窗口不在前台时把图标不透明度在 100%↔0% 之间往返，每档 70ms） |
+| `app/lib/widget/watcher/tray_watcher.dart` | `ref.watch(unreadConversationCountProvider)`：未读数变化推给 `TrayUnreadIndicator` |
+| `app/lib/widget/watcher/window_watcher.dart` | `onWindowFocus` / `onWindowBlur` / `onWindowMinimize` 同步「窗口是否在前台」，供托盘决定闪不闪 |
+| `app/lib/util/native/tray_helper.dart` | `hideToTray` / `showFromTray` 同步窗口活跃态（托盘菜单唤出也要停闪），`destroyTray` 停掉闪烁定时器 |
+| `app/macos/Runner/AppDelegate.swift` | `setStatusBarAlpha`：改 `button.alphaValue`，配合 Dart 侧把人设成 0 / 1 做闪烁 |
 | `app/windows/runner/flutter_window.cpp` | `RegisterClipboardChannel` / `RegisterTitleBarChannel` 注册（后者把主窗口 HWND 交给通道） |
 | `app/windows/runner/CMakeLists.txt` | 新的 runner 源文件（`title_bar_ext.cpp` 等）+ `windowscodecs` / `shell32` 链接（`dwmapi` 已在上游链接） |
 | `app/android/.../MainActivity.kt` | `getClipboardImage` / `getClipboardFiles` 分支 + `readClipboardImage()` / `readClipboardFiles()` |
@@ -114,6 +121,8 @@ app/lib/widget/chat/message_bubble.dart               374 行
 app/lib/widget/chat/file_message_card.dart            198 行
 app/lib/widget/chat/top_toast.dart                    168 行
 app/lib/util/native/title_bar_theme.dart              117 行（标题栏跟随 App 主题，含 120ms debounce）
+app/lib/util/native/tray_unread.dart                  160 行（托盘未读指示：显示 / 隐藏闪烁、停止）
+support/scripts/gen_tray_blank_icon.py                 45 行（生成全透明占位图标 logo-blank.ico 等，幂等）
 app/lib/widget/startup_splash.dart                     44 行（蓝底白 logo 的启动动画，复用 LocalChatLogo）
 app/lib/widget/chat/drop_confirm_dialog.dart          128 行
 app/windows/runner/clipboard_image_win.cpp            217 行（纯 Win32/WIC，可单独编译验证）

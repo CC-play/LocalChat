@@ -70,6 +70,9 @@ class AppDelegate: FlutterAppDelegate {
         }
     }
     
+    /// [FORK] 菜单栏图标当前的不透明度，1 表示常亮。
+    private var statusBarAlphaValue: CGFloat = 1
+
     private func setupStatusBarItem(i18n: [String: String]) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = statusItem?.button {
@@ -103,6 +106,24 @@ class AppDelegate: FlutterAppDelegate {
         }
     }
     
+    /// [FORK] 改菜单栏图标的不透明度，用来做「有未读」时的闪烁。
+    ///
+    /// 直接改 button 的 `alphaValue`：图标是 template image，系统只拿 alpha 通道
+    /// 上色，整块视图降透明度正好是「消失 / 出现」，不用重画位图、也不用第二张图。
+    /// 注意不透明度到 0 时图标不可见但**仍然可点**，这是想要的效果。
+    ///
+    /// 返回 false 表示 `setupStatusBar` 还没跑过，Dart 侧应当回滚状态并重试。
+    private func applyStatusBarAlpha(_ alpha: Double) -> Bool {
+        guard let button = statusItem?.button else { return false }
+
+        let value = CGFloat(min(max(alpha, 0), 1))
+        guard abs(statusBarAlphaValue - value) > 0.001 else { return true }
+
+        statusBarAlphaValue = value
+        button.alphaValue = value
+        return true
+    }
+
     @objc func showLocalChatFromMenuBar() {
         channel?.invokeMethod("showLocalChatFromMenuBar", arguments: nil)
     }
@@ -146,6 +167,17 @@ class AppDelegate: FlutterAppDelegate {
             let i18n = call.arguments as! [String: String]
             setupStatusBarItem(i18n: i18n)
             result(nil)
+        case "setStatusBarAlpha":
+            // [FORK] 菜单栏图标的不透明度 0...1，有未读时由 Dart 侧每 500ms 在 0/1 之间切。
+            if let alpha = call.arguments as? Double {
+                if applyStatusBarAlpha(alpha) {
+                    result(nil)
+                } else {
+                    result(FlutterError(code: "STATUS_BAR_NOT_READY", message: "The menu bar icon has not been created yet", details: nil))
+                }
+            } else {
+                result(FlutterError(code: "INVALID_ARGUMENT", message: "Expected a double value", details: nil))
+            }
         case "removeDestinationFolderAccess":
             removeExistingDestinationAccess()
             result(nil)

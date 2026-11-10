@@ -5,6 +5,7 @@ import 'package:localchat_app/gen/assets.gen.dart';
 import 'package:localchat_app/gen/strings.g.dart';
 import 'package:localchat_app/provider/animation_provider.dart';
 import 'package:localchat_app/util/native/platform_check.dart';
+import 'package:localchat_app/util/native/tray_unread.dart';
 import 'package:logging/logging.dart';
 import 'package:refena_flutter/refena_flutter.dart';
 import 'package:tray_manager/tray_manager.dart' as tm;
@@ -70,6 +71,9 @@ Future<void> hideToTray() async {
     await windowManager.setSkipTaskbar(true);
   }
 
+  // [FORK] 窗口藏起来了，未读消息只能靠托盘图标提示（有未读时开始闪）。
+  await TrayUnreadIndicator.setWindowActive(false);
+
   // Disable animations
   try {
     RefenaScope.defaultRef.notifier(sleepProvider).setState((_) => true);
@@ -87,6 +91,9 @@ Future<void> showFromTray() async {
     await windowManager.setSkipTaskbar(false);
   }
 
+  // [FORK] 回到前台：停止闪烁，图标恢复常显。
+  await TrayUnreadIndicator.setWindowActive(true);
+
   // Enable animations
   try {
     RefenaScope.defaultRef.notifier(sleepProvider).setState((_) => false);
@@ -99,4 +106,6 @@ Future<void> destroyTray() async {
   if (!checkPlatform([TargetPlatform.linux])) {
     await tm.trayManager.destroy();
   }
+  // [FORK] 托盘没了，闪烁定时器必须一起停，否则会继续对空图标 setIcon。
+  TrayUnreadIndicator.stop();
 }
