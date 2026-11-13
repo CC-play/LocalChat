@@ -2118,6 +2118,24 @@ class Translations$dialogs$donateQr$en {
 
   /// en: 'Scan the code with WeChat to send any amount. Thank you for supporting development.'
   String get content => 'Scan the code with WeChat to send any amount. Thank you for supporting development.';
+
+  /// en: 'Save to Downloads'
+  String get saveToDownloads => 'Save to Downloads';
+
+  /// en: 'Save to Photos'
+  String get saveToGallery => 'Save to Photos';
+
+  /// en: 'Saved to {path}'
+  String savedToDownloads({required Object path}) => 'Saved to ${path}';
+
+  /// en: 'Saved to Photos'
+  String get savedToGallery => 'Saved to Photos';
+
+  /// en: 'Photo access denied'
+  String get galleryPermissionDenied => 'Photo access denied';
+
+  /// en: 'Could not save the image'
+  String get saveFailed => 'Could not save the image';
 }
 
 // Path: settingsTab.general.brightnessOptions

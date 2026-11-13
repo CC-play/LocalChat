@@ -455,7 +455,13 @@
     },
     "donateQr": {
       "title": "支持 LocalChat",
-      "content": "用微信掃碼贊助，金額隨意。感謝你的支持。"
+      "content": "用微信掃碼贊助，金額隨意。感謝你的支持。",
+      "saveToDownloads": "儲存到下載目錄",
+      "saveToGallery": "儲存到相簿",
+      "savedToDownloads": "已儲存到 {path}",
+      "savedToGallery": "已儲存到相簿",
+      "galleryPermissionDenied": "未取得相簿存取權限",
+      "saveFailed": "儲存失敗"
     }
   },
   "sanitization": {

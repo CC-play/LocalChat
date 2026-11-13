@@ -1764,6 +1764,18 @@ class Translations$dialogs$donateQr$zh_CN extends Translations$dialogs$donateQr$
   String get title => '支持 LocalChat';
   @override
   String get content => '用微信扫码赞赏，金额随意。感谢你的支持。';
+  @override
+  String get saveToDownloads => '保存到下载目录';
+  @override
+  String get saveToGallery => '保存到相册';
+  @override
+  String savedToDownloads({required Object path}) => '已保存到 ${path}';
+  @override
+  String get savedToGallery => '已保存到相册';
+  @override
+  String get galleryPermissionDenied => '未获得相册访问权限';
+  @override
+  String get saveFailed => '保存失败';
 }
 
 // Path: settingsTab.general.brightnessOptions
