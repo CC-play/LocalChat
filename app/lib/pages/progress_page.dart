@@ -6,11 +6,16 @@ import 'package:flutter/material.dart';
 import 'package:localchat_app/config/theme.dart';
 import 'package:localchat_app/gen/strings.g.dart';
 import 'package:localchat_app/model/state/server/receive_session_state.dart';
+import 'package:localchat_app/pages/conversation_page.dart';
+import 'package:localchat_app/pages/home_page.dart';
+import 'package:localchat_app/pages/home_page_controller.dart';
 import 'package:localchat_app/pages/web_share_page.dart';
+import 'package:localchat_app/provider/conversation_provider.dart';
 import 'package:localchat_app/provider/file_transfer_provider.dart';
 import 'package:localchat_app/provider/network/send_provider.dart';
 import 'package:localchat_app/provider/network/server/server_provider.dart';
 import 'package:localchat_app/provider/settings_provider.dart';
+import 'package:localchat_app/util/conversation/conversation_recorder.dart';
 import 'package:localchat_app/util/native/open_file.dart';
 import 'package:localchat_app/util/native/open_folder.dart';
 import 'package:localchat_app/util/native/platform_check.dart';
@@ -58,6 +63,12 @@ class _ProgressPageState extends State<ProgressPage> with Refena {
   Set<String> _selectedFiles = {};
   SessionStatus? _lastStatus;
 
+  /// [FORK] 对端在会话存储里的主键（进页面时算好并缓存）。
+  ///
+  /// 必须提前抓：`_exit` 会先把这个 session 关掉，之后再读 `sendProvider` /
+  /// `serverProvider` 已经拿不到设备信息，想算主键也来不及了。
+  String? _peerKey;
+
   // If [autoFinish] is enabled, we wait a few seconds before automatically closing the session.
   int _finishCounter = 3;
   Timer? _finishTimer;
@@ -75,6 +86,9 @@ class _ProgressPageState extends State<ProgressPage> with Refena {
 
     // init
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // [FORK] session 还在时先把对端主键记下来，供传输完成后跳会话使用。
+      _peerKey = _resolvePeerKey();
+
       if (_useWakelock) {
         try {
           unawaited(WakelockPlus.enable());
@@ -103,7 +117,8 @@ class _ProgressPageState extends State<ProgressPage> with Refena {
           if (finished) {
             if (_finishCounter == 1) {
               timer.cancel();
-              _exit(closeSession: true);
+              // [FORK] 自动关闭时带上 openConversation：传成功了就落到对端会话。
+              _exit(closeSession: true, openConversation: true);
             } else {
               setState(() {
                 _finishCounter--;
@@ -136,7 +151,7 @@ class _ProgressPageState extends State<ProgressPage> with Refena {
     });
   }
 
-  void _exit({required bool closeSession}) async {
+  void _exit({required bool closeSession, bool openConversation = false}) async {
     final receiveSession = ref.read(serverProvider.select((s) => s?.session));
     final sendSession = ref.read(sendProvider)[widget.sessionId];
     final SessionStatus? status = receiveSession?.status ?? sendSession?.status;
@@ -146,10 +161,60 @@ class _ProgressPageState extends State<ProgressPage> with Refena {
     if (result && mounted) {
       if (ref.read(serverProvider)?.webUpload == true) {
         context.global.dispatch(NavigateAction.popUntil<WebSharePage>());
+      } else if (openConversation && _lastKnownStatus(status) == SessionStatus.finished && _openPeerConversation()) {
+        // [FORK] 已经落在对端会话页，不需要再回首页。
       } else {
         context.global.dispatch(NavigateAction.popUntilRoot());
       }
     }
+  }
+
+  /// 状态取「当前能读到的」，读不到（session 已被上层关掉）就退回上一次渲染时的值。
+  ///
+  /// 自动关闭的最后一步可能正好撞上 session 被移除，这时 [status] 是 null，
+  /// 但传输其实已经成功——只看 null 会漏掉这种最该跳会话的情况。
+  SessionStatus? _lastKnownStatus(SessionStatus? status) => status ?? _lastStatus;
+
+  /// [FORK] 当前传输对端在会话存储里的主键。
+  ///
+  /// 走 [peerKeyOf] 而不是直接读 `fingerprint`：它和写会话时用的是同一套规则
+  /// （指纹优先，没有指纹才退化成 `alias:<别名>`），否则 Web 对端永远对不上。
+  String? _resolvePeerKey() {
+    final device = ref.read(serverProvider)?.session?.sender ?? ref.read(sendProvider)[widget.sessionId]?.target;
+    if (device == null) {
+      return null;
+    }
+    final key = peerKeyOf(device);
+    // `alias:` 是「指纹和别名都为空」时拼出来的空壳键，不能拿去匹配。
+    return key.isEmpty || key == 'alias:' ? null : key;
+  }
+
+  /// [FORK] 传输成功后直接进对端会话页。
+  ///
+  /// 只在会话列表里确实存在这条会话时才跳：没有会话（用户清空过列表、对端是
+  /// 从没聊过的设备）就保持原来的行为——回首页。
+  ///
+  /// 返回 true 表示已经完成导航，调用方不要再 pop。
+  bool _openPeerConversation() {
+    final peerKey = _peerKey;
+    if (peerKey == null) {
+      return false;
+    }
+    final exists = ref.read(conversationProvider).any((c) => c.peerFingerprint == peerKey);
+    if (!exists) {
+      return false;
+    }
+
+    // 先用全局 navigator 清到首页，再压入会话页，这样用户从会话页返回落在列表上。
+    // 两个调用都不能用本页 context：popUntilRoot 已经把本页移出路由栈了。
+    //
+    // 顺带把底部 Tab 切到会话：从发送页发起的传输同样会跳过来，返回时落在会话列表
+    // 比落回「发送」更连贯（会话 Tab 也是首页的初始 Tab）。
+    ref.redux(homePageControllerProvider).dispatch(ChangeTabAction(HomeTab.conversations));
+    final navigation = ref.read(navigationProvider);
+    navigation.popUntilRoot();
+    unawaited(Routerino.context.push(() => ConversationPage(peerFingerprint: peerKey)));
+    return true;
   }
 
   Future<bool> _askCancelConfirmation(SessionStatus status) async {
@@ -215,6 +280,8 @@ class _ProgressPageState extends State<ProgressPage> with Refena {
         }
         if (ref.read(serverProvider)?.webUpload == true) {
           context.global.dispatch(NavigateAction.popUntil<WebSharePage>());
+        } else if (_lastStatus == SessionStatus.finished && _openPeerConversation()) {
+          // [FORK] 后台完成了、session 已被移除：同样落到对端会话页。
         } else {
           context.global.dispatch(NavigateAction.popUntilRoot());
         }
