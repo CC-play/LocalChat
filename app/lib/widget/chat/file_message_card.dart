@@ -1,10 +1,13 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:localchat_app/gen/strings.g.dart';
 import 'package:localchat_app/model/conversation/conversation.dart';
 import 'package:localchat_app/util/native/file_availability.dart';
 import 'package:localchat_app/util/native/platform_check.dart';
+import 'package:localchat_app/util/native/video_frame.dart';
 import 'package:localchat_isolates/model/file_type.dart';
 import 'package:localchat_isolates/util/file_size_helper.dart';
 
@@ -18,6 +21,44 @@ IconData iconForFileType(FileType? type) {
     _ => Icons.insert_drive_file,
   };
 }
+
+/// [FORK] 判断「能不能出缩略图」时要按扩展名兜一层底。
+///
+/// 一是 `FileType` 只有六个桶，`guessFileType()` 也只认十几个扩展名——mkv / webm /
+/// avi / webp 这些都很常见，却统统落进 `other`；二是历史消息里的 `fileType` 可能为
+/// null。只按枚举判断，就会出现「系统明明能取到封面，卡片却画了一个空白页图标」。
+/// 这里只补图片和视频两类（其余类型不出缩略图），故意不做全量的类型识别。
+const _imageExtensions = {
+  'jpg',
+  'jpeg',
+  'png',
+  'gif',
+  'bmp',
+  'webp',
+  'heic',
+  'heif',
+  'avif',
+  'tif',
+  'tiff',
+  'dng',
+  'ico',
+};
+
+const _videoExtensions = {
+  'mp4',
+  'mov',
+  'mkv',
+  'webm',
+  'avi',
+  'm4v',
+  'wmv',
+  'flv',
+  'mpg',
+  'mpeg',
+  'ts',
+  '3gp',
+  'ogv',
+};
 
 /// 气泡内的文件卡片（图标 + 文件名 + 大小），可点击打开。
 ///
@@ -65,6 +106,10 @@ class _FileMessageCardState extends State<FileMessageCard> {
   /// 只能靠这个手动补一次显示。
   final _tooltipKey = GlobalKey<TooltipState>();
 
+  /// 视频首帧。取一次就存着，卡片重建（悬浮、状态变化）不重新解码。
+  Future<Uint8List?>? _videoFrame;
+  String? _videoFramePath;
+
   /// 路径为空是确定的不存在，不必等 IO；有路径才去 stat。
   @override
   void initState() {
@@ -75,6 +120,7 @@ class _FileMessageCardState extends State<FileMessageCard> {
     } else {
       unawaited(_refreshMissing());
     }
+    _ensureVideoFrame();
   }
 
   @override
@@ -88,7 +134,117 @@ class _FileMessageCardState extends State<FileMessageCard> {
       } else {
         unawaited(_refreshMissing());
       }
+      _ensureVideoFrame();
     }
+  }
+
+  /// 只在「确实是视频、而且路径变了」时才去取帧。
+  void _ensureVideoFrame() {
+    if (!_isVideo) {
+      return;
+    }
+    final path = widget.message.filePath;
+    if (path == null || path.isEmpty || path == _videoFramePath) {
+      return;
+    }
+    _videoFramePath = path;
+    _videoFrame = VideoFrameLoader.load(path);
+  }
+
+  String? get _extension {
+    final name = widget.message.fileName;
+    if (name == null) {
+      return null;
+    }
+    final dot = name.lastIndexOf('.');
+    if (dot < 0 || dot == name.length - 1) {
+      return null;
+    }
+    return name.substring(dot + 1).toLowerCase();
+  }
+
+  bool get _isImage => widget.message.fileType == FileType.image || _imageExtensions.contains(_extension);
+
+  bool get _isVideo => widget.message.fileType == FileType.video || _videoExtensions.contains(_extension);
+
+  /// 图标兜底时用的类型：枚举可能是 other / null（老消息、少见的容器），
+  /// 但扩展名已经认出来是图片或视频了，就别再画一个空白页。
+  FileType? get _displayType {
+    if (_isVideo) {
+      return FileType.video;
+    }
+    if (_isImage) {
+      return FileType.image;
+    }
+    return widget.message.fileType;
+  }
+
+  /// 左侧方块的内容：能拿到图就画图，拿不到就画类型图标。
+  ///
+  /// 图标压在底层、缩略图盖在上面，是刻意的——图片解码失败、视频还没取到帧、
+  /// 文件被删，都会自然露出下面的图标，不需要额外的状态判断。
+  Widget _buildLogo(Color iconColor) {
+    final thumbnail = _buildThumbnail();
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Icon(iconForFileType(_displayType), color: iconColor),
+        ?thumbnail,
+      ],
+    );
+  }
+
+  Widget? _buildThumbnail() {
+    final path = widget.message.filePath;
+    if (path == null || path.isEmpty) {
+      return null;
+    }
+
+    if (_isImage) {
+      // content:// 是 Android 的另一套 IO，得异步读字节，这里不做；
+      // 那种情况（例如只存进了相册）回落到图标，卡片本来也点不开。
+      if (path.startsWith('content://')) {
+        return null;
+      }
+      return Image.file(
+        File(path),
+        fit: BoxFit.cover,
+        // 40dp 的方块，2x 屏要 80px；96 留一点余量，也顺便限制解码后的内存。
+        cacheWidth: 96,
+        gaplessPlayback: true,
+        errorBuilder: (_, _, _) => const SizedBox.shrink(),
+      );
+    }
+
+    if (_isVideo && _videoFrame != null) {
+      return FutureBuilder<Uint8List?>(
+        future: _videoFrame,
+        builder: (context, snapshot) {
+          final bytes = snapshot.data;
+          if (bytes == null) {
+            return const SizedBox.shrink();
+          }
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              Image.memory(bytes, fit: BoxFit.cover, gaplessPlayback: true),
+              // 视频帧和图片长得很像，右下角给个播放角标，一眼区分。
+              Positioned(
+                right: 2,
+                bottom: 2,
+                child: Container(
+                  padding: const EdgeInsets.all(1),
+                  decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(3)),
+                  child: const Icon(Icons.play_arrow_rounded, size: 11, color: Colors.white),
+                ),
+              ),
+            ],
+          );
+        },
+      );
+    }
+
+    return null;
   }
 
   /// 查一次文件是否还在磁盘上，结果有变化才重建。
@@ -177,11 +333,13 @@ class _FileMessageCardState extends State<FileMessageCard> {
           Container(
             width: 40,
             height: 40,
+            // 图片/视频帧要跟着方块一起裁圆角，不裁就是四个直角。
+            clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
               color: iconBg,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(iconForFileType(message.fileType), color: iconColor),
+            child: _buildLogo(iconColor),
           ),
           const SizedBox(width: 10),
           Expanded(
