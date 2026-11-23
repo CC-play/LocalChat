@@ -40,6 +40,11 @@ class MessageBubble extends StatelessWidget {
 
   final VoidCallback? onFileTap;
 
+  /// [FORK] 点击文件卡片上的文件夹图标时回调（在系统文件管理器里定位文件）。
+  ///
+  /// 为 null 表示不给这个入口（多选态、移动端），卡片上不会出现那颗图标。
+  final VoidCallback? onFileReveal;
+
   /// [FORK] 右键（桌面）点击气泡时回调，参数是全局坐标，用于在该点弹出菜单。
   final ValueChanged<Offset>? onSecondaryTap;
 
@@ -83,6 +88,7 @@ class MessageBubble extends StatelessWidget {
     required this.selfInitial,
     required this.selfFingerprint,
     this.onFileTap,
+    this.onFileReveal,
     this.onSecondaryTap,
     this.onLongPress,
     this.onRetry,
@@ -119,6 +125,9 @@ class MessageBubble extends StatelessWidget {
         // [FORK] 多选态不打开文件：子节点 InkWell 在手势竞技场里优先于外层
         // GestureDetector，不置空就是「点了选中不了、反而把文件打开了」。
         onTap: selectionMode ? null : onFileTap,
+        // [FORK] 悬浮文件卡片时露出的「在文件管理器中显示」图标。和点卡片同理，
+        // 多选态让位给「切换选中」，置空即整颗图标都不出现。
+        onRevealInFolder: selectionMode ? null : onFileReveal,
       );
     }
 

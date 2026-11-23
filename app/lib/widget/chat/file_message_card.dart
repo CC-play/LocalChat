@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:localchat_app/gen/strings.g.dart';
 import 'package:localchat_app/model/conversation/conversation.dart';
 import 'package:localchat_app/util/native/file_availability.dart';
+import 'package:localchat_app/util/native/platform_check.dart';
 import 'package:localchat_isolates/model/file_type.dart';
 import 'package:localchat_isolates/util/file_size_helper.dart';
 
@@ -25,16 +26,26 @@ IconData iconForFileType(FileType? type) {
 /// - 磁盘上已经不在了 → 悬浮给一句提示，右键菜单里的「打开文件所在位置」置灰；
 /// - `filePath` 为空（接收时没留下绝对路径，例如只存进了相册）→ 同样算不可用，
 ///   提示语换成「这个文件不在本机」。
+///
+/// [FORK] 另外，**已传输完成**（sent / received）且在磁盘上确实存在的文件，鼠标
+/// 悬浮到卡片上时会在大小右侧露出一个文件夹图标，点它直接在系统文件管理器里
+/// 定位到这个文件——把右键菜单里藏得较深的一步搬到触手可及的位置。具体动作由
+/// [onRevealInFolder] 提供，和右键菜单走同一份实现，行为不会出现两套。
 class FileMessageCard extends StatefulWidget {
   final ChatMessage message;
   final bool isOutgoing;
   final VoidCallback? onTap;
+
+  /// [FORK] 「在文件管理器中显示」的悬浮入口。为 null 表示这条消息不提供该入口
+  /// （多选态、移动端），此时图标完全不出现。
+  final VoidCallback? onRevealInFolder;
 
   const FileMessageCard({
     super.key,
     required this.message,
     required this.isOutgoing,
     this.onTap,
+    this.onRevealInFolder,
   });
 
   @override
@@ -119,6 +130,28 @@ class _FileMessageCardState extends State<FileMessageCard> {
     return t.conversation.fileMovedOrDeleted;
   }
 
+  /// [FORK] 要不要在大小右侧露出「在文件管理器中显示」的图标。
+  ///
+  /// 四个条件缺一不可：
+  /// - 调用方给了 [FileMessageCard.onRevealInFolder]（多选态、移动端为 null）；
+  /// - 传输已经完成（sent / received）。还在发的文件连落盘都没有，谈不上定位；
+  /// - 本机确实还有这个文件（[localFileExists] 的结论，和能打开的条件同源）；
+  /// - 桌面端。手机上没有「文件夹」可浏览，接收路径还可能是 `content://`，
+  ///   `openFolder` 在那边走的是另一套语义。
+  bool get _canRevealInFolder {
+    if (widget.onRevealInFolder == null) {
+      return false;
+    }
+    final status = widget.message.status;
+    if (status != ChatMessageStatus.sent && status != ChatMessageStatus.received) {
+      return false;
+    }
+    if (!checkPlatformIsDesktop()) {
+      return false;
+    }
+    return _isOpenable;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -162,9 +195,35 @@ class _FileMessageCardState extends State<FileMessageCard> {
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  message.fileSize.asReadableFileSize,
-                  style: TextStyle(fontSize: 11, color: subColor),
+                // [FORK] 「在文件管理器中显示」的图标放在 size 这一行的**右端**：
+                // 文件体积靠左、图标贴右边缘，中间用 Spacer 撑开。这样一列文件卡片
+                // 的图标在同一条竖线上，扫视时不用跟着文件名的长短左右找。
+                Row(
+                  children: [
+                    Text(
+                      message.fileSize.asReadableFileSize,
+                      style: TextStyle(fontSize: 11, color: subColor),
+                    ),
+                    if (_canRevealInFolder) ...[
+                      const Spacer(),
+                      AnimatedOpacity(
+                        opacity: _hovered ? 1 : 0,
+                        duration: const Duration(milliseconds: 120),
+                        // 透明时一并挡掉点击与悬浮：看不见的按钮还能被点到是最糟的。
+                        child: IgnorePointer(
+                          ignoring: !_hovered,
+                          child: _RevealInFolderButton(
+                            color: subColor,
+                            hoverColor: titleColor,
+                            hoverBackground: widget.isOutgoing
+                                ? Colors.white.withValues(alpha: 0.18)
+                                : theme.colorScheme.primary.withValues(alpha: 0.10),
+                            onTap: widget.onRevealInFolder!,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ],
             ),
@@ -186,13 +245,77 @@ class _FileMessageCardState extends State<FileMessageCard> {
 
     // 悬停时再确认一次：文件可能是卡片渲染之后才被移动/删除的，
     // 靠 initState 那一次判断会一直显示过期的状态。
+    // [FORK] 悬浮状态本身也要触发重建——「在文件管理器中显示」的图标靠它淡入淡出。
     return MouseRegion(
       onEnter: (_) {
-        _hovered = true;
+        if (!_hovered) {
+          setState(() => _hovered = true);
+        }
         unawaited(_refreshMissing());
       },
-      onExit: (_) => _hovered = false,
+      onExit: (_) {
+        if (_hovered) {
+          setState(() => _hovered = false);
+        }
+      },
       child: card,
+    );
+  }
+}
+
+/// [FORK] 文件卡片上的「在文件管理器中显示」图标。
+///
+/// 用自绘的悬浮反馈而不是 `InkResponse`：气泡是一层带圆角的纯 `Container`，
+/// 上面没有 `Material`，水波纹会画到页面级的 Material 上去（位置和形状都不对）。
+class _RevealInFolderButton extends StatefulWidget {
+  final Color color;
+  final Color hoverColor;
+  final Color hoverBackground;
+  final VoidCallback onTap;
+
+  const _RevealInFolderButton({
+    required this.color,
+    required this.hoverColor,
+    required this.hoverBackground,
+    required this.onTap,
+  });
+
+  @override
+  State<_RevealInFolderButton> createState() => _RevealInFolderButtonState();
+}
+
+class _RevealInFolderButtonState extends State<_RevealInFolderButton> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: t.conversation.revealInFolder,
+      // 和卡片上的其它提示保持一致：稍等一下再出，快速划过不闪。
+      waitDuration: const Duration(milliseconds: 400),
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _hover = true),
+        onExit: (_) => setState(() => _hover = false),
+        child: GestureDetector(
+          // opaque：图标里 14px 的空白也要能点中，否则得瞄得很准。
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              color: _hover ? widget.hoverBackground : Colors.transparent,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Icon(
+              Icons.folder_open,
+              size: 14,
+              color: _hover ? widget.hoverColor : widget.color,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

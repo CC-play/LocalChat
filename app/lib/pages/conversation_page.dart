@@ -1013,6 +1013,9 @@ class _ConversationPageState extends State<ConversationPage> {
                                     // 恒传非 null：filePath 为空时由 _openFileMessage 弹提示，
                                     // 让「点了没反应」变成「明确告诉你为什么打不开」。
                                     onFileTap: _selecting ? null : () => _openFileMessage(msg),
+                                    // [FORK] 悬浮文件卡片时露出的「在文件管理器中显示」图标。
+                                    // 复用手指菜单同一个实现：目录整个没了时的提示语才不会两套。
+                                    onFileReveal: _selecting ? null : () => unawaited(_revealInFolder(msg)),
                                   ),
                                 ],
                               );
