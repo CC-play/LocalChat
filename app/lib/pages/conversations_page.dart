@@ -33,6 +33,16 @@ const _dangerRed = Color(0xFFD32F2F);
 /// 各取所需，不是同一块色。
 const _dangerRedText = Color(0xFFFF5252);
 
+/// [FORK] 会话项右侧「消息发送失败」警示图标的前景色。
+///
+/// 不用 `colorScheme.error`：浅色主题下它是 #BA1A1A，压在深色标题旁边像一块发暗的
+/// 砖红；深色主题下是 #FFB4AB 浅粉，更不显眼。改用饱和正红，并按亮度分档——同一个
+/// 色在两套背景上没法都够鲜艳：亮红在浅底上会糊，深红在深底上发闷。
+/// 深色沿用菜单里那个 #FF5252；浅色用 Red 600，对浅底对比度约 3.9:1，
+/// 20px 的描边图标仍能看清轮廓。
+Color _failedIconColor(Brightness brightness) =>
+    brightness == Brightness.dark ? _dangerRedText : const Color(0xFFE53935);
+
 /// 会话列表：按对端设备聚合的往来记录，微信式的首页。
 class ConversationsPage extends StatelessWidget {
   const ConversationsPage({super.key});
@@ -384,6 +394,7 @@ class _ConversationTileState extends State<_ConversationTile> {
     final theme = Theme.of(context);
     final last = conversation.lastMessage;
     final unread = conversation.unreadCount;
+    final failed = last?.status == ChatMessageStatus.failed;
 
     return GestureDetector(
       // [FORK] 桌面端右击整行弹出会话菜单。用 translucent：行内留白也能右键，
@@ -421,19 +432,33 @@ class _ConversationTileState extends State<_ConversationTile> {
             ],
           ),
         ),
-        title: Row(
+        // [FORK] 重名时标题变成「名字 · 3F7A」，否则与原来一模一样。
+        title: PeerTitleText(
+          conversation: conversation,
+          ambiguous: ambiguous,
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+        // [FORK] 右侧竖排一列：时间在上，发送失败的警示图标在它正下方，两者都贴右边缘。
+        //
+        // 之前是「标题行里塞 [!] 11/14，再用 Transform 把图标下移到预览行底部」——
+        // 图标和时间的 x 对不齐，偏移量还是照着实测间距硬编码的，改字体就会失准。
+        // 合成一列后位置关系由布局保证，不需要任何魔法数字。
+        //
+        // 图标槽恒定 20dp 高（不失败时留空）：trailing 高度一致，各行的时间才会落在
+        // 同一水平线上；否则 ListTile 的垂直居中会把有无图标的行错开半个图标高。
+        trailing: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Expanded(
-              // [FORK] 重名时标题变成「名字 · 3F7A」，否则与原来一模一样。
-              child: PeerTitleText(
-                conversation: conversation,
-                ambiguous: ambiguous,
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-            ),
             Text(
               _formatTime(conversation.lastActivity),
               style: TextStyle(fontSize: 11, color: theme.colorScheme.outline),
+            ),
+            const SizedBox(height: 2),
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: failed ? Icon(Icons.error_outline, size: 20, color: _failedIconColor(theme.brightness)) : null,
             ),
           ],
         ),
@@ -443,9 +468,6 @@ class _ConversationTileState extends State<_ConversationTile> {
           overflow: TextOverflow.ellipsis,
           style: TextStyle(fontSize: 12, color: theme.colorScheme.outline),
         ),
-        trailing: last != null && last.status == ChatMessageStatus.failed
-            ? Icon(Icons.error_outline, size: 16, color: theme.colorScheme.error)
-            : null,
       ),
     );
   }
