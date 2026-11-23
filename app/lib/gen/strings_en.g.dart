@@ -367,6 +367,12 @@ class Translations$conversation$en {
   /// en: 'Clear'
   String get clear => 'Clear';
 
+  /// en: 'Clear ({seconds})'
+  String clearCountdown({required Object seconds}) => 'Clear (${seconds})';
+
+  /// en: 'Delete chat'
+  String get deleteAction => 'Delete chat';
+
   /// en: 'Delete chat?'
   String get deleteTitle => 'Delete chat?';
 

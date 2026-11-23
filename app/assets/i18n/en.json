@@ -197,6 +197,8 @@
     "clearAllTitle": "Clear all chats?",
     "clearAllMessage": "All chat history will be deleted. This cannot be undone. Received files are not affected.",
     "clear": "Clear",
+    "clearCountdown": "Clear ({seconds})",
+    "deleteAction": "Delete chat",
     "deleteTitle": "Delete chat?",
     "deleteMessage": "The chat history with \"{name}\" will be deleted. Received files are not affected.",
     "deleted": "This chat has been deleted.",

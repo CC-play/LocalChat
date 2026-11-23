@@ -197,6 +197,8 @@
     "clearAllTitle": "清空全部会话？",
     "clearAllMessage": "所有会话记录都会被删除，此操作不可撤销。已接收的文件不受影响。",
     "clear": "清空",
+    "clearCountdown": "清空（{seconds}）",
+    "deleteAction": "删除此会话",
     "deleteTitle": "删除会话？",
     "deleteMessage": "与「{name}」的聊天记录将被删除，已接收的文件不受影响。",
     "deleted": "该会话已被删除",

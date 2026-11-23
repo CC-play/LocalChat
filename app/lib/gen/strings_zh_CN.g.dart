@@ -327,6 +327,10 @@ class Translations$conversation$zh_CN extends Translations$conversation$en {
   @override
   String get clear => '清空';
   @override
+  String clearCountdown({required Object seconds}) => '清空（${seconds}）';
+  @override
+  String get deleteAction => '删除此会话';
+  @override
   String get deleteTitle => '删除会话？';
   @override
   String deleteMessage({required Object name}) => '与「${name}」的聊天记录将被删除，已接收的文件不受影响。';

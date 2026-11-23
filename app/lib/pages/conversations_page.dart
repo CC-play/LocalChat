@@ -10,12 +10,28 @@ import 'package:localchat_app/provider/selection/selected_sending_files_provider
 import 'package:localchat_app/util/conversation/conversation_sender.dart';
 import 'package:localchat_app/util/conversation/peer_label.dart';
 import 'package:localchat_app/util/native/chat_notification.dart';
+import 'package:localchat_app/util/native/platform_check.dart';
 import 'package:localchat_app/util/ui/avatar_color.dart';
 import 'package:localchat_app/widget/chat/peer_avatar.dart';
 import 'package:localchat_app/widget/chat/peer_title.dart';
 import 'package:localchat_isolates/util/file_size_helper.dart';
 import 'package:refena_flutter/refena_flutter.dart';
 import 'package:routerino/routerino.dart';
+
+/// [FORK] 破坏性操作（删除会话 / 清空全部）的实心底色。
+///
+/// 不能直接拿 `colorScheme.error` 当背景：M3 在深色主题下把它定义成 #FFB4AB
+/// 浅粉、配套的 onError 是暗红，成品是一块淡粉配深字——读起来像「选中高亮」，
+/// 不像危险动作。危险红是语义色而非主题色，固定成同一个正红，深浅两套主题
+/// 下都是红底白字。对比度 4.6:1，达到 AA 正文标准。
+const _dangerRed = Color(0xFFD32F2F);
+
+/// [FORK] 右键菜单里「删除此会话」的文字色。
+///
+/// 比 [_dangerRed] 亮两档：菜单项只是一行小字，夹在灰字菜单里要靠色相跳出来，
+/// 用深红会发闷；而确认框的主按钮是整块实心红，用亮红反而刺眼。两种场景
+/// 各取所需，不是同一块色。
+const _dangerRedText = Color(0xFFFF5252);
 
 /// 会话列表：按对端设备聚合的往来记录，微信式的首页。
 class ConversationsPage extends StatelessWidget {
@@ -40,14 +56,9 @@ class ConversationsPage extends StatelessWidget {
               onPressed: () async {
                 final confirmed = await showDialog<bool>(
                   context: context,
-                  builder: (context) => AlertDialog(
-                    title: Text(t.conversation.clearAllTitle),
-                    content: Text(t.conversation.clearAllMessage),
-                    actions: [
-                      TextButton(onPressed: () => Navigator.pop(context, false), child: Text(t.general.cancel)),
-                      TextButton(onPressed: () => Navigator.pop(context, true), child: Text(t.conversation.clear)),
-                    ],
-                  ),
+                  // [FORK] 清空是不可撤销的批量删除，按钮做成红色并带 3 秒倒计时，
+                  // 避免「连点两下」就把整页记录抹掉。倒计时由对话框自己管。
+                  builder: (_) => const _ClearAllDialog(),
                 );
                 if (confirmed == true && context.mounted) {
                   await context.ref.redux(conversationProvider).dispatchAsync(ClearConversationsAction());
@@ -103,6 +114,75 @@ class ConversationsPage extends StatelessWidget {
           pendingFiles: pendingFiles,
         );
       },
+    );
+  }
+}
+
+/// [FORK] 「清空全部会话」的确认框。
+///
+/// 比普通确认框多一道防误触：主按钮是红色的危险操作，且前 3 秒保持禁用并显示
+/// 剩余秒数。清空会删掉所有会话记录且不可撤销，手一抖连点两下就没了——倒计时
+/// 的成本远低于事后找不回来。
+class _ClearAllDialog extends StatefulWidget {
+  const _ClearAllDialog();
+
+  @override
+  State<_ClearAllDialog> createState() => _ClearAllDialogState();
+}
+
+class _ClearAllDialogState extends State<_ClearAllDialog> {
+  /// 禁用时长。3 秒足够让「我要清空」和「手滑」区分开，又不至于让人等得不耐烦。
+  static const _countdownFrom = 3;
+
+  int _remaining = _countdownFrom;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      setState(() => _remaining--);
+      if (_remaining <= 0) {
+        timer.cancel();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    // 用户提前取消 / 点遮罩关闭时，计时器必须跟着走，否则会给已卸载的 State setState。
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ready = _remaining <= 0;
+    return AlertDialog(
+      title: Text(t.conversation.clearAllTitle),
+      content: Text(t.conversation.clearAllMessage),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: Text(t.general.cancel),
+        ),
+        FilledButton(
+          // 禁用态下 onPressed 为 null，改用 disabledBackground/disabledForeground
+          // 把红底压成淡红、文字转灰——仍看得出这里是主操作，但一眼知道还不能点。
+          onPressed: ready ? () => Navigator.pop(context, true) : null,
+          style: FilledButton.styleFrom(
+            backgroundColor: _dangerRed,
+            foregroundColor: Colors.white,
+            disabledBackgroundColor: _dangerRed.withValues(alpha: 0.15),
+            disabledForegroundColor: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.38),
+          ),
+          child: Text(ready ? t.conversation.clear : t.conversation.clearCountdown(seconds: _remaining)),
+        ),
+      ],
     );
   }
 }
@@ -256,7 +336,18 @@ String _totalSizeOf(List<CrossFile> files) {
   return total.asReadableFileSize;
 }
 
-class _ConversationTile extends StatelessWidget {
+/// [FORK] 会话项右键菜单里的动作。
+///
+/// 只有一个成员也单独立枚举：将来加「标为已读」「置顶」时，`showMenu` 的返回值和
+/// `switch` 都能直接扩展，不必把 if/else 改成别的形式。
+enum _TileMenuAction { delete }
+
+/// [FORK] 会话列表里的一行。
+///
+/// 桌面端右击整行会弹出操作菜单（目前只有「删除此会话」），它和长按一样
+/// 落到 [_confirmDelete]：两条入口共用同一个确认框与同一份删除逻辑，不会
+/// 出现「菜单直接删、长按还要确认」这种不一致。
+class _ConversationTile extends StatefulWidget {
   final Conversation conversation;
 
   /// [FORK] 是否与列表里其它会话同名 —— 同名时标题后追加指纹短码。
@@ -272,66 +363,150 @@ class _ConversationTile extends StatelessWidget {
   });
 
   @override
+  State<_ConversationTile> createState() => _ConversationTileState();
+}
+
+class _ConversationTileState extends State<_ConversationTile> {
+  /// 右键菜单是否已经打开。
+  ///
+  /// 连点右键时，`PopupRoute` 的遮罩只能吃掉第二次点击本身，挡不住再 push
+  /// 一层菜单，会叠出两个一模一样的菜单；这里加一道闸门。
+  bool _menuOpen = false;
+
+  // 与 Widget 同名字段转发：下面的布局和交互沿用手感更熟的 `conversation.xxx`
+  // 写法，不必逐处改成 `widget.conversation.xxx`。
+  Conversation get conversation => widget.conversation;
+  bool get ambiguous => widget.ambiguous;
+  List<CrossFile> get pendingFiles => widget.pendingFiles;
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final last = conversation.lastMessage;
     final unread = conversation.unreadCount;
 
-    return ListTile(
-      onTap: () => unawaited(_open(context)),
-      onLongPress: () => _confirmDelete(context),
-      // [FORK] 未读数挂在头像右上角：44 的方框比头像大一圈，徽标锚 right/top，
-      // 正好压在圆角方块的右上角外侧，不与标题行抢位置。
-      leading: SizedBox(
-        width: 44,
-        height: 44,
-        child: Stack(
-          // 徽标要探出头像方框一点，默认的 hardEdge 会把它切掉。
-          clipBehavior: Clip.none,
+    return GestureDetector(
+      // [FORK] 桌面端右击整行弹出会话菜单。用 translucent：行内留白也能右键，
+      // 且不抢 ListTile 自己的点击与长按（右键是次要键，不参与 tap 竞技）。
+      behavior: HitTestBehavior.translucent,
+      onSecondaryTapUp: checkPlatformIsDesktop() ? (details) => unawaited(_showTileMenu(details.globalPosition)) : null,
+      child: ListTile(
+        onTap: () => unawaited(_open(context)),
+        onLongPress: () => _confirmDelete(context),
+        // [FORK] 未读数挂在头像右上角：44 的方框比头像大一圈，徽标锚 right/top，
+        // 正好压在圆角方块的右上角外侧，不与标题行抢位置。
+        leading: SizedBox(
+          width: 44,
+          height: 44,
+          child: Stack(
+            // 徽标要探出头像方框一点，默认的 hardEdge 会把它切掉。
+            clipBehavior: Clip.none,
+            children: [
+              Center(
+                // [FORK] 与聊天气泡共用同一个头像部件：圆角方块 + 按指纹取色。
+                child: PeerAvatar(
+                  initial: conversation.initial,
+                  colors: avatarColorsFor(conversation.peerFingerprint, theme.brightness),
+                  size: 40,
+                ),
+              ),
+              if (unread > 0)
+                Positioned(
+                  // 方块有实实在在的直角区域，徽标比圆形头像时再往外挪 1px，
+                  // 避免压在头像本体上（徽标自带 1.5px 底色描边）。
+                  top: -4,
+                  right: -4,
+                  child: _UnreadBadge(count: unread),
+                ),
+            ],
+          ),
+        ),
+        title: Row(
           children: [
-            Center(
-              // [FORK] 与聊天气泡共用同一个头像部件：圆角方块 + 按指纹取色。
-              child: PeerAvatar(
-                initial: conversation.initial,
-                colors: avatarColorsFor(conversation.peerFingerprint, theme.brightness),
-                size: 40,
+            Expanded(
+              // [FORK] 重名时标题变成「名字 · 3F7A」，否则与原来一模一样。
+              child: PeerTitleText(
+                conversation: conversation,
+                ambiguous: ambiguous,
+                style: const TextStyle(fontWeight: FontWeight.w600),
               ),
             ),
-            if (unread > 0)
-              Positioned(
-                // 方块有实实在在的直角区域，徽标比圆形头像时再往外挪 1px，
-                // 避免压在头像本体上（徽标自带 1.5px 底色描边）。
-                top: -4,
-                right: -4,
-                child: _UnreadBadge(count: unread),
-              ),
+            Text(
+              _formatTime(conversation.lastActivity),
+              style: TextStyle(fontSize: 11, color: theme.colorScheme.outline),
+            ),
           ],
         ),
+        subtitle: Text(
+          last == null ? '' : _previewOf(last),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(fontSize: 12, color: theme.colorScheme.outline),
+        ),
+        trailing: last != null && last.status == ChatMessageStatus.failed
+            ? Icon(Icons.error_outline, size: 16, color: theme.colorScheme.error)
+            : null,
       ),
-      title: Row(
-        children: [
-          Expanded(
-            // [FORK] 重名时标题变成「名字 · 3F7A」，否则与原来一模一样。
-            child: PeerTitleText(
-              conversation: conversation,
-              ambiguous: ambiguous,
-              style: const TextStyle(fontWeight: FontWeight.w600),
+    );
+  }
+
+  /// [FORK] 在右击位置弹出会话菜单。
+  ///
+  /// 样式与聊天页气泡的右键菜单保持一致（surfaceContainer 底 + 一圈 outlineVariant
+  /// 描边），两个右键菜单在同一套界面里不该长得像两个 App。
+  Future<void> _showTileMenu(Offset position) async {
+    if (_menuOpen) {
+      return;
+    }
+    final overlay = Overlay.of(context).context.findRenderObject();
+    if (overlay is! RenderBox) {
+      return;
+    }
+
+    _menuOpen = true;
+    final theme = Theme.of(context);
+    _TileMenuAction? action;
+    try {
+      action = await showMenu<_TileMenuAction>(
+        context: context,
+        position: RelativeRect.fromLTRB(
+          position.dx,
+          position.dy,
+          overlay.size.width - position.dx,
+          overlay.size.height - position.dy,
+        ),
+        color: theme.colorScheme.surfaceContainer,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: BorderSide(color: theme.colorScheme.outlineVariant),
+        ),
+        items: [
+          PopupMenuItem(
+            value: _TileMenuAction.delete,
+            height: 40,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.delete_outline, size: 16, color: _dangerRedText),
+                const SizedBox(width: 10),
+                // [FORK] 破坏性操作走鲜红文字：菜单里只有这一项，颜色就是唯一的提示。
+                // 不用 colorScheme.error —— 深色下它是 #FFB4AB 浅粉，作为一行小字
+                // 完全跳不出来。
+                Text(t.conversation.deleteAction, style: const TextStyle(color: _dangerRedText)),
+              ],
             ),
           ),
-          Text(
-            _formatTime(conversation.lastActivity),
-            style: TextStyle(fontSize: 11, color: theme.colorScheme.outline),
-          ),
         ],
-      ),
-      subtitle: Text(
-        last == null ? '' : _previewOf(last),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(fontSize: 12, color: theme.colorScheme.outline),
-      ),
-      trailing: last != null && last.status == ChatMessageStatus.failed ? Icon(Icons.error_outline, size: 16, color: theme.colorScheme.error) : null,
-    );
+      );
+    } finally {
+      _menuOpen = false;
+    }
+
+    // 菜单关闭后会话可能已经被别处删掉，State 也就卸载了，确认框不能再弹。
+    if (action == _TileMenuAction.delete && mounted) {
+      await _confirmDelete(context);
+    }
   }
 
   String _previewOf(ChatMessage message) {
@@ -415,7 +590,15 @@ class _ConversationTile extends StatelessWidget {
         content: Text(t.conversation.deleteMessage(name: peerLabel(conversation, ambiguous: ambiguous))),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: Text(t.general.cancel)),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: Text(t.general.delete)),
+          // [FORK] 删除不可撤销，用实心红把它和「取消」区分开。
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: _dangerRed,
+              foregroundColor: Colors.white,
+            ),
+            child: Text(t.general.delete),
+          ),
         ],
       ),
     );
