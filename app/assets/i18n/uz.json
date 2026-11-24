@@ -152,7 +152,7 @@
     },
     "other": {
       "title": "Boshqa",
-      "support": "LocalSendni qoʻllab-quvvatlash",
+      "support": "LocalChatni qoʻllab-quvvatlash",
       "donate": "Xayriya",
       "privacyPolicy": "Maxfiylik siyosati",
       "termsOfUse": "Foydalanish shartlari"
@@ -308,7 +308,7 @@
   },
   "donationPage": {
     "title": "Xayriya",
-    "info": "LocalSend bepul, ochiq manbali va reklamasiz. Agar ilova sizga yoqqan boʻlsa, xayriya bilan rivojlanishni qoʻllab-quvvatlashingiz mumkin.",
+    "info": "LocalChat bepul, ochiq manbali va reklamasiz. Agar ilova sizga yoqqan boʻlsa, xayriya bilan rivojlanishni qoʻllab-quvvatlashingiz mumkin.",
     "donate": "{amount} xayriya qilish",
     "thanks": "Katta rahmat!",
     "restore": "Xaridni tiklash"

@@ -156,7 +156,7 @@
     },
     "other": {
       "title": "Other information",
-      "support": "Support LocalSend",
+      "support": "Support LocalChat",
       "donate": "Donate",
       "privacyPolicy": "Privacy Policy",
       "termsOfUse": "Terms of Use"
@@ -405,7 +405,7 @@
   },
   "donationPage": {
     "title": "Donate",
-    "info": "LocalSend is free, open-source and without any ads. If you like the app, you can support the development with a donation.",
+    "info": "LocalChat is free, open-source and without any ads. If you like the app, you can support the development with a donation.",
     "donate": "Donate {amount}",
     "thanks": "Thank you very much!",
     "restore": "Restore purchase"

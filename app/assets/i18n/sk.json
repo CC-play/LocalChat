@@ -152,7 +152,7 @@
     },
     "other": {
       "title": "Iné",
-      "support": "Podporte LocalSend",
+      "support": "Podporte LocalChat",
       "donate": "Darovať",
       "privacyPolicy": "Zásady ochrany osobných údajov",
       "termsOfUse": "Podmienky používania"
@@ -308,7 +308,7 @@
   },
   "donationPage": {
     "title": "Darovať",
-    "info": "LocalSend je bezplatný, s otvoreným kódom a bez reklám. Ak sa vám aplikácia páči, môžete jej vývoj podporiť darom.",
+    "info": "LocalChat je bezplatný, s otvoreným kódom a bez reklám. Ak sa vám aplikácia páči, môžete jej vývoj podporiť darom.",
     "donate": "Darovať {amount}",
     "thanks": "Ďakujeme veľmi pekne!",
     "restore": "Obnoviť nákup"

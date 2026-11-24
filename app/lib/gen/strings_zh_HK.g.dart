@@ -548,7 +548,7 @@ class Translations$donationPage$zh_HK extends Translations$donationPage$en {
   @override
   String get title => _root.settingsTab.other.donate;
   @override
-  String get info => 'LocalSend 唔單只免費、開源，仲係冇廣告添㗎！如果你鍾意呢個 app，不妨捐款贊助我哋開發？';
+  String get info => 'LocalChat 唔單只免費、開源，仲係冇廣告添㗎！如果你鍾意呢個 app，不妨捐款贊助我哋開發？';
   @override
   String donate({required Object amount}) => '捐 ${amount}';
   @override
@@ -983,7 +983,7 @@ class Translations$settingsTab$other$zh_HK extends Translations$settingsTab$othe
   @override
   String get title => '其他資訊';
   @override
-  String get support => '支援 LocalSend';
+  String get support => '支援 LocalChat';
   @override
   String get donate => '捐款';
   @override

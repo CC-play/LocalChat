@@ -152,7 +152,7 @@
     },
     "other": {
       "title": "Autre",
-      "support": "Soutenir LocalSend",
+      "support": "Soutenir LocalChat",
       "donate": "Faire une donation",
       "privacyPolicy": "Politique de confidentialité",
       "termsOfUse": "Conditions d'utilisation"
@@ -308,7 +308,7 @@
   },
   "donationPage": {
     "title": "Faire une donation",
-    "info": "LocalSend est gratuit, open-source et sans aucune pub. Si vous aimez ce logiciel, vous pouvez faire un don pour soutenir son développement.",
+    "info": "LocalChat est gratuit, open-source et sans aucune pub. Si vous aimez ce logiciel, vous pouvez faire un don pour soutenir son développement.",
     "donate": "Donner {amount}",
     "thanks": "Merci beaucoup !",
     "restore": "Restaurer les achats"

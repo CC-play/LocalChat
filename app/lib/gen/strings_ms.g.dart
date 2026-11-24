@@ -538,7 +538,7 @@ class _Translations$donationPage$ms extends Translations$donationPage$en {
   String get title => 'Derma';
   @override
   String get info =>
-      'LocalSend adalah percuma, sumber terbuka dan tanpa iklan. Jika anda menyukai aplikasi ini, anda boleh menyokong pembangunannya dengan derma.';
+      'LocalChat adalah percuma, sumber terbuka dan tanpa iklan. Jika anda menyukai aplikasi ini, anda boleh menyokong pembangunannya dengan derma.';
   @override
   String donate({required Object amount}) => 'Derma ${amount}';
   @override
@@ -1047,7 +1047,7 @@ class _Translations$settingsTab$other$ms extends Translations$settingsTab$other$
   @override
   String get title => 'Lain-lain';
   @override
-  String get support => 'Sokong LocalSend';
+  String get support => 'Sokong LocalChat';
   @override
   String get donate => 'Derma';
   @override

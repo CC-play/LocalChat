@@ -965,7 +965,7 @@ class _Translations$settingsTab$other$gl extends Translations$settingsTab$other$
   @override
   String get title => 'Outros';
   @override
-  String get support => 'Apoia a LocalSend';
+  String get support => 'Apoia a LocalChat';
   @override
   String get donate => 'Doar';
   @override

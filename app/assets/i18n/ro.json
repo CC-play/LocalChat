@@ -152,7 +152,7 @@
     },
     "other": {
       "title": "Altele",
-      "support": "Susține LocalSend",
+      "support": "Susține LocalChat",
       "donate": "Donează",
       "privacyPolicy": "Politica de confidențialitate",
       "termsOfUse": "Termeni de utilizare"
@@ -308,7 +308,7 @@
   },
   "donationPage": {
     "title": "Donează",
-    "info": "LocalSend este gratuit, open-source și fără reclame. Dacă îți place aplicația, poți susține dezvoltarea cu o donație.",
+    "info": "LocalChat este gratuit, open-source și fără reclame. Dacă îți place aplicația, poți susține dezvoltarea cu o donație.",
     "donate": "Donează {amount}",
     "thanks": "Îți mulțumim foarte mult!",
     "restore": "Restabilește achiziția"

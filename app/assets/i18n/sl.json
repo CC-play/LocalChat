@@ -152,7 +152,7 @@
     },
     "other": {
       "title": "Drugo",
-      "support": "Podprite LocalSend",
+      "support": "Podprite LocalChat",
       "donate": "Donirajte",
       "privacyPolicy": "Politika zasebnosti",
       "termsOfUse": "Pogoji uporabe"
@@ -308,7 +308,7 @@
   },
   "donationPage": {
     "title": "Doniraj",
-    "info": "LocalSend je brezplačna, odprtokodna in brez oglasov. Če vam je aplikacija všeč, lahko podprete razvoj z donacijo.",
+    "info": "LocalChat je brezplačna, odprtokodna in brez oglasov. Če vam je aplikacija všeč, lahko podprete razvoj z donacijo.",
     "donate": "Doniraj {amount}",
     "thanks": "Najlepša hvala!",
     "restore": "Obnovi nakup"

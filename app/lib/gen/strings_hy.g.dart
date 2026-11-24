@@ -538,7 +538,7 @@ class _Translations$donationPage$hy extends Translations$donationPage$en {
   String get title => 'Նվիրաբերել';
   @override
   String get info =>
-      'LocalSend-ը անվճար է, բաց կոդով և առանց որևէ գովազդի: Եթե ​​ձեզ դուր է գալիս ծրագիրը, կարող եք աջակցել զարգացմանը նվիրաբերելով:';
+      'LocalChat-ը անվճար է, բաց կոդով և առանց որևէ գովազդի: Եթե ​​ձեզ դուր է գալիս ծրագիրը, կարող եք աջակցել զարգացմանը նվիրաբերելով:';
   @override
   String donate({required Object amount}) => 'Նվիրաբերել ${amount}';
   @override
@@ -1048,7 +1048,7 @@ class _Translations$settingsTab$other$hy extends Translations$settingsTab$other$
   @override
   String get title => 'Այլ';
   @override
-  String get support => 'Աջակցել LocalSend-ին';
+  String get support => 'Աջակցել LocalChat-ին';
   @override
   String get donate => 'Նվիրաբերել';
   @override

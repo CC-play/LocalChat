@@ -909,8 +909,8 @@ class Translations$donationPage$en {
   /// en: 'Donate'
   String get title => 'Donate';
 
-  /// en: 'LocalSend is free, open-source and without any ads. If you like the app, you can support the development with a donation.'
-  String get info => 'LocalSend is free, open-source and without any ads. If you like the app, you can support the development with a donation.';
+  /// en: 'LocalChat is free, open-source and without any ads. If you like the app, you can support the development with a donation.'
+  String get info => 'LocalChat is free, open-source and without any ads. If you like the app, you can support the development with a donation.';
 
   /// en: 'Donate {amount}'
   String donate({required Object amount}) => 'Donate ${amount}';
@@ -1513,8 +1513,8 @@ class Translations$settingsTab$other$en {
   /// en: 'Other information'
   String get title => 'Other information';
 
-  /// en: 'Support LocalSend'
-  String get support => 'Support LocalSend';
+  /// en: 'Support LocalChat'
+  String get support => 'Support LocalChat';
 
   /// en: 'Donate'
   String get donate => 'Donate';

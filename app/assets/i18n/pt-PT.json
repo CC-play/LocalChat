@@ -152,7 +152,7 @@
     },
     "other": {
       "title": "Outros",
-      "support": "Suporte o LocalSend",
+      "support": "Suporte o LocalChat",
       "donate": "Doar",
       "privacyPolicy": "Política de Privacidade",
       "termsOfUse": "Termos de Utilização"
@@ -308,7 +308,7 @@
   },
   "donationPage": {
     "title": "Doar",
-    "info": "O LocalSend é um software gratuito, de código aberto e sem qualquer anúncio. Se gosta da aplicação, considere apoiar o desenvolvimento com um donativo.",
+    "info": "O LocalChat é um software gratuito, de código aberto e sem qualquer anúncio. Se gosta da aplicação, considere apoiar o desenvolvimento com um donativo.",
     "donate": "Doar {amount}",
     "thanks": "Muito obrigado!",
     "restore": "Restaurar compra"

@@ -476,7 +476,7 @@ class _Translations$donationPage$en_IN extends Translations$donationPage$en {
   @override
   String get title => 'Donate';
   @override
-  String get info => 'LocalSend is free, open-source and without any ads. If you like the app, you can support the development with a donation.';
+  String get info => 'LocalChat is free, open-source and without any ads. If you like the app, you can support the development with a donation.';
   @override
   String donate({required Object amount}) => 'Donate ${amount}';
   @override
@@ -976,7 +976,7 @@ class _Translations$settingsTab$other$en_IN extends Translations$settingsTab$oth
   @override
   String get title => 'Other';
   @override
-  String get support => 'Support LocalSend';
+  String get support => 'Support LocalChat';
   @override
   String get donate => 'Donate';
   @override

@@ -536,7 +536,7 @@ class _Translations$donationPage$hu extends Translations$donationPage$en {
   String get title => 'Adomány';
   @override
   String get info =>
-      'A LocalSend ingyenes, nyílt forráskódú és hirdetések nélküli. Ha megtetszett az alkalmazás, adományával támogathatja a fejlesztést.';
+      'A LocalChat ingyenes, nyílt forráskódú és hirdetések nélküli. Ha megtetszett az alkalmazás, adományával támogathatja a fejlesztést.';
   @override
   String donate({required Object amount}) => 'Adomány ${amount}';
   @override
@@ -965,7 +965,7 @@ class _Translations$settingsTab$other$hu extends Translations$settingsTab$other$
   @override
   String get title => 'Egyéb';
   @override
-  String get support => 'LocalSend támogatás';
+  String get support => 'LocalChat támogatás';
   @override
   String get donate => 'Adomány';
   @override

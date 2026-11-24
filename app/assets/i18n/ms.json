@@ -152,7 +152,7 @@
     },
     "other": {
       "title": "Lain-lain",
-      "support": "Sokong LocalSend",
+      "support": "Sokong LocalChat",
       "donate": "Derma",
       "privacyPolicy": "Dasar Privasi",
       "termsOfUse": "Syarat Penggunaan"
@@ -308,7 +308,7 @@
   },
   "donationPage": {
     "title": "Derma",
-    "info": "LocalSend adalah percuma, sumber terbuka dan tanpa iklan. Jika anda menyukai aplikasi ini, anda boleh menyokong pembangunannya dengan derma.",
+    "info": "LocalChat adalah percuma, sumber terbuka dan tanpa iklan. Jika anda menyukai aplikasi ini, anda boleh menyokong pembangunannya dengan derma.",
     "donate": "Derma {amount}",
     "thanks": "Terima kasih banyak!",
     "restore": "Pulihkan pembelian"

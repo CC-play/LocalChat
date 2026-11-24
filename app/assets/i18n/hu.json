@@ -152,7 +152,7 @@
     },
     "other": {
       "title": "Egyéb",
-      "support": "LocalSend támogatás",
+      "support": "LocalChat támogatás",
       "donate": "Adomány",
       "privacyPolicy": "Adatvédelmi irányelvek",
       "termsOfUse": "Használati feltételek"
@@ -308,7 +308,7 @@
   },
   "donationPage": {
     "title": "Adomány",
-    "info": "A LocalSend ingyenes, nyílt forráskódú és hirdetések nélküli. Ha megtetszett az alkalmazás, adományával támogathatja a fejlesztést.",
+    "info": "A LocalChat ingyenes, nyílt forráskódú és hirdetések nélküli. Ha megtetszett az alkalmazás, adományával támogathatja a fejlesztést.",
     "donate": "Adomány {amount}",
     "thanks": "Köszönöm szépen!",
     "restore": "Vásárlás visszaállítása"

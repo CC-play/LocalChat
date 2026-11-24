@@ -536,7 +536,7 @@ class _Translations$donationPage$vi extends Translations$donationPage$en {
   String get title => 'Ủng hộ';
   @override
   String get info =>
-      'LocalSend là ứng dụng miễn phí, mã nguồn mở, không chứa quảng cáo. Nếu bạn yêu thích ứng dụng này, bạn có thể hỗ trợ việc phát triển bằng việc ủng hộ.';
+      'LocalChat là ứng dụng miễn phí, mã nguồn mở, không chứa quảng cáo. Nếu bạn yêu thích ứng dụng này, bạn có thể hỗ trợ việc phát triển bằng việc ủng hộ.';
   @override
   String donate({required Object amount}) => 'Ủng hộ ${amount}';
   @override
@@ -965,7 +965,7 @@ class _Translations$settingsTab$other$vi extends Translations$settingsTab$other$
   @override
   String get title => 'Khác';
   @override
-  String get support => 'Hỗ trợ LocalSend';
+  String get support => 'Hỗ trợ LocalChat';
   @override
   String get donate => 'Ủng hộ';
   @override

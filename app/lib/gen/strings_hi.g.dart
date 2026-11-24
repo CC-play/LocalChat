@@ -537,7 +537,7 @@ class _Translations$donationPage$hi extends Translations$donationPage$en {
   @override
   String get title => 'दान करें';
   @override
-  String get info => 'LocalSend मुफ्त, ओपन-सोर्स और बिना किसी विज्ञापन के है। यदि आपको ऐप पसंद है, तो आप विकास का समर्थन दान करके कर सकते हैं।';
+  String get info => 'LocalChat मुफ्त, ओपन-सोर्स और बिना किसी विज्ञापन के है। यदि आपको ऐप पसंद है, तो आप विकास का समर्थन दान करके कर सकते हैं।';
   @override
   String donate({required Object amount}) => 'दान करें ${amount}';
   @override
@@ -1049,7 +1049,7 @@ class _Translations$settingsTab$other$hi extends Translations$settingsTab$other$
   @override
   String get title => 'अन्य';
   @override
-  String get support => 'LocalSend का समर्थन करें';
+  String get support => 'LocalChat का समर्थन करें';
   @override
   String get donate => 'दान करें';
   @override

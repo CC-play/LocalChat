@@ -152,7 +152,7 @@
     },
     "other": {
       "title": "Muu teave",
-      "support": "Toeta LocalSendi",
+      "support": "Toeta LocalChati",
       "donate": "Toeta rahaliselt",
       "privacyPolicy": "Andmekaitsepõhimõtted",
       "termsOfUse": "Kasutustingimused"
@@ -308,7 +308,7 @@
   },
   "donationPage": {
     "title": "Toeta meid rahaliselt",
-    "info": "LocalSend põhineb avatud lähtekoodil, on kõikide jaoks vaba ning tasuta kasutatav, ega sisalda reklaame. Kui sulle see rakendus meeldib, siis palun toeta meie arendust.",
+    "info": "LocalChat põhineb avatud lähtekoodil, on kõikide jaoks vaba ning tasuta kasutatav, ega sisalda reklaame. Kui sulle see rakendus meeldib, siis palun toeta meie arendust.",
     "donate": "Anneta {amount}",
     "thanks": "Suur tänu!",
     "restore": "Taasta ost"
