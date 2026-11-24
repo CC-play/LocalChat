@@ -28,3 +28,6 @@
 /packages/localchat_isolates/rust_builder/cargokit/pubspec.yaml
 /packages/localchat_isolates/rust_builder/cargokit/pubspec.lock
 /packages/localchat_isolates/rust_builder/cargokit/.dart_tool/
+
+# Local build/verification logs written to the repo root (machine-specific)
+/build_*.log
