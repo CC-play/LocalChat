@@ -31,3 +31,6 @@
 
 # Local build/verification logs written to the repo root (machine-specific)
 /build_*.log
+
+# 本地开发待办与踩坑记录，不入库
+/todo.md
