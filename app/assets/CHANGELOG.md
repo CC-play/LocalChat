@@ -1,3 +1,32 @@
+## 0.1.0 (2026-11-24)
+
+First standalone release of LocalChat: the LocalSend 1.18.2 transfer engine, with the one-shot "pick files → send" flow replaced by a list of peers you can talk to repeatedly. Everything below this entry is the upstream LocalSend changelog, kept for reference.
+
+**Conversations**
+
+- feat: peers grouped into a chat list sorted by recent activity, with history in both directions
+- feat: unread badges on the avatar, notification sound, and a blinking tray icon on desktop
+- feat: multi-select to delete messages; right-click a conversation to delete it or clear its history
+- feat: duplicate device names get a fingerprint suffix so they can be told apart
+
+**Sending**
+
+- feat: drop files onto a conversation, or paste files, images and text with `Ctrl/Cmd+V`
+- feat: upload progress drawn inside the bubble; long transfers can be cancelled, failed ones resent
+- feat: text messages keep retrying in the background for up to 2 minutes when the peer is briefly unreachable
+- feat: file cards show thumbnails for images and videos, offer "show in file manager", and grey out once the file is gone
+- feat: on Android, the system share sheet lands in a conversation instead of sending immediately
+
+**Branding and platform**
+
+- feat(branding): renamed to LocalChat, application id `com.localchat.app`, new icon set on all platforms
+- feat(settings): WeChat reward code page, with the code saved to the gallery or Downloads folder
+- feat(windows): title bar follows the app theme; build passes `/utf-8` to MSVC so non-ASCII comments compile
+- fix(theme): raised the dark surface ramp so the background is no longer near-black
+- perf: SHA-256 verification 20x faster in debug builds (`opt-level` for `sha2` / `digest`)
+- i18n: UI strings no longer say "LocalSend"; upstream attribution stays in About
+- note: still interoperates with stock LocalSend — same endpoints, port and multicast group
+
 ## 1.18.2 (2026-08-21)
 
 - feat: drag and drop files into the "Receive via link" browser page
