@@ -11,7 +11,7 @@ if(WIN32)
     execute_process(COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File "${CMAKE_CURRENT_LIST_DIR}/resolve_symlinks.ps1" "${cargokit_cmake_root}" OUTPUT_VARIABLE _cargokit_resolved_raw OUTPUT_STRIP_TRAILING_WHITESPACE)
 
     # [FORK] 兜底：只取最后一行（脚本自身的输出总在 profile 输出之后）。
-    # 注意不要用正则 [^\r\n]，CMake 会把 \r 当作字面字符 r，导致路径在 'D:/Users' 处被截断。
+    # 注意不要用正则 [^\r\n]，CMake 会把 \r 当作字面字符 r，导致路径在盘符后的第一段斜杠处被截断。
     string(REPLACE "\r\n" "\n" _cargokit_resolved_raw "${_cargokit_resolved_raw}")
     string(REPLACE "\r" "\n" _cargokit_resolved_raw "${_cargokit_resolved_raw}")
     string(REPLACE "\n" ";" _cargokit_resolved_lines "${_cargokit_resolved_raw}")
