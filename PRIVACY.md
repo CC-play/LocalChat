@@ -46,7 +46,7 @@ When a peer is not on your local network, the app uses WebRTC. The defaults are:
 
 What is sent to the signalling server: a random session identifier, your device's public-key fingerprint, device name, device type/model, protocol version, and the WebRTC handshake (session description and ICE candidates, which can include IP addresses).
 
-What is not sent: file names, file contents, and chat text. The actual transfer runs over an encrypted peer-to-peer channel (DTLS), and both sides confirm a PIN before data is exchanged.
+What is not sent: file names, file contents, and chat text. The actual transfer runs over an encrypted peer-to-peer channel (DTLS); if the receiving device has PIN verification enabled, nothing is transferred until the PIN matches.
 
 Version 0.1.0 has no setting to change these servers; they are compile-time defaults. If you need different servers, build from source.
 
@@ -70,7 +70,7 @@ LocalChat is not directed at children and collects no personal data from anyone.
 
 ## Changes and contact
 
-This policy is versioned with the code; the date at the top changes when it does. Questions or corrections: open an issue at <https://github.com/CC-play/LocalChat/issues>.
+This policy is versioned with the code; the date at the top changes when it does. Questions or corrections: [open an issue](https://github.com/CC-play/LocalChat/issues).
 
 ---
 
@@ -122,7 +122,7 @@ LocalChat 没有账号体系、没有后端、没有统计。它在你的局域�
 
 发送给信令服务器的内容：随机会话标识、你设备的公钥指纹、设备名、设备类型/型号、协议版本，以及 WebRTC 握手信息（会话描述与 ICE 候选地址，其中可能包含 IP 地址）。
 
-不会发送：文件名、文件内容、聊天文本。实际传输走加密的点对点通道（DTLS），并且双方需要确认一致的 PIN 才会交换数据。
+不会发送：文件名、文件内容、聊天文本。实际传输走加密的点对点通道（DTLS）；若接收方开启了 PIN 校验，PIN 一致后才会开始传输。
 
 0.1.0 版本没有提供修改这些服务器的设置项，它们是编译期默认值。如需更换，请从源码构建。
 
@@ -146,4 +146,4 @@ LocalChat 不面向儿童，也不收集任何人的个人数据。
 
 ## 变更与联系方式
 
-本政策随代码一起纳入版本管理，修改时会更新顶部的日期。疑问或指正请到 <https://github.com/CC-play/LocalChat/issues> 提 issue。
+本政策随代码一起纳入版本管理，修改时会更新顶部的日期。疑问或指正请[提 issue](https://github.com/CC-play/LocalChat/issues)。
