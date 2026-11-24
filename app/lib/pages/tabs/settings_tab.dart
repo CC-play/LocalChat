@@ -33,6 +33,10 @@ import 'package:refena_flutter/refena_flutter.dart';
 import 'package:routerino/routerino.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+/// This fork's own privacy policy, not the upstream one: it additionally
+/// covers the chat history and the WebRTC path used off-LAN.
+const String _privacyPolicyUrl = 'https://github.com/CC-play/LocalChat/blob/main/PRIVACY.md';
+
 class SettingsTab extends StatelessWidget {
   const SettingsTab();
 
@@ -554,7 +558,7 @@ class SettingsTab extends StatelessWidget {
                   label: t.settingsTab.other.privacyPolicy,
                   onTap: () async {
                     await launchUrl(
-                      Uri.parse('https://localsend.org/privacy'),
+                      Uri.parse(_privacyPolicyUrl),
                       mode: LaunchMode.externalApplication,
                     );
                   },
