@@ -45,6 +45,14 @@ Windows 上重新构建前请先关闭正在运行的实例，否则链接器无
 - Windows 配置存放在 `%APPDATA%\LocalChat\`；若在可执行文件旁放一个空的 `settings.json`，则切换为便携模式。
 - 工程指南见 [AGENTS.md](AGENTS.md)，会话功能的设计说明见 [aoci/modules/conversation.md](aoci/modules/conversation.md)。
 
+## 打赏
+
+LocalChat 是业余时间开发的，免费分发。如果它帮你省了点事，欢迎扫码请我喝杯咖啡 —— 完全自愿。
+
+<img src="app/assets/img/donate_qrcode.png" width="220" alt="微信赞赏码">
+
+应用内同一张码的位置：**设置 → 其他信息 → 捐赠**。
+
 ## 许可证
 
 Apache-2.0，继承自上游项目，详见 [LICENSE](LICENSE)。

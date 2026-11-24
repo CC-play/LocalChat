@@ -45,6 +45,14 @@ Close a running instance before rebuilding on Windows — the linker cannot over
 - Settings live in `%APPDATA%\LocalChat\` on Windows. Drop an empty `settings.json` next to the executable for portable mode.
 - Engineering guide: [AGENTS.md](AGENTS.md). Conversation design: [aoci/modules/conversation.md](aoci/modules/conversation.md).
 
+## Support
+
+LocalChat is built in spare time and given away for free. If it saves you some trouble, a coffee is welcome — entirely optional.
+
+<img src="app/assets/img/donate_qrcode.png" width="220" alt="WeChat reward code">
+
+The same code is in the app under **Settings → Other information → Donate**.
+
 ## License
 
 Apache-2.0, inherited from the upstream project — see [LICENSE](LICENSE).
