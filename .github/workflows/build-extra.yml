@@ -1,0 +1,212 @@
+name: Build extra targets
+
+# Manual only. Produces unsigned macOS, Linux and Windows arm64 builds as
+# workflow artifacts; attaching them to a release is a manual step.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-extra-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pinned by .fvmrc / pubspec.yaml (flutter: ^3.41.0)
+  FLUTTER_VERSION: "3.41.9"
+  # Windows arm64 requires Flutter 3.47+ (no arm64 SDK binaries before that)
+  FLUTTER_VERSION_ARM64: "3.47.4"
+
+jobs:
+  macos:
+    name: macOS arm64 (unsigned)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      # Installs the toolchain pinned in rust-toolchain.toml, including the
+      # aarch64-apple-darwin target that cargokit needs.
+      - name: Install Rust toolchain
+        working-directory: packages/localchat_isolates
+        run: rustup show
+
+      - name: Dependencies
+        working-directory: app
+        run: flutter pub get
+
+      - name: Build macOS
+        working-directory: app
+        run: flutter build macos --release
+
+      - name: Inspect signature
+        continue-on-error: true
+        run: |
+          APP="app/build/macos/Build/Products/Release/LocalChat.app"
+          codesign -dv --verbose=2 "$APP" 2>&1 | head -20
+          codesign --verify --deep --strict "$APP" 2>&1 | head -20
+
+      - name: Package zip
+        run: |
+          VERSION=$(sed -n 's/^version: \([0-9]*\.[0-9]*\.[0-9]*\).*/\1/p' app/pubspec.yaml)
+          APP="app/build/macos/Build/Products/Release/LocalChat.app"
+          test -d "$APP"
+          OUT="LocalChat-$VERSION-macos-arm64-unsigned.zip"
+          # ditto keeps the bundle layout, symlinks and permissions intact
+          ditto -c -k --sequesterRsrc --keepParent "$APP" "$OUT"
+          ls -lh "$OUT"
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: macos-arm64-unsigned
+          path: LocalChat-*-macos-arm64-unsigned.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  linux:
+    name: Linux x64
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake libgtk-3-dev ninja-build libayatana-appindicator3-dev
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Install Rust toolchain
+        working-directory: packages/localchat_isolates
+        run: rustup show
+
+      - name: Dependencies
+        working-directory: app
+        run: flutter pub get
+
+      - name: Build Linux
+        working-directory: app
+        run: flutter build linux --release
+
+      - name: Package tar.gz
+        run: |
+          VERSION=$(sed -n 's/^version: \([0-9]*\.[0-9]*\.[0-9]*\).*/\1/p' app/pubspec.yaml)
+          BUNDLE="app/build/linux/x64/release/bundle"
+          test -d "$BUNDLE"
+          OUT="LocalChat-$VERSION-linux-x64.tar.gz"
+          tar -czf "$OUT" -C "$BUNDLE" .
+          ls -lh "$OUT"
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: linux-x64
+          path: LocalChat-*-linux-x64.tar.gz
+          if-no-files-found: error
+          retention-days: 14
+
+  windows-arm64:
+    name: Windows arm64
+    runs-on: windows-11-arm
+    steps:
+      - name: Fix long file paths
+        run: git config --global core.longpaths true
+
+      - uses: actions/checkout@v6
+
+      # Flutter ships no arm64 Windows SDK, so clone the SDK instead of using
+      # a setup action.
+      - name: Setup Flutter SDK
+        run: |
+          git clone --depth 1 --branch ${{ env.FLUTTER_VERSION_ARM64 }} https://github.com/flutter/flutter.git $env:USERPROFILE\flutter
+          Add-Content $env:GITHUB_PATH "$env:USERPROFILE\flutter\bin"
+          & "$env:USERPROFILE\flutter\bin\flutter.bat" --version
+
+      # Flutter silently falls back to an x64 Dart SDK when arm64 artifacts are
+      # missing, which would produce an x64 build.
+      - name: Verify native arm64 toolchain
+        run: |
+          $dartVersion = & "$env:USERPROFILE\flutter\bin\dart.bat" --version 2>&1 | Out-String
+          Write-Host $dartVersion
+          if ($dartVersion -notmatch 'windows_arm64') {
+            Write-Error "Dart SDK is not windows_arm64 - Flutter fell back to x64"
+            exit 1
+          }
+
+      - name: Read version
+        run: |
+          $line = Select-String -Path app\pubspec.yaml -Pattern '^version: ([0-9]+\.[0-9]+\.[0-9]+)' | Select-Object -First 1
+          $v = $line.Matches[0].Groups[1].Value
+          Write-Host "VERSION=$v"
+          Add-Content $env:GITHUB_ENV "VERSION=$v"
+
+      # CMakeLists.txt installs localchat_msix_helper.msix, so it must exist
+      # before the app is configured. Patch the architecture first.
+      - name: Build MSIX helper
+        run: |
+          $manifest = 'support\build\msix\content\AppxManifest.xml'
+          (Get-Content $manifest -Raw) -replace 'ProcessorArchitecture="x64"', 'ProcessorArchitecture="arm64"' | Set-Content $manifest -NoNewline
+          if (-not (Select-String -Path $manifest -Pattern 'ProcessorArchitecture="arm64"' -Quiet)) {
+            Write-Error "Failed to patch ProcessorArchitecture in $manifest"
+            exit 1
+          }
+          $makepri = (Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin\10.*\x64\makepri.exe' | Select-Object -Last 1).FullName
+          $makeappx = 'C:\Program Files (x86)\Windows Kits\10\App Certification Kit\makeappx.exe'
+          if (-not (Test-Path $makeappx)) {
+            $makeappx = (Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin\10.*\x64\makeappx.exe' | Select-Object -Last 1).FullName
+          }
+          & $makepri new /pr support\build\msix\content /cf support\build\msix\priconfig.xml /mn support\build\msix\content\AppxManifest.xml /of support\build\msix\content\resources.pri /o
+          & $makeappx pack /o /d support\build\msix\content /nv /p app\windows\localchat_msix_helper.msix
+          if (-not (Test-Path app\windows\localchat_msix_helper.msix)) {
+            Write-Error "MSIX helper was not produced"
+            exit 1
+          }
+
+      - name: Dependencies
+        working-directory: app
+        run: flutter pub get
+
+      - name: Build Windows
+        working-directory: app
+        run: flutter build windows --release
+
+      # support/build/windows only carries x64 runtime DLLs, so take the arm64
+      # ones from the Visual Studio redistributable.
+      - name: Add arm64 CRT DLLs
+        run: |
+          $crt = Get-ChildItem 'C:\Program Files\Microsoft Visual Studio\*\VC\Redist\MSVC\*\arm64\Microsoft.VC143.CRT' -ErrorAction SilentlyContinue | Select-Object -Last 1
+          if (-not $crt) {
+            Write-Warning "arm64 CRT redist not found, skipping"
+            exit 0
+          }
+          $dest = 'app\build\windows\arm64\runner\Release'
+          Copy-Item "$($crt.FullName)\msvcp140.dll" $dest
+          Copy-Item "$($crt.FullName)\vcruntime140.dll" $dest
+          Copy-Item "$($crt.FullName)\vcruntime140_1.dll" $dest
+
+      - name: Package zip
+        working-directory: app
+        run: |
+          $release = 'build\windows\arm64\runner\Release'
+          if (-not (Test-Path $release)) {
+            Write-Error "arm64 release folder missing - did Flutter fall back to x64?"
+            exit 1
+          }
+          Compress-Archive -Path "$release\*" -DestinationPath "LocalChat-$env:VERSION-windows-arm64.zip"
+          Get-Item "LocalChat-$env:VERSION-windows-arm64.zip" | Select-Object Name, Length
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: windows-arm64
+          path: app/LocalChat-*-windows-arm64.zip
+          if-no-files-found: error
+          retention-days: 14
