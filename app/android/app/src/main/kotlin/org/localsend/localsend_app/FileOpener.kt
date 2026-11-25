@@ -119,8 +119,11 @@ fun openGalleryMedia(
  * 1. 文件名 + 大小 —— Gal 一般沿用原文件名，这条命中率最高；
  * 2. 大小 + 接收时间前后十分钟 —— Gal 遇到重名会改名，名字对不上时还有这条；
  * 3. 只按大小 / 只按名字 —— 兜底，取最近加入的一条。
+ *
+ * 取缩略图（[fileThumbnailBytes]）用的是同一个函数：能打开和能取图必须是同一套匹配，
+ * 否则会出现「点了能打开、卡片却是图标」。
  */
-private fun findGalleryEntry(
+internal fun findGalleryEntry(
     context: Context,
     fileName: String?,
     fileSize: Long,
@@ -314,7 +317,7 @@ private fun isFileManager(packageName: String): Boolean {
     return fileManagerHints.any { pkg.contains(it) }
 }
 
-private fun mimeTypeFromName(fileName: String): String {
+internal fun mimeTypeFromName(fileName: String): String {
     val fileExt = fileName.substring(fileName.lastIndexOf(".") + 1).lowercase(Locale.ROOT)
     return when (fileExt) {
         "3gp" -> "video/3gpp"

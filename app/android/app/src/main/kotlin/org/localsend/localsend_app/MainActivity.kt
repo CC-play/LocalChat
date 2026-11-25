@@ -299,6 +299,35 @@ class MainActivity : FlutterActivity() {
                     result.success(status.wire)
                 }
 
+                // 文件卡片的小缩略图（[FORK]）。三种来源统一走这里：只进相册的媒体
+                // （没有路径）、content:// 的文件、以及 Android 上的视频首帧。
+                //
+                // 解码放后台线程：一张 4K 图缩到 96px 也要几十毫秒，聊天列表里同时
+                // 滚过去好几张，在主线程解就是肉眼可见的掉帧。结果回主线程再交给 Flutter。
+                "getFileThumbnail" -> {
+                    val path = call.argument<String>("path")
+                    val fileName = call.argument<String>("fileName")
+                    val fileSize = (call.argument<Number>("fileSize") ?: 0).toLong()
+                    val timestampMs = call.argument<Number>("timestampMs")?.toLong()
+                    val maxSize = (call.argument<Number>("maxSize") ?: 96).toInt()
+                    val appContext = context.applicationContext
+                    Thread {
+                        val bytes = try {
+                            fileThumbnailBytes(appContext, path, fileName, fileSize, timestampMs, maxSize)
+                        } catch (_: Throwable) {
+                            // 缩略图取不到不是错误：卡片会回落到类型图标。
+                            null
+                        }
+                        runOnUiThread {
+                            try {
+                                result.success(bytes)
+                            } catch (_: Exception) {
+                                // 页面已经销毁、通道已关闭，结果没人要了。
+                            }
+                        }
+                    }.start()
+                }
+
                 "shareIntentReady" -> {
                     onShareIntentReady()
                     result.success(null)

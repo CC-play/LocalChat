@@ -390,8 +390,38 @@ Windows 资源管理器 `/select` 选中该文件，macOS 访达、Linux 文件�
 - 卡片不再把它算作 missing：文件确实在本机，悬浮光标保持手型、不挂提示。
 
 `Gal` 只写 MediaStore、不回传句柄，所以拿不到当时那个 URI，只能事后回查。名字通常还在
-（Gal 沿用原文件名），重名被改名时靠大小 + 时间窗兜底。卡片缩略图对这类消息仍是类型图标
-——`filePath` 为空，没有可交给 `Image.file` 的东西。
+（Gal 沿用原文件名），重名被改名时靠大小 + 时间窗兜底。
+
+### 卡片缩略图（`util/native/file_thumbnail.dart` + `GalleryThumbnail.kt`）
+
+卡片左边的 40dp 方块有两条来源，判据是「`Image.file` 能不能读」：
+
+| 情况 | 来源 |
+|---|---|
+| 图片 + 真实路径 | `Image.file`（`cacheWidth: 96`，同步、最省事） |
+| 只进了相册的媒体（无路径） | 原生回查 MediaStore 取图 |
+| `content://` 路径（SAF 接收、选择器选中） | 原生解码（`Image.file` 读不了 URI） |
+| 视频 + 桌面端 | `VideoFrameLoader`（Windows Shell 缩略图） |
+| 视频 + Android | 原生取首帧 |
+
+原生侧（`fileThumbnailBytes`）做三件事：
+
+- **定位 URI**：`content://` 直接用 → 绝对路径经自家 FileProvider 转 → 都没有就
+  `findGalleryEntry` 回查相册。**和点卡片打开用的是同一个函数**，不会出现「能打开但
+  取不到图」；
+- **解码**：图片走 `ContentResolver` 两趟解码（先 `inJustDecodeBounds` 拿尺寸，再按
+  `inSampleSize` 跳着解），峰值只有一个缩略图大小；视频在 API 29+ 用
+  `loadThumbnail`，否则 `MediaMetadataRetriever`（AFD 必须开到 `frameAtTime` 之后）；
+- **编码**：缩到 96px 内，有透明通道压 PNG，否则 JPEG(85)。
+
+两处容易踩的地方：
+
+- **解码必须在后台线程**。`MethodChannel` 的回调是主线程，一张 4K 图缩到 96px 也要
+  几十毫秒，列表同时滚过几张就是肉眼可见的掉帧。`MainActivity` 里起了个 `Thread`，
+  结果回主线程再 `result.success`。
+- **Dart 侧必须缓存**。卡片会因为悬浮、消息状态变化、列表复用来回重建，每次都跨通道
+  就是白烧 CPU。`FileThumbnailLoader` 按「消息 id + 尺寸」缓存（含 null，失败不重试）
+  并合并并发请求，上限 200 条。
 
 ### 点卡片用「对应的应用」打开（`util/native/open_file.dart` + `FileOpener.kt`）
 

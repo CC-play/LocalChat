@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:localchat_app/gen/strings.g.dart';
 import 'package:localchat_app/model/conversation/conversation.dart';
 import 'package:localchat_app/util/native/file_availability.dart';
+import 'package:localchat_app/util/native/file_thumbnail.dart';
 import 'package:localchat_app/util/native/platform_check.dart';
 import 'package:localchat_app/util/native/video_frame.dart';
 import 'package:localchat_isolates/model/file_type.dart';
@@ -68,6 +69,10 @@ const _videoExtensions = {
 /// - `filePath` 为空（接收时没留下绝对路径，例如只存进了相册）→ 不算丢文件：
 ///   点击会由原生侧回查 MediaStore 找到那一项，再用图片查看器 / 播放器打开。
 ///
+/// [FORK] 缩略图有两条来源：有可用路径的图片直接 `Image.file`；只进相册的媒体、
+/// `content://` 的文件、以及 Android 上的视频首帧则交给原生取一张小图
+/// （[FileThumbnailLoader]）——这几类没有 `Image.file` 能读的路径。
+///
 /// [FORK] 另外，**已传输完成**（sent / received）且在磁盘上确实存在的文件，鼠标
 /// 悬浮到卡片上时会在大小右侧露出一个文件夹图标，点它直接在系统文件管理器里
 /// 定位到这个文件——把右键菜单里藏得较深的一步搬到触手可及的位置。具体动作由
@@ -110,6 +115,12 @@ class _FileMessageCardState extends State<FileMessageCard> {
   Future<Uint8List?>? _videoFrame;
   String? _videoFramePath;
 
+  /// [FORK] 由原生取回的缩略图，覆盖 `Image.file` 画不了的那几类：
+  /// 只存进了相册的媒体（没有路径）、`content://` 的文件、以及 Android 上的视频首帧。
+  /// 取一次存着，重建不重取；取不到就保持 null，卡片自然露出下面的类型图标。
+  Future<Uint8List?>? _nativeThumb;
+  String? _nativeThumbKey;
+
   /// 路径为空是确定的不存在，不必等 IO；有路径才去 stat。
   ///
   /// [FORK] 「只存进了相册」是例外：文件确实在本机，只是没有路径。这条不能标成
@@ -123,6 +134,7 @@ class _FileMessageCardState extends State<FileMessageCard> {
       unawaited(_refreshMissing());
     }
     _ensureVideoFrame();
+    _ensureNativeThumbnail();
   }
 
   /// `null` 表示「有路径，得去查」，其余两种情况不用等 IO。
@@ -144,11 +156,19 @@ class _FileMessageCardState extends State<FileMessageCard> {
       }
       _ensureVideoFrame();
     }
+    // 缩略图每次都问一遍：内部按 [_nativeThumbnailId] 判断要不要真去取，
+    // 这样「接收完成后消息从占位变成『已存进相册』」这种同 id、同路径的变化也能补上图。
+    _ensureNativeThumbnail();
   }
 
   /// 只在「确实是视频、而且路径变了」时才去取帧。
   void _ensureVideoFrame() {
     if (!_isVideo) {
+      return;
+    }
+    // Android 的视频首帧由 [_ensureNativeThumbnail] 走原生取，这条路是 Windows
+    // 专用的（Shell 缩略图服务），在这里调只会拿到 null。
+    if (checkPlatform([TargetPlatform.android])) {
       return;
     }
     final path = widget.message.filePath;
@@ -157,6 +177,61 @@ class _FileMessageCardState extends State<FileMessageCard> {
     }
     _videoFramePath = path;
     _videoFrame = VideoFrameLoader.load(path);
+  }
+
+  /// 这一步要不要交给原生取图。
+  ///
+  /// 判据和 [_buildThumbnail] 里 `Image.file` 的能力对齐：只有它画不了的才走原生。
+  bool get _usesNativeThumbnail {
+    if (!_isImage && !_isVideo) {
+      return false;
+    }
+    // 只进了相册的媒体没有路径，只能回查 MediaStore。
+    if (widget.message.isOnlyInGallery) {
+      return true;
+    }
+    final path = widget.message.filePath;
+    if (path == null || path.isEmpty) {
+      return false;
+    }
+    // content:// 不是文件系统路径，Image.file / VideoFrameLoader 都读不了
+    // （SAF 接收的文件、选择器选中的图片都是这种）。
+    if (path.startsWith('content://')) {
+      return true;
+    }
+    // 桌面端的视频首帧走 VideoFrameLoader，Android 没有那条路。
+    return _isVideo && checkPlatform([TargetPlatform.android]);
+  }
+
+  /// 缓存键：只要这几项不变，取到的图就一直有效。
+  String? get _nativeThumbnailId {
+    if (!_usesNativeThumbnail) {
+      return null;
+    }
+    final message = widget.message;
+    // isOnlyInGallery 也放进键里：消息从「正在接收」变成「已存进相册」时路径可能没变，
+    // 但这个标记会翻过来，不带它就是「永远不补图」。
+    return '${message.id}|${message.filePath ?? ''}|${message.fileName ?? ''}|${message.fileSize}'
+        '|${message.isOnlyInGallery}';
+  }
+
+  /// 只取一次：卡片重建（悬浮、状态变化、列表复用）不重新跨通道要图。
+  void _ensureNativeThumbnail() {
+    final id = _nativeThumbnailId;
+    if (id == null || id == _nativeThumbKey) {
+      return;
+    }
+    _nativeThumbKey = id;
+    // 时间戳只在「没有路径、要回查相册」时有用：Gal 遇到重名会改名，名字+大小
+    // 对不上时靠接收时间窗兜底。
+    _nativeThumb = FileThumbnailLoader.load(
+      key: id,
+      path: widget.message.filePath,
+      fileName: widget.message.fileName,
+      fileSize: widget.message.fileSize,
+      timestampMs: widget.message.timestamp.millisecondsSinceEpoch,
+      size: 96,
+    );
   }
 
   String? get _extension {
@@ -203,14 +278,20 @@ class _FileMessageCardState extends State<FileMessageCard> {
   }
 
   Widget? _buildThumbnail() {
+    // 原生这张图能覆盖的前提先试——【只进相册 / content:// / Android 视频首帧】。
+    final nativeThumbnail = _buildNativeThumbnail();
+    if (nativeThumbnail != null) {
+      return nativeThumbnail;
+    }
+
     final path = widget.message.filePath;
     if (path == null || path.isEmpty) {
       return null;
     }
 
     if (_isImage) {
-      // content:// 是 Android 的另一套 IO，得异步读字节，这里不做；
-      // 那种情况（例如只存进了相册）回落到图标，卡片本来也点不开。
+      // content:// 是 Android 的另一套 IO，得异步读字节——这种情况上面已经交给
+      // 原生处理了，走到这里说明原生也没拿到；`Image.file` 读不了，回落到图标。
       if (path.startsWith('content://')) {
         return null;
       }
@@ -232,27 +313,51 @@ class _FileMessageCardState extends State<FileMessageCard> {
           if (bytes == null) {
             return const SizedBox.shrink();
           }
-          return Stack(
-            fit: StackFit.expand,
-            children: [
-              Image.memory(bytes, fit: BoxFit.cover, gaplessPlayback: true),
-              // 视频帧和图片长得很像，右下角给个播放角标，一眼区分。
-              Positioned(
-                right: 2,
-                bottom: 2,
-                child: Container(
-                  padding: const EdgeInsets.all(1),
-                  decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(3)),
-                  child: const Icon(Icons.play_arrow_rounded, size: 11, color: Colors.white),
-                ),
-              ),
-            ],
-          );
+          return _withPlayBadge(Image.memory(bytes, fit: BoxFit.cover, gaplessPlayback: true));
         },
       );
     }
 
     return null;
+  }
+
+  /// 原生取回的那张图。还没回来 / 取不到时返回 null，让调用方继续走路径那条路
+  /// （或直接露出图标）。
+  Widget? _buildNativeThumbnail() {
+    final future = _nativeThumb;
+    if (future == null) {
+      return null;
+    }
+    return FutureBuilder<Uint8List?>(
+      future: future,
+      builder: (context, snapshot) {
+        final bytes = snapshot.data;
+        if (bytes == null || bytes.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        final image = Image.memory(bytes, fit: BoxFit.cover, gaplessPlayback: true);
+        return _isVideo ? _withPlayBadge(image) : image;
+      },
+    );
+  }
+
+  /// 视频帧和图片长得很像，右下角给个播放角标，一眼区分。
+  Widget _withPlayBadge(Widget child) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        child,
+        Positioned(
+          right: 2,
+          bottom: 2,
+          child: Container(
+            padding: const EdgeInsets.all(1),
+            decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(3)),
+            child: const Icon(Icons.play_arrow_rounded, size: 11, color: Colors.white),
+          ),
+        ),
+      ],
+    );
   }
 
   /// 查一次文件是否还在磁盘上，结果有变化才重建。

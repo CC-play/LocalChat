@@ -157,6 +157,35 @@ Future<AndroidOpenResult> openGalleryFile({
   }
 }
 
+/// [FORK] 取一张小缩略图的字节（JPEG / PNG），取不到返回 null。
+///
+/// [path] 可以为 null —— 只写进相册的消息没有路径，原生侧会按
+/// [fileName] + [fileSize] + [timestampMs] 回查 MediaStore，和点卡片打开时用的是
+/// 同一套匹配。
+///
+/// 这里吞掉所有异常：缩略图只是显示上的锦上添花，取不到就回落到类型图标，
+/// 不该让卡片因为一张小图而报错。
+Future<Uint8List?> getFileThumbnail({
+  String? path,
+  String? fileName,
+  int fileSize = 0,
+  int? timestampMs,
+  int maxSize = 96,
+}) async {
+  try {
+    return await _methodChannel.invokeMethod<Uint8List>('getFileThumbnail', {
+      'path': path,
+      'fileName': fileName,
+      'fileSize': fileSize,
+      'timestampMs': timestampMs,
+      'maxSize': maxSize,
+    });
+  } catch (e) {
+    _logger.fine('Could not load thumbnail for $fileName', e);
+    return null;
+  }
+}
+
 /// Tells MainActivity that the Dart side is now subscribed to the share_handler media stream,
 /// so share intents that were held back during app start can be replayed.
 Future<void> flushPendingShareIntentsAndroid() async {
