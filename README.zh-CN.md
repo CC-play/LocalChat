@@ -33,7 +33,7 @@ LocalChat 沿用 [LocalSend](https://github.com/localsend/localsend) 的传输�
 
 ## 当前状态
 
-`0.1.0` —— Windows 与 Android 已构建并实测。Linux、macOS、iOS 直接来自上游代码，尚未验证。
+`0.1.1` —— Windows 与 Android 已构建并实测。Linux、macOS、iOS 直接来自上游代码，尚未验证。
 
 | 平台 | 发布包 | 说明 |
 |---|---|---|

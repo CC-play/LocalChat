@@ -33,7 +33,7 @@ Resize the window and the tab bar moves: a rail down the left side while the win
 
 ## Status
 
-`0.1.0` — Windows and Android are built and tested. Linux, macOS and iOS come from the upstream codebase and have not been verified.
+`0.1.1` — Windows and Android are built and tested. Linux, macOS and iOS come from the upstream codebase and have not been verified.
 
 | Platform | Package | Notes |
 |---|---|---|

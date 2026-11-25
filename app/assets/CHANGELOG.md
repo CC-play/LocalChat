@@ -1,3 +1,23 @@
+## 0.1.1 (2026-11-25)
+
+What happens after a file arrives, plus a desktop default that keeps the app listening when the window is closed.
+
+**Files**
+
+- fix(android): opening a received photo or video no longer lands in the file manager — the MIME type comes from `ContentResolver` instead of being guessed from the URI's tail, file managers are filtered out of the candidates, and the matching viewer or player is launched directly
+- fix(android): media saved only to the gallery is located again by name, size and receive time, so tapping the card opens that file instead of the gallery list
+- fix(android): when nothing on the device can handle a format, say so instead of handing the request to a file manager
+- feat(chat): image and video cards show real thumbnails even when the file exists only in the gallery; video thumbnails skip a leading black frame
+- fix(chat): a file that only lives in the gallery is no longer reported as "not on this device"
+
+**Desktop**
+
+- feat(settings): "Minimize to tray on close" now defaults to on for Windows, macOS and Linux (X11), so closing the window keeps the receive server running; it still quits when the tray icon could not be created
+
+**Docs**
+
+- docs: screenshots in the README, with a note that the tab bar moves as the window is resized
+
 ## 0.1.0 (2026-11-24)
 
 First standalone release of LocalChat: the LocalSend 1.18.2 transfer engine, with the one-shot "pick files → send" flow replaced by a list of peers you can talk to repeatedly. Everything below this entry is the upstream LocalSend changelog, kept for reference.
