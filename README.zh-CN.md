@@ -8,6 +8,21 @@ LocalChat 沿用 [LocalSend](https://github.com/localsend/localsend) 的传输�
 
 [**下载**](https://github.com/CC-play/LocalChat/releases) · [协议规范](https://github.com/localsend/protocol)
 
+## 截图
+
+<p align="center">
+  <img src="docs/screenshots/chat.png" width="270" alt="会话页面：文字消息与文件卡片">
+  <img src="docs/screenshots/send.png" width="270" alt="发送页面：附近设备列表">
+  <img src="docs/screenshots/receive.png" width="270" alt="接收页面：本机别名">
+</p>
+
+调整窗口宽度，标签栏位置会变化：窗口较宽时是左侧图标栏，窄于 700 px 后变成底部标签栏。
+
+<p align="center">
+  <img src="docs/screenshots/tabs-wide.png" width="440" alt="宽窗口：标签栏在左侧">
+  <img src="docs/screenshots/tabs-narrow.png" width="334" alt="窄窗口：标签栏在底部">
+</p>
+
 ## 功能
 
 - **会话列表** —— 对端按最近活跃时间聚合成聊天列表，双向保留历史记录。

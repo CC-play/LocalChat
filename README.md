@@ -8,6 +8,21 @@ LocalChat keeps the transfer engine and wire protocol of [LocalSend](https://git
 
 [**Download**](https://github.com/CC-play/LocalChat/releases) · [Protocol spec](https://github.com/localsend/protocol)
 
+## Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/chat.png" width="270" alt="Conversation with text messages and file cards">
+  <img src="docs/screenshots/send.png" width="270" alt="Send tab listing nearby devices">
+  <img src="docs/screenshots/receive.png" width="270" alt="Receive tab showing this device's alias">
+</p>
+
+Resize the window and the tab bar moves: a rail down the left side while the window is wide, a bar across the bottom once it is narrower than 700 px.
+
+<p align="center">
+  <img src="docs/screenshots/tabs-wide.png" width="440" alt="Tab bar as a rail on the left">
+  <img src="docs/screenshots/tabs-narrow.png" width="334" alt="Tab bar across the bottom">
+</p>
+
 ## Features
 
 - **Conversations** — peers are grouped into a chat list sorted by recent activity, with a full history in both directions.
