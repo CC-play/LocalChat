@@ -93,6 +93,7 @@
 | macOS 的菜单栏图标必须走 `main-delegate-channel` 的 `setStatusBarAlpha`，**不要**用 `tray_manager.setIcon` | 插件会自己新建一个 `NSStatusItem`，菜单栏上出现两个图标 |
 | 托盘闪烁用「原生图标 ↔ 全透明占位图」（`assets/img/logo-blank.ico` / `logo-32-white-blank.png`，由 `support/scripts/gen_tray_blank_icon.py` 生成），不要加角标、也不要删图标来「隐藏」 | 用户要的是原图标自己消失 / 出现；删掉图标会让任务栏托盘格子挪位，看起来像图标在跳 |
 | 停闪（窗口回前台 / 未读清零）时要把图标推回「显示」 | 上一次可能停在「隐藏」那一拍上，不推回去托盘就一直空着 |
+| 「关闭时最小化到托盘」在电脑端默认开启（`isMinimizeToTray` 的默认值 = `checkPlatformHasTray() && checkPlatformIsNotWaylandDesktop()`），但藏窗口前必须先确认 `isTrayReady` | 托盘建不起来（缺 appindicator、Wayland 无 StatusNotifier）还去藏窗口，应用会彻底消失——没有窗口、没有图标，只能去任务管理器结束进程 |
 
 ## 为什么不做符号索引
 

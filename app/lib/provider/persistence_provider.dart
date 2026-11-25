@@ -550,8 +550,16 @@ class PersistenceService {
     await _prefs.setBool(_autoFinish, autoFinish);
   }
 
+  /// [FORK] 电脑端默认开启。
+  ///
+  /// 关窗口的常见预期是「退到托盘继续收」，而不是把正在传输的东西连同服务一起关掉；
+  /// 关掉窗口就退出应用之后，对方还在发的文件会直接失败。
+  ///
+  /// 只在**没存过值**时生效：用户显式关过一次，存下来的 `false` 优先。
+  /// 默认值仍要求「确实有托盘可用」——Wayland 下托盘图标不一定能显示，
+  /// 那时藏起窗口等于让应用消失，所以留给用户自己开。
   bool isMinimizeToTray() {
-    return _prefs.getBool(_minimizeToTray) ?? false;
+    return _prefs.getBool(_minimizeToTray) ?? (checkPlatformHasTray() && checkPlatformIsNotWaylandDesktop());
   }
 
   Future<void> setMinimizeToTray(bool minimizeToTray) async {

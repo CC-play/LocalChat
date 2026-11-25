@@ -99,7 +99,8 @@ class _WindowWatcherState extends State<WindowWatcher> with WindowListener, Refe
     }
 
     try {
-      if (ref.read(settingsProvider).minimizeToTray) {
+      // [FORK] 托盘没建起来时不能藏窗口：藏了就再也找不回来。这种情况按「关闭即退出」处理。
+      if (ref.read(settingsProvider).minimizeToTray && isTrayReady) {
         await hideToTray();
       } else {
         await destroyTray();

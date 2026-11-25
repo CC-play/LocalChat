@@ -67,7 +67,7 @@
 | `app/lib/provider/network/send_provider.dart` | Started / Finished / Failed 三处写会话；`sessionIdOverride` 参数；upload 事件的 `setPhase(uploading)` 与失败细分（`_settlePreRecorded`） |
 | `app/lib/pages/receive_page.dart` | 文本消息的「接受 / 拒绝」两个按钮（上游只有「关闭」，等价于接受） |
 | `app/lib/model/state/settings_state.dart` | `autoAcceptTextMessages`：文本消息是否静默接收（默认开，设置页可关） |
-| `app/lib/provider/persistence_provider.dart` | `getConversations` / `setConversations`；`isAutoAcceptTextMessages`（默认 true） |
+| `app/lib/provider/persistence_provider.dart` | `getConversations` / `setConversations`；`isAutoAcceptTextMessages`（默认 true）；`isMinimizeToTray`（电脑端默认 true，Wayland 除外） |
 | `app/lib/util/shared_preferences/settings_migration.dart` | fork 新增的整个文件：`%APPDATA%\LocalSend` → `LocalChat` 的改名迁移（有单测） |
 | `app/lib/util/conversation/conversation_recorder.dart` | 文件头注释即 fork 说明 |
 | `app/lib/pages/conversation_page.dart` | 顶部说明；聊天页背景 / 输入栏取 `ChatPalette`；气泡菜单（复制 / 取消传输 / 打开文件所在位置 / 删除该条记录）与移动端长按入口；`device` 参数 + `_draftConversation()`：从发送页发起会话时的草稿会话 |
@@ -88,8 +88,8 @@
 | `app/lib/util/native/chat_notification.dart` | 整个文件为 fork 新增（通知发送 / 状态查询 / 点击回传） |
 | `app/lib/util/native/tray_unread.dart` | 整个文件为 fork 新增（托盘未读指示：未读 + 窗口不在前台时把图标不透明度在 100%↔0% 之间往返，每档 70ms） |
 | `app/lib/widget/watcher/tray_watcher.dart` | `ref.watch(unreadConversationCountProvider)`：未读数变化推给 `TrayUnreadIndicator` |
-| `app/lib/widget/watcher/window_watcher.dart` | `onWindowFocus` / `onWindowBlur` / `onWindowMinimize` 同步「窗口是否在前台」，供托盘决定闪不闪 |
-| `app/lib/util/native/tray_helper.dart` | `hideToTray` / `showFromTray` 同步窗口活跃态（托盘菜单唤出也要停闪），`destroyTray` 停掉闪烁定时器 |
+| `app/lib/widget/watcher/window_watcher.dart` | `onWindowFocus` / `onWindowBlur` / `onWindowMinimize` 同步「窗口是否在前台」，供托盘决定闪不闪；关闭时先看 `isTrayReady`，托盘没建起来就按「退出」处理，不藏窗口 |
+| `app/lib/util/native/tray_helper.dart` | `hideToTray` / `showFromTray` 同步窗口活跃态（托盘菜单唤出也要停闪），`destroyTray` 停掉闪烁定时器；`isTrayReady` 记录托盘是否真的建起来了 |
 | `app/macos/Runner/AppDelegate.swift` | `setStatusBarAlpha`：改 `button.alphaValue`，配合 Dart 侧把人设成 0 / 1 做闪烁 |
 | `app/windows/runner/flutter_window.cpp` | `RegisterClipboardChannel` / `RegisterTitleBarChannel` 注册（后者把主窗口 HWND 交给通道） |
 | `app/windows/runner/CMakeLists.txt` | 新的 runner 源文件（`title_bar_ext.cpp` 等）+ `windowscodecs` / `shell32` 链接（`dwmapi` 已在上游链接） |

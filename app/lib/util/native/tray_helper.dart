@@ -18,6 +18,16 @@ enum TrayEntry {
   close,
 }
 
+/// [FORK] 托盘是否真的建起来了。
+///
+/// 「关闭时最小化到托盘」默认开启之后，这个判断变得必要：托盘初始化失败时
+/// （缺 libayatana-appindicator、Wayland 没有 StatusNotifier 宿主……）把窗口
+/// 藏起来，用户既看不到程序，也没有图标把它叫回来——只能去任务管理器结束进程。
+/// 所以藏之前先确认托盘在。
+bool get isTrayReady => _trayReady;
+
+bool _trayReady = false;
+
 Future<void> initTray() async {
   if (!checkPlatformHasTray()) {
     return;
@@ -27,6 +37,7 @@ Future<void> initTray() async {
       await tm.trayManager.setIcon(Assets.img.logo);
     } else if (checkPlatform([TargetPlatform.macOS])) {
       // The menu bar icon will created in AppDelegate.swift
+      _trayReady = true;
       return;
     } else if (checkPlatform([TargetPlatform.linux])) {
       String icon;
@@ -53,6 +64,8 @@ Future<void> initTray() async {
       ),
     ];
     await tm.trayManager.setContextMenu(tm.Menu(items: items));
+    // 图标和菜单都建好了，托盘才算真的可用。
+    _trayReady = true;
     // No Linux implementation for setToolTip available as of tray_manager 0.2.2
     // https://pub.dev/packages/tray_manager#api
     if (!checkPlatform([TargetPlatform.linux])) {
