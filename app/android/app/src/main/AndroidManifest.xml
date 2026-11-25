@@ -74,6 +74,19 @@
 
         </activity>
 
+        <!-- [FORK] 把本机文件交给系统打开器时必须有 FileProvider：Android 7+ 直接传
+             file:// 会抛 FileUriExposedException。authority 用 applicationId 拼，
+             和 Kotlin 侧 FileOpener.kt 的拼接方式保持一致。 -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.localsend.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <!-- Quick tile to launch the app -->
         <service
             android:name=".QuickTileService"

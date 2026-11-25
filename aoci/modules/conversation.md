@@ -357,7 +357,7 @@ Windows 资源管理器 `/select` 选中该文件，macOS 访达、Linux 文件�
 `ChatMessage.filePath` 只是一个路径，文件随时可能被移动 / 更名 / 删除，所以「还在不在」
 是渲染时现查的。判断只有一处：`util/native/file_availability.dart` 的 `localFileExists`。
 
-- `null` / 空串 → 不存在（这条消息本来就没有本地副本，例如接收时只存进了相册）；
+- `null` / 空串 → 没有**可用的路径**（注意：这不等于文件不存在，见下节「只存进了相册」）；
 - **只在桌面端 + 绝对路径下真的去 stat**：Android 的绝对路径可能落在 scoped storage，
   `exists()` 会因权限不足误报 false，宁可说「有」也不能把能打开的文件说成丢了；
   `content://` 这类 URI 不归 `File` 管，`exists()` 对它只会返回 false。
@@ -367,8 +367,52 @@ Windows 资源管理器 `/select` 选中该文件，macOS 访达、Linux 文件�
 | 位置 | 文件还在 | 文件已不在 |
 |---|---|---|
 | 卡片悬浮光标 | 手型 | 箭头 |
-| 卡片悬浮提示 | 无 | 「文件已被移动、更名或删除」；`filePath` 为空时换成「这个文件不在本机」 |
+| 卡片悬浮提示 | 无 | 「文件已被移动、更名或删除」；没有路径时看下一节 |
 | 菜单「打开文件所在位置」 | 可点 | 置灰（`enabled: false`），仍然显示 |
+
+### 只存进了相册（`ChatMessage.isOnlyInGallery`）
+
+接收图片 / 视频时默认 `saveToGallery = true`：落盘先写缓存目录，`Gal.putImage` 把文件
+搬进 MediaStore 后**删掉缓存**（`file_saver.dart` 的 `saveCachedFileToGallery`），
+返回的路径是 `null`。于是聊天里这类消息 `filePath` 为空、**但文件确实在本机**。
+
+早期版本把「路径为空」直接当成「文件不在本机」，手机上点开刚收到的照片就会弹
+「这个文件不在本机，无法打开」—— 文件好好躺在相册里。现在的处理：
+
+- `recordReceivedFile` 把 `event.savedToGallery` 写进 `ChatMessage.savedToGallery`；
+- `isOnlyInGallery` 统一判定：显式标记优先，旧记录按「接收成功 + 图片/视频 + 无路径」
+  推断（这套接收逻辑里媒体文件只有进相册才没有路径）；
+- 点卡片：Android 走 `android_channel.openGalleryFile()`，原生侧按「文件名 + 大小 →
+  大小 + 接收时间前后 10 分钟 → 只按大小 / 只按名字」三级回查 MediaStore，拿到
+  `content URI` 后交给系统按 MIME 挑应用（图片→图片查看器，视频→播放器）；
+- 回查不到 → 「相册里找不到这个文件，可能已被删除」；查到了但系统没有能处理该类型的
+  应用 → 「手机上没有能打开这种文件的应用」；非 Android 平台仍提示「已保存到相册」；
+- 卡片不再把它算作 missing：文件确实在本机，悬浮光标保持手型、不挂提示。
+
+`Gal` 只写 MediaStore、不回传句柄，所以拿不到当时那个 URI，只能事后回查。名字通常还在
+（Gal 沿用原文件名），重名被改名时靠大小 + 时间窗兜底。卡片缩略图对这类消息仍是类型图标
+——`filePath` 为空，没有可交给 `Image.file` 的东西。
+
+### 点卡片用「对应的应用」打开（`util/native/open_file.dart` + `FileOpener.kt`）
+
+打开文件时必须给**具体 MIME**（`image/jpeg` 而不是 `image/*`），否则声明了通配类型的
+文件管理器也会进候选，很容易抢走默认打开方式：
+
+- MIME 的来源依次是：调用方给的（相册回查时 MediaStore 的 `MIME_TYPE`）→
+  `ContentResolver.getType(uri)` → 按扩展名猜 → 兜底通配类型；
+- **兜底绝不能是 `vnd.android.document/directory`**。以前的实现就栽在这：`content://…/123`
+  这种 URI 末尾没有扩展名，猜不出来就落到「目录」，系统便把请求交给文档 UI / 文件管理器。
+- 三条入口共用 `FileOpener.kt` 的 `openUri`：`content://` 直接开；
+  绝对路径先用 `openFilePath` 过自家 FileProvider（`${applicationId}.localsend.fileprovider`
+  + `res/xml/file_paths.xml`）换成 content URI，再开；只进相册的媒体走 `openGalleryMedia`。
+- 候选应用里剔掉文件管理器（包名特征见 `FileOpener.kt` 的 `fileManagerHints`）；
+  一个候选直接开，多个候选且系统没有默认时才弹选择器，选择器里也只有筛选后的应用。
+- 原生返回 `opened` / `noApp` / `notFound` / `failed` 四态，Dart 侧分别给不同文案，
+  不再「点了没反应」或静默失败。
+- 「在文件管理器中显示」传 `isDirectory: true`：打开文件夹本来就该交给文档 UI，
+  这时不做文件管理器过滤。
+- 绝对路径这条会先不预判 `File.exists()`（scoped storage 下会误报 false），
+  FileProvider 失败时才退回 `OpenFilex`。
 
 置灰**不写死颜色**：`PopupMenuItem(enabled: false)` 自带 disabled 样式——M3 文字取
 `onSurface` 的 38%（浅色 → 灰 100 左右，深色 → `onSurface` 压暗到 38%），图标再叠

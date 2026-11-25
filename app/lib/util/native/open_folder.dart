@@ -13,7 +13,8 @@ Future<void> openFolder({
   String? fileName,
 }) async {
   if (folderPath.startsWith('content://')) {
-    await android_channel.openContentUri(uri: folderPath);
+    // 打开的是目录：明确告诉原生侧走文档 UI，别当成文件去猜 MIME。
+    await android_channel.openContentUri(uri: folderPath, isDirectory: true);
     return;
   }
 

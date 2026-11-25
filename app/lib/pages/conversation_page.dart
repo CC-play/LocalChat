@@ -21,6 +21,7 @@ import 'package:localchat_app/util/conversation/clipboard_image.dart';
 import 'package:localchat_app/util/conversation/conversation_media_picker.dart';
 import 'package:localchat_app/util/conversation/conversation_sender.dart';
 import 'package:localchat_app/util/conversation/peer_label.dart';
+import 'package:localchat_app/util/native/channel/android_channel.dart' as android_channel;
 import 'package:localchat_app/util/native/chat_notification.dart';
 import 'package:localchat_app/util/native/cross_file_converters.dart';
 import 'package:localchat_app/util/native/file_availability.dart';
@@ -598,16 +599,49 @@ class _ConversationPageState extends State<ConversationPage> {
 
   /// [FORK] 点会话里的文件卡片。
   ///
-  /// `filePath` 为空表示这条消息在本机没有可用的副本（例如接收时只存进了相册，
-  /// 没留下绝对路径）。这种情况不能静默吞掉点击，否则就是「点了没反应」，
-  /// 所以在顶部提示一句。
-  void _openFileMessage(ChatMessage message) {
+  /// 三种情况，只有第三种是真的打不开：
+  /// 1. 有本地路径 → 交给系统打开器（`openFile` 内部按 MIME 找对应应用）；
+  /// 2. 没有路径，但文件当初被搬进了系统相册（[ChatMessage.isOnlyInGallery]）→
+  ///    由原生侧回查 MediaStore 拿到 content URI，再交给图片查看器 / 播放器打开；
+  /// 3. 其余情况才是「本机没有这个文件」，例如接收时对方中途放弃、只留了条记录。
+  Future<void> _openFileMessage(ChatMessage message) async {
     final path = message.filePath;
-    if (path == null || path.isEmpty) {
-      TopToast.show(context, t.conversation.fileUnavailable);
+    if (path != null && path.isNotEmpty) {
+      await openFile(context, message.fileType ?? FileType.other, path);
       return;
     }
-    unawaited(openFile(context, message.fileType ?? FileType.other, path));
+
+    if (message.isOnlyInGallery) {
+      if (checkPlatform([TargetPlatform.android])) {
+        final result = await android_channel.openGalleryFile(
+          fileName: message.fileName,
+          fileSize: message.fileSize,
+          timestampMs: message.timestamp.millisecondsSinceEpoch,
+        );
+        if (result == android_channel.AndroidOpenResult.opened || !mounted) {
+          return;
+        }
+        TopToast.show(
+          context,
+          switch (result) {
+            // 记录还在、文件却查不到：多半被用户在相册里删了。
+            android_channel.AndroidOpenResult.notFound => t.conversation.fileMissingInGallery,
+            // 手机上的相册 / 播放器都被禁用，或者文件格式没人认领。
+            android_channel.AndroidOpenResult.noApp => t.conversation.noAppForFile,
+            _ => t.conversation.fileInGallery,
+          },
+        );
+        return;
+      }
+      if (mounted) {
+        TopToast.show(context, t.conversation.fileInGallery);
+      }
+      return;
+    }
+
+    if (mounted) {
+      TopToast.show(context, t.conversation.fileUnavailable);
+    }
   }
 
   /// [FORK] 在系统文件管理器里定位这条文件消息对应的文件（Windows
@@ -1010,9 +1044,9 @@ class _ConversationPageState extends State<ConversationPage> {
                                         ? () => unawaited(_expireStaleMessage(msg))
                                         : null,
                                     staleAfter: chatSendWatchdogTimeout,
-                                    // 恒传非 null：filePath 为空时由 _openFileMessage 弹提示，
-                                    // 让「点了没反应」变成「明确告诉你为什么打不开」。
-                                    onFileTap: _selecting ? null : () => _openFileMessage(msg),
+                                    // 恒传非 null：没有本地路径时由 _openFileMessage 决定是打开相册
+                                    // 还是明确告诉你为什么打不开，避免「点了没反应」。
+                                    onFileTap: _selecting ? null : () => unawaited(_openFileMessage(msg)),
                                     // [FORK] 悬浮文件卡片时露出的「在文件管理器中显示」图标。
                                     // 复用手指菜单同一个实现：目录整个没了时的提示语才不会两套。
                                     onFileReveal: _selecting ? null : () => unawaited(_revealInFolder(msg)),

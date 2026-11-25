@@ -413,6 +413,12 @@ class Translations$conversation$zh_CN extends Translations$conversation$en {
   @override
   String get fileUnavailable => '这个文件不在本机，无法打开';
   @override
+  String get fileInGallery => '已保存到相册，请在相册中查看';
+  @override
+  String get fileMissingInGallery => '相册里找不到这个文件，可能已被删除';
+  @override
+  String get noAppForFile => '手机上没有能打开这种文件的应用';
+  @override
   String get fileMovedOrDeleted => '文件已被移动、更名或删除';
   @override
   String get notificationsOff => '通知已关闭';

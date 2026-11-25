@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  给「用对应应用打开本机文件」用的 FileProvider 路径表。
+
+  root-path 覆盖整块外部存储：接收目录可以是用户自己挑的任意位置（包括
+  Download、微信目录这种不属于本 App 的路径），只声明 files-path / cache-path
+  会漏掉它们，`getUriForFile` 抛 IllegalArgumentException，文件就打不开了。
+-->
+<paths>
+    <root-path
+        name="root"
+        path="." />
+    <external-path
+        name="external"
+        path="." />
+    <external-files-path
+        name="external_files"
+        path="." />
+    <external-cache-path
+        name="external_cache"
+        path="." />
+    <files-path
+        name="files"
+        path="." />
+    <cache-path
+        name="cache"
+        path="." />
+</paths>

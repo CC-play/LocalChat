@@ -260,13 +260,43 @@ class MainActivity : FlutterActivity() {
                 "openFileForWriting" -> handleOpenFileForWriting(call, result)
 
                 "openContentUri" -> {
-                    openUri(context, call.argument<String>("uri")!!)
-                    result.success(null)
+                    // 返回 opened / noApp / notFound / failed：Dart 侧据此给出
+                    // 「没有能打开的应用」这类提示，而不是静默失败。
+                    val status = openUri(
+                        context,
+                        call.argument<String>("uri")!!,
+                        call.argument<String>("mimeType"),
+                        call.argument<Boolean>("isDirectory") ?: false,
+                    )
+                    result.success(status.wire)
                 }
 
                 "openGallery" -> {
                     openGallery()
                     result.success(null)
+                }
+
+                // 本机绝对路径：换成 FileProvider URI 后同样按 MIME 挑应用，
+                // 不会因为「谁声明了通配类型」而落到文件管理器。
+                "openFilePath" -> {
+                    val status = openFilePath(
+                        context,
+                        call.argument<String>("path")!!,
+                        call.argument<String>("mimeType"),
+                    )
+                    result.success(status.wire)
+                }
+
+                // 接收时只写进相册的图片 / 视频：回查 MediaStore 拿到 content URI，
+                // 再交给系统按 MIME 找对应的图片查看器 / 播放器。
+                "openGalleryFile" -> {
+                    val status = openGalleryMedia(
+                        context,
+                        call.argument<String>("fileName"),
+                        (call.argument<Number>("fileSize") ?: 0).toLong(),
+                        call.argument<Number>("timestampMs")?.toLong(),
+                    )
+                    result.success(status.wire)
                 }
 
                 "shareIntentReady" -> {

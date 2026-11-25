@@ -124,6 +124,10 @@ Future<void> recordReceivedFile({
   required String? filePath,
   required int fileSize,
   required FileType fileType,
+
+  /// [FORK] 文件是否被搬进了系统相册。此时 [filePath] 为空，卡片点开走的是
+  /// 「打开相册」而不是「打开文件」，所以要单独记下来。
+  bool savedToGallery = false,
 }) async {
   await _appendSafely(
     ref,
@@ -143,6 +147,7 @@ Future<void> recordReceivedFile({
         filePath: filePath,
         fileSize: fileSize,
         fileType: fileType,
+        savedToGallery: savedToGallery,
       ),
     ),
   );

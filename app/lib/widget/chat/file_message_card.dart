@@ -65,8 +65,8 @@ const _videoExtensions = {
 /// [FORK] 卡片会自己确认一次「本机还有没有这个文件」，因为 [ChatMessage] 里只记了
 /// 一个路径，文件随时可能被移动 / 更名 / 删除：
 /// - 磁盘上已经不在了 → 悬浮给一句提示，右键菜单里的「打开文件所在位置」置灰；
-/// - `filePath` 为空（接收时没留下绝对路径，例如只存进了相册）→ 同样算不可用，
-///   提示语换成「这个文件不在本机」。
+/// - `filePath` 为空（接收时没留下绝对路径，例如只存进了相册）→ 不算丢文件：
+///   点击会由原生侧回查 MediaStore 找到那一项，再用图片查看器 / 播放器打开。
 ///
 /// [FORK] 另外，**已传输完成**（sent / received）且在磁盘上确实存在的文件，鼠标
 /// 悬浮到卡片上时会在大小右侧露出一个文件夹图标，点它直接在系统文件管理器里
@@ -111,27 +111,35 @@ class _FileMessageCardState extends State<FileMessageCard> {
   String? _videoFramePath;
 
   /// 路径为空是确定的不存在，不必等 IO；有路径才去 stat。
+  ///
+  /// [FORK] 「只存进了相册」是例外：文件确实在本机，只是没有路径。这条不能标成
+  /// `missing`，否则卡片会一直挂一句「已保存到相册」的提示，而它其实是能打开的
+  /// —— 点击会由原生侧回查 MediaStore 再交给对应应用。
   @override
   void initState() {
     super.initState();
-    final path = widget.message.filePath;
-    if (path == null || path.isEmpty) {
-      _missing = true;
-    } else {
+    _missing = _initialMissing();
+    if (_missing == null) {
       unawaited(_refreshMissing());
     }
     _ensureVideoFrame();
+  }
+
+  /// `null` 表示「有路径，得去查」，其余两种情况不用等 IO。
+  bool? _initialMissing() {
+    if (widget.message.isOnlyInGallery) {
+      return false;
+    }
+    final path = widget.message.filePath;
+    return (path == null || path.isEmpty) ? true : null;
   }
 
   @override
   void didUpdateWidget(FileMessageCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.message.id != widget.message.id || oldWidget.message.filePath != widget.message.filePath) {
-      _missing = null;
-      final path = widget.message.filePath;
-      if (path == null || path.isEmpty) {
-        _missing = true;
-      } else {
+      _missing = _initialMissing();
+      if (_missing == null) {
         unawaited(_refreshMissing());
       }
       _ensureVideoFrame();
@@ -252,6 +260,13 @@ class _FileMessageCardState extends State<FileMessageCard> {
   /// 「怎么算不在」的统一规则在 [localFileExists]（桌面端 + 绝对路径才真的 stat），
   /// 右键菜单里的「打开文件所在位置」用的是同一个函数，两处不会说两套话。
   Future<void> _refreshMissing() async {
+    // 只进相册的消息没有路径可 stat，但它是能打开的：不要把它算成「不见了」。
+    if (widget.message.isOnlyInGallery) {
+      if (_missing != false) {
+        setState(() => _missing = false);
+      }
+      return;
+    }
     final exists = await localFileExists(widget.message.filePath);
     if (!mounted || _missing == !exists) {
       return;
@@ -267,7 +282,13 @@ class _FileMessageCardState extends State<FileMessageCard> {
   }
 
   /// 还能不能打开：有本地副本、且磁盘上确实还在。
+  ///
+  /// [FORK] 只存在于相册里的文件也算「能打开」—— 点击会回查 MediaStore 再交给
+  /// 对应应用，不是死路。
   bool get _isOpenable {
+    if (widget.message.isOnlyInGallery) {
+      return true;
+    }
     if (_missing == true) {
       return false;
     }
@@ -276,9 +297,14 @@ class _FileMessageCardState extends State<FileMessageCard> {
 
   /// 不可用时悬浮显示的说明。
   ///
-  /// 两种原因的措辞分开：路径为空是「本来就没存在本机」，文件不在是
-  /// 「原来有、现在没了」，混成一句会误导。
+  /// 三种原因的措辞分开：只进了相册是「文件在，去相册看」（[isOnlyInGallery] 已经
+  /// 不算 missing，正常走不到这一支，留着是为了语义完整）；没有路径且不是相册是
+  /// 「本来就没存到本机」；路径还在但盘上没有是「原来有、现在没了」—— 混成一句
+  /// 会把还躺在相册里的图说成「不在本机」。
   String get _unavailableHint {
+    if (widget.message.isOnlyInGallery) {
+      return t.conversation.fileInGallery;
+    }
     final path = widget.message.filePath;
     if (path == null || path.isEmpty) {
       return t.conversation.fileUnavailable;

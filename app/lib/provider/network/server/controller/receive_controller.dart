@@ -407,6 +407,7 @@ class ReceiveController {
         filePath: filePath,
         fileSize: receivingFile.file.size,
         fileType: fileType,
+        savedToGallery: event.savedToGallery,
       );
 
       // [FORK] 自动接收（quickSave）不经过「请求」那一页，也就没有那一声，

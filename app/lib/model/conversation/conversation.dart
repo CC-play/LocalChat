@@ -61,6 +61,13 @@ class ChatMessage {
   final int fileSize;
   final FileType? fileType;
 
+  /// [FORK] 接收时文件是否只写进了系统相册。
+  ///
+  /// 这种情况 [filePath] 必然为空：落盘时先写缓存目录，`Gal.putImage` 把它搬进
+  /// MediaStore 之后就删掉缓存，从头到尾没有留下可交给打开器的路径。文件**确实
+  /// 在本机**，只是没有路径 —— 卡片不能按「文件丢了」处理。
+  final bool savedToGallery;
+
   /// 失败原因，仅在 [status] == [ChatMessageStatus.failed] 时有意义。
   final String? errorMessage;
 
@@ -75,8 +82,31 @@ class ChatMessage {
     this.filePath,
     this.fileSize = 0,
     this.fileType,
+    this.savedToGallery = false,
     this.errorMessage,
   });
+
+  /// [FORK] 本地副本是否只存在于系统相册里。
+  ///
+  /// [savedToGallery] 是 v0.1.0 之后才写入的字段，更早的记录一律为 false，所以
+  /// 还要按「接收成功 + 媒体文件 + 无路径」补一层推断：在这套接收逻辑里，图片和
+  /// 视频只有在存进相册时才会没有路径（见 `file_saver.dart` 的
+  /// `saveCachedFileToGallery`），其余类型落盘后总有路径。
+  bool get isOnlyInGallery {
+    if (kind != ChatMessageKind.file || direction != ChatMessageDirection.received) {
+      return false;
+    }
+    if (filePath != null && filePath!.isNotEmpty) {
+      return false;
+    }
+    if (savedToGallery) {
+      return true;
+    }
+    if (status != ChatMessageStatus.received) {
+      return false;
+    }
+    return fileType == FileType.image || fileType == FileType.video;
+  }
 
   bool get isOutgoing => direction == ChatMessageDirection.sent;
 
@@ -110,6 +140,7 @@ class ChatMessage {
       filePath: filePath ?? this.filePath,
       fileSize: fileSize,
       fileType: fileType,
+      savedToGallery: savedToGallery,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
     );
   }
@@ -126,6 +157,7 @@ class ChatMessage {
       if (filePath != null) 'filePath': filePath,
       'fileSize': fileSize,
       if (fileType != null) 'fileType': fileType!.name,
+      if (savedToGallery) 'savedToGallery': true,
       if (errorMessage != null) 'errorMessage': errorMessage,
     };
   }
@@ -146,6 +178,7 @@ class ChatMessage {
       filePath: json['filePath'] as String?,
       fileSize: (json['fileSize'] as num?)?.toInt() ?? 0,
       fileType: FileType.values.firstWhereOrNull((e) => e.name == json['fileType']),
+      savedToGallery: json['savedToGallery'] as bool? ?? false,
       errorMessage: json['errorMessage'] as String?,
     );
   }

@@ -498,6 +498,15 @@ class Translations$conversation$en {
   /// en: 'This file is not on this device, so it can't be opened'
   String get fileUnavailable => 'This file is not on this device, so it can\'t be opened';
 
+  /// en: 'Saved in Photos. Open it from there.'
+  String get fileInGallery => 'Saved in Photos. Open it from there.';
+
+  /// en: 'Can't find this file in Photos; it may have been deleted'
+  String get fileMissingInGallery => 'Can\'t find this file in Photos; it may have been deleted';
+
+  /// en: 'No app on this phone can open this file type'
+  String get noAppForFile => 'No app on this phone can open this file type';
+
   /// en: 'This file has been moved, renamed, or deleted'
   String get fileMovedOrDeleted => 'This file has been moved, renamed, or deleted';
 
