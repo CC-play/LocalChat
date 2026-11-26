@@ -54,10 +54,9 @@ jobs:
 
       - name: Package zip
         run: |
-          VERSION=$(sed -n 's/^version: \([0-9]*\.[0-9]*\.[0-9]*\).*/\1/p' app/pubspec.yaml)
           APP="app/build/macos/Build/Products/Release/LocalChat.app"
           test -d "$APP"
-          OUT="LocalChat-$VERSION-macos-arm64-unsigned.zip"
+          OUT="LocalChat.zip"
           # ditto keeps the bundle layout, symlinks and permissions intact
           ditto -c -k --sequesterRsrc --keepParent "$APP" "$OUT"
           ls -lh "$OUT"
@@ -65,7 +64,56 @@ jobs:
       - uses: actions/upload-artifact@v6
         with:
           name: macos-arm64-unsigned
-          path: LocalChat-*-macos-arm64-unsigned.zip
+          path: LocalChat.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  ios:
+    name: iOS arm64 (unsigned)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      # cargokit adds aarch64-apple-ios itself when the pod builds; this only
+      # installs the toolchain pinned in rust-toolchain.toml.
+      - name: Install Rust toolchain
+        working-directory: packages/localchat_isolates
+        run: rustup show
+
+      - name: Dependencies
+        working-directory: app
+        run: flutter pub get
+
+      # --no-codesign makes xcodebuild pass CODE_SIGNING_ALLOWED=NO, so the
+      # Runner and ShareExtension targets both build without a certificate.
+      # Entitlements (multicast, App Groups, push) are not applied either, which
+      # is why this job needs no Apple account at all.
+      - name: Build iOS
+        working-directory: app
+        run: flutter build ios --release --no-codesign
+
+      - name: Package unsigned ipa
+        run: |
+          APP=$(ls -d app/build/ios/iphoneos/*.app | head -1)
+          test -d "$APP"
+          echo "bundling $APP"
+          rm -rf Payload LocalChat-unsigned.ipa
+          mkdir Payload
+          cp -R "$APP" Payload/
+          # An ipa is just a zip whose root contains Payload/<Name>.app
+          zip -qry LocalChat-unsigned.ipa Payload
+          ls -lh LocalChat-unsigned.ipa
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: ios-unsigned
+          path: LocalChat-unsigned.ipa
           if-no-files-found: error
           retention-days: 14
 
@@ -100,17 +148,16 @@ jobs:
 
       - name: Package tar.gz
         run: |
-          VERSION=$(sed -n 's/^version: \([0-9]*\.[0-9]*\.[0-9]*\).*/\1/p' app/pubspec.yaml)
           BUNDLE="app/build/linux/x64/release/bundle"
           test -d "$BUNDLE"
-          OUT="LocalChat-$VERSION-linux-x64.tar.gz"
+          OUT="LocalChat.tar.gz"
           tar -czf "$OUT" -C "$BUNDLE" .
           ls -lh "$OUT"
 
       - uses: actions/upload-artifact@v6
         with:
           name: linux-x64
-          path: LocalChat-*-linux-x64.tar.gz
+          path: LocalChat.tar.gz
           if-no-files-found: error
           retention-days: 14
 
@@ -141,13 +188,6 @@ jobs:
             Write-Error "Dart SDK is not windows_arm64 - Flutter fell back to x64"
             exit 1
           }
-
-      - name: Read version
-        run: |
-          $line = Select-String -Path app\pubspec.yaml -Pattern '^version: ([0-9]+\.[0-9]+\.[0-9]+)' | Select-Object -First 1
-          $v = $line.Matches[0].Groups[1].Value
-          Write-Host "VERSION=$v"
-          Add-Content $env:GITHUB_ENV "VERSION=$v"
 
       # CMakeLists.txt installs localchat_msix_helper.msix, so it must exist
       # before the app is configured. Patch the architecture first.
@@ -201,12 +241,12 @@ jobs:
             Write-Error "arm64 release folder missing - did Flutter fall back to x64?"
             exit 1
           }
-          Compress-Archive -Path "$release\*" -DestinationPath "LocalChat-$env:VERSION-windows-arm64.zip"
-          Get-Item "LocalChat-$env:VERSION-windows-arm64.zip" | Select-Object Name, Length
+          Compress-Archive -Path "$release\*" -DestinationPath "LocalChat.zip"
+          Get-Item "LocalChat.zip" | Select-Object Name, Length
 
       - uses: actions/upload-artifact@v6
         with:
           name: windows-arm64
-          path: app/LocalChat-*-windows-arm64.zip
+          path: app/LocalChat.zip
           if-no-files-found: error
           retention-days: 14
