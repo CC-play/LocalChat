@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#498FE7</color>
+    <!-- [FORK] 自适应图标的底板色。必须与 ic_launcher_foreground 的白色底板一致，
+         否则桌面图标是白底、而 Android 12+ 的启动画面会露出另一种底色。 -->
+    <color name="ic_launcher_background">#FFFFFF</color>
 </resources>
