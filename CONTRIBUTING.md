@@ -162,14 +162,14 @@ buildTypes {
 
 ### Bump Flutter
 
-Suppose we want to update flutter to `3.41.9`:
+Suppose we want to update flutter to `3.44.9`:
 
-1. Update flutter from fvm: `fvm use 3.41.9`
+1. Update flutter from fvm: `fvm use 3.44.9`
 2. Update flutter from submodule:
    1. `git submodule update --init`
    2. `cd support/submodules/flutter`
    3. `git fetch`
-   4. `git checkout 3.41.9`
+   4. `git checkout 3.44.9`
    5. `cd ../../..`
    6. `git add support/submodules/flutter`
 3. Update flutter constraints:

@@ -13,8 +13,10 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # Pinned by .fvmrc / pubspec.yaml (flutter: ^3.41.0)
-  FLUTTER_VERSION: "3.41.9"
+  # Pinned by .fvmrc / pubspec.yaml (flutter: ^3.44.0). Stays on the 3.44 series
+  # because that is what the Windows and Android builds were verified against;
+  # 3.41.9 can no longer resolve dependencies (audioplayers 6.8.1 needs >= 3.44.0).
+  FLUTTER_VERSION: "3.44.9"
   # Windows arm64 requires Flutter 3.47+ (no arm64 SDK binaries before that)
   FLUTTER_VERSION_ARM64: "3.47.4"
 

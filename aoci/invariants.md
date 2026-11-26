@@ -21,7 +21,7 @@
 | Windows 构建前把 VS18 的 `CMake\bin`、`Ninja` 前置到 PATH，并 `export CL="/source-charset:utf-8"` | PATH 里的 cmake 是坏的 venv shim（ModuleNotFoundError）；中文插件源码触发 C4819 被 `/WX` 升级为错误 |
 | `app/windows/localchat_msix_helper.msix` 被 gitignore，需手工生成 | 干净检出后 Windows install 步骤失败 |
 | 测启动存活前必须先关掉旧实例 | LocalChat 有单实例机制，第二个实例发 `/show` 后 `exit 0`，会误判为崩溃 |
-| 本机用系统 Flutter 3.44.0（`fvm` 未装，`.fvmrc` 要求 3.41.9，`pubspec` 约束 `^3.41.0`） | 装 fvm 后行为可能变化，不要假设两端等价 |
+| 本机用系统 Flutter 3.44.0（`fvm` 未装；`.fvmrc` 与 CI 用 3.44.9，`pubspec` 约束 `^3.44.0`） | 同 minor 内差别仅补丁号，风险低；但以 `.fvmrc` 的 3.44.9 为准，跨 minor 升级前必须重测 |
 
 ## 状态管理
 
