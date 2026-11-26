@@ -19,9 +19,13 @@ env:
   FLUTTER_VERSION_ARM64: "3.47.4"
 
 jobs:
+  # macOS 14 runner images were retired on 2026-11-02: a job pinned to
+  # `macos-14` is rejected at dispatch with "The configuration
+  # 'macos-14-arm64-us-default' is not supported" and never starts.
+  # Supported arm64 labels are macos-15, macos-26 and macos-latest.
   macos:
     name: macOS arm64 (unsigned)
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v6
 
@@ -70,7 +74,7 @@ jobs:
 
   ios:
     name: iOS arm64 (unsigned)
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v6
 
