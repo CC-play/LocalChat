@@ -33,12 +33,12 @@ LocalChat 沿用 [LocalSend](https://github.com/localsend/localsend) 的传输�
 
 ## 当前状态
 
-`0.1.1` —— Windows 与 Android 已构建并实测。Linux、macOS、iOS 直接来自上游代码，尚未验证。
+`0.2.0` —— Windows 与 Android 已构建并实测。Linux、macOS、iOS 直接来自上游代码，尚未验证。
 
 | 平台 | 发布包 | 说明 |
 |---|---|---|
-| Windows 10+ | `LocalChat-<版本>-win-x64.zip` | 绿色版：解压后运行 `localchat_app.exe` |
-| Android 7.0+（API 24） | `LocalChat-<版本>-android.apk` | 侧载安装；包名 `com.localchat.app` |
+| Windows 10+ | `LocalChat.zip` | 绿色版：解压后运行 `LocalChat.exe` |
+| Android 7.0+（API 24） | `LocalChat.apk` | 侧载安装；包名 `com.localchat.app` |
 
 首次启动请在防火墙中放行 `TCP/UDP 53317`，否则设备之间无法互相发现。仍然找不到时，检查路由器是否开启了 AP 隔离。
 

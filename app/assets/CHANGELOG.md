@@ -1,3 +1,21 @@
+## 0.2.0 (2026-11-26)
+
+New artwork, a logo that follows the window, and one executable name across every platform.
+
+**Branding**
+
+- feat(brand): new chat-bubble icon, derived from a single transparent master and backed per platform — transparent on Windows, macOS and the web, white-backed on iOS and Android; the Android adaptive-icon background moved from brand blue to white, so the launcher no longer shows a blue plate
+- feat(receive): the spinning logo scales with the window (120–240 px) instead of a fixed 200 px, and keeps a proportional gap to the device name so the two no longer sit on top of each other
+
+**Desktop**
+
+- chore(windows): the executable is `LocalChat.exe` instead of `localchat_app.exe`; the macOS bundle, the iOS app and the Linux binary follow the same rule, and the Windows manifest file is renamed to match
+- chore(release): release archives carry fixed names — `LocalChat.zip`, `LocalChat.apk`, `LocalChat.dmg` — so a download link keeps working across versions
+
+**Upgrade note**
+
+- An existing "start with the system" entry still points at `localchat_app.exe`: switch it on again in Settings after upgrading, and repoint any shortcut at `LocalChat.exe`
+
 ## 0.1.1 (2026-11-25)
 
 What happens after a file arrives, plus a desktop default that keeps the app listening when the window is closed.

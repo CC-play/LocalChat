@@ -1,8 +1,7 @@
 # Prerequisite:
 # - brew install create-dmg
 
-VERSION=$(sed -n 's/^version: \([0-9]*\.[0-9]*\.[0-9]*\).*/\1/p' app/pubspec.yaml)
-DMG="LocalChat-$VERSION.dmg"
+DMG="LocalChat.dmg"
 
 cd app
 fvm flutter clean

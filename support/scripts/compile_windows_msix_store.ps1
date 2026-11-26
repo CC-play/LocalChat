@@ -7,6 +7,6 @@ fvm flutter pub get
 fvm dart run build_runner build -d
 fvm flutter pub run msix:create --store
 
-Move-Item -Path build/windows/x64/runner/Release/localchat_app.msix -Destination LocalChat-XXX-windows-x86-64-store.msix
+Move-Item -Path build/windows/x64/runner/Release/LocalChat.msix -Destination LocalChat.msix
 
 Write-Output 'Generated Windows msix!'

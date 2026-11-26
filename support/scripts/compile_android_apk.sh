@@ -26,6 +26,10 @@ flutter config --no-analytics
 flutter pub get
 dart run build_runner build -d
 flutter build apk
+# Flutter's discovery copy uses a fixed filename.
+if [ -f build/app/outputs/flutter-apk/app-release.apk ]; then
+	mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/LocalChat.apk
+fi
 
 popd
 cd localchat

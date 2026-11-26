@@ -33,12 +33,12 @@ Resize the window and the tab bar moves: a rail down the left side while the win
 
 ## Status
 
-`0.1.1` — Windows and Android are built and tested. Linux, macOS and iOS come from the upstream codebase and have not been verified.
+`0.2.0` — Windows and Android are built and tested. Linux, macOS and iOS come from the upstream codebase and have not been verified.
 
 | Platform | Package | Notes |
 |---|---|---|
-| Windows 10+ | `LocalChat-<version>-win-x64.zip` | Portable: extract, run `localchat_app.exe` |
-| Android 7.0+ (API 24) | `LocalChat-<version>-android.apk` | Sideload; package `com.localchat.app` |
+| Windows 10+ | `LocalChat.zip` | Portable: extract, run `LocalChat.exe` |
+| Android 7.0+ (API 24) | `LocalChat.apk` | Sideload; package `com.localchat.app` |
 
 Allow `TCP/UDP 53317` through the firewall on first launch, otherwise devices will not find each other. If they still don't, check that the router has AP isolation disabled.
 

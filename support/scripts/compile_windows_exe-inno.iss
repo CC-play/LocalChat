@@ -15,7 +15,7 @@
 #define MyAppVersion "1.18.2"
 #define MyAppPublisher "Tien Do Nam"
 #define MyAppURL "https://localsend.org"
-#define MyAppExeName "localchat_app.exe"
+#define MyAppExeName "LocalChat.exe"
 #define MyAppMsixHelper "localchat_msix_helper.msix"
 
 [Setup]
@@ -35,7 +35,7 @@ DisableProgramGroupPage=yes
 ;PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 OutputDir={#ResultDir}
-OutputBaseFilename=localchat
+OutputBaseFilename=LocalChat
 SetupIconFile={#PayloadDir}\logo.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 Compression=lzma
